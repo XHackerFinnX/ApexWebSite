@@ -1,36 +1,155 @@
-<!doctype html>
-<html lang="ru">
+<html lang="en">
     <head>
         <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width" />
-        <title>Apex — новое рядом</title>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <meta
+            name="description"
+            content="Finishline Fever — motorsport culture, apparel and trackside essentials."
+        />
+        <title>Finishline Fever® — Driven by obsession</title>
         <link rel="stylesheet" href="style.css" />
     </head>
-    <body>
-        <nav>
-            <div class="brand">APEX®</div>
-            <div>Каталог &nbsp; История &nbsp; О нас</div>
-            <button class="pill" id="checkout">Оплатить · <span id="cart">0</span></button>
-        </nav>
-        <main>
-            <section class="hero">
-                <h1>НОВОЕ<br />РЯДОМ.</h1>
-                <p>Вещи для города без лишнего шума. Собраны внимательно, доставлены быстро.</p>
+    <body class="storefront">
+        <div class="ticker" aria-label="Store announcements">
+            <div>
+                FREE SHIPPING OVER $100 <i>✦</i> NEW DROP ONLINE NOW <i>✦</i> WORLDWIDE DELIVERY
+                <i>✦</i> FREE SHIPPING OVER $100 <i>✦</i> NEW DROP ONLINE NOW <i>✦</i> WORLDWIDE
+                DELIVERY
+            </div>
+        </div>
+
+        <header class="site-header">
+            <button class="menu-button" id="menuButton" aria-label="Open menu">
+                <span></span><span></span>
+            </button>
+            <a class="wordmark" href="#top" aria-label="Finishline Fever home">
+                <span>FINISHLINE</span><strong>FEVER</strong>
+            </a>
+            <nav class="main-nav" id="mainNav" aria-label="Main navigation">
+                <a href="#shop">SHOP</a><a href="#story">STORY</a><a href="#journal">JOURNAL</a>
+            </nav>
+            <div class="header-tools">
+                <button aria-label="Search">⌕</button
+                ><button id="checkout">CART <span id="cart">(0)</span></button>
+            </div>
+        </header>
+
+        <main id="top">
+            <section class="hero" aria-labelledby="hero-title">
+                <div class="hero-copy">
+                    <p class="eyebrow">EST. 2024 — MADE FOR RACE DAY</p>
+                    <h1 id="hero-title">CHASE<br />THE <em>RUSH.</em></h1>
+                    <p class="hero-note">
+                        Motorsport essentials built for the people who live life at full throttle.
+                    </p>
+                    <a class="arrow-link" href="#shop">EXPLORE THE DROP <span>↗</span></a>
+                </div>
+                <div class="race-visual" aria-hidden="true">
+                    <div class="sun"></div>
+                    <div class="speed-lines"></div>
+                    <svg class="race-car" viewBox="0 0 940 420" role="img">
+                        <path
+                            class="car-shadow"
+                            d="M78 338c104-36 637-43 793 3-99 47-660 58-793-3Z"
+                        />
+                        <g class="wheel">
+                            <circle cx="237" cy="315" r="81" />
+                            <circle cx="237" cy="315" r="51" />
+                            <circle cx="237" cy="315" r="21" />
+                        </g>
+                        <g class="wheel">
+                            <circle cx="735" cy="315" r="81" />
+                            <circle cx="735" cy="315" r="51" />
+                            <circle cx="735" cy="315" r="21" />
+                        </g>
+                        <path
+                            class="car-dark"
+                            d="m94 286 105-17 91-101 213-22 131 44 164 35 67 53-18 52H99Z"
+                        />
+                        <path class="car-red" d="m116 271 172-72 201-19 154 56 186 32-23 45H111Z" />
+                        <path class="car-light" d="m289 199 49-82h149l71 71-73-9Z" />
+                        <path class="window" d="m356 133 121 1 51 51-178 1Z" />
+                        <path
+                            class="car-light"
+                            d="m114 269 108-66 18 16-38 49Zm566-25 151-8 42 39-178-10Z"
+                        />
+                        <path class="stripe" d="m241 220 330-20 42 16-390 40Z" />
+                        <text x="420" y="269">77</text>
+                        <path class="spoiler" d="m693 169 156 4-7 21-143 2Z" />
+                    </svg>
+                    <span class="corner-tag">01 / SPEED IS A FEELING</span>
+                </div>
             </section>
-            <div class="toolbar" id="filters"></div>
-            <section class="section"><div class="grid" id="products"></div></section>
+
+            <section class="manifesto" id="story">
+                <p class="section-label">OUR PHILOSOPHY</p>
+                <h2>FOR THOSE WHO HEAR<br />THE <span>ENGINE</span> IN THE SILENCE.</h2>
+                <p>
+                    Born from late nights, burnt rubber and the belief that racing is more than a
+                    sport. It is a language.
+                </p>
+            </section>
+
+            <section class="shop-section" id="shop">
+                <div class="section-heading">
+                    <div>
+                        <p class="section-label">LATEST ARRIVALS</p>
+                        <h2>THE GRID</h2>
+                    </div>
+                    <a href="#products">VIEW ALL <span>↗</span></a>
+                </div>
+                <div class="filters" id="filters"></div>
+                <div class="product-grid" id="products" aria-live="polite"></div>
+            </section>
+
+            <section class="editorial" id="journal">
+                <div class="editorial-art">
+                    <span>NO<br />BRAKES</span>
+                    <div class="helmet">77</div>
+                </div>
+                <div class="editorial-copy">
+                    <p class="section-label">FIELD NOTES — 001</p>
+                    <h2>BUILT FOR<br />THE WEEKEND.</h2>
+                    <p>
+                        A collection inspired by sun-faded pit passes, garage uniforms and the
+                        machines that made history.
+                    </p>
+                    <a class="arrow-link light" href="#shop">READ THE STORY <span>↗</span></a>
+                </div>
+            </section>
+
+            <section class="newsletter">
+                <p class="section-label">JOIN THE PADDOCK</p>
+                <h2>STAY AHEAD<br />OF THE <em>PACK.</em></h2>
+                <form id="newsletterForm">
+                    <input
+                        type="email"
+                        required
+                        placeholder="YOUR EMAIL ADDRESS"
+                        aria-label="Email address"
+                    /><button>JOIN <span>↗</span></button>
+                </form>
+                <p id="newsletterStatus" role="status"></p>
+            </section>
         </main>
-        <dialog id="captcha">
-            <h2>Подтвердите, что вы человек</h2>
-            <p class="muted">Перед переходом к оплате пройдите Yandex SmartCaptcha.</p>
-            <input
-                id="captchaToken"
-                value="demo-pass"
-                aria-label="Токен CAPTCHA"
-            /><br /><br /><button id="confirmPay">Проверить и оплатить</button>
-            <button class="chip" id="cancelPay">Отмена</button>
-            <p id="payStatus"></p>
-        </dialog>
+
+        <footer>
+            <a class="wordmark footer-mark" href="#top"
+                ><span>FINISHLINE</span><strong>FEVER</strong></a
+            >
+            <div><a href="#">INSTAGRAM</a><a href="#">TIKTOK</a><a href="#">CONTACT</a></div>
+            <p>© 2026 FINISHLINE FEVER®</p>
+        </footer>
+
+        <div class="cart-drawer" id="cartDrawer" aria-hidden="true">
+            <button class="drawer-close" id="closeCart">×</button>
+            <p class="section-label">YOUR CART</p>
+            <h2>RACE BAG <span id="drawerCount">(0)</span></h2>
+            <div id="cartItems" class="cart-items"><p>Your grid is empty.</p></div>
+            <button class="checkout-button">CHECKOUT — <span id="cartTotal">$0</span></button>
+        </div>
+        <div class="scrim" id="scrim"></div>
+        <div class="toast" id="toast" role="status">ADDED TO YOUR RACE BAG</div>
         <script src="shop.js"></script>
     </body>
 </html>

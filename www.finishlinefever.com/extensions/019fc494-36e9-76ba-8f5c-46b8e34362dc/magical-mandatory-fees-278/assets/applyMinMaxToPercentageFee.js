@@ -1,0 +1,1 @@
+export function applyMinMaxToPercentageFee(e,n,l){let t=e;return null!=n&&t<n&&(t=n),null!=l&&t>l&&(t=l),t}
