@@ -33,6 +33,14 @@ const collections = [
                 image: "images/hoodie-grid.png",
                 category: "Hoodies",
             },
+            {
+                id: "hoodie-grid",
+                name: "Grid Wall Zip Hoodie",
+                price: 124,
+                compareAt: 150,
+                image: "images/hoodie-grid.png",
+                category: "Hoodies",
+            },
         ],
     },
     {
