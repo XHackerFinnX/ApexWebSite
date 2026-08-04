@@ -1,4 +1,5 @@
 from typing import Protocol
+
 from store.domain import Integration, Product
 
 

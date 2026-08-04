@@ -64,7 +64,9 @@ class Settings(BaseSettings):
             "sslmode": self.POSTGRESQL_SSLMODE,
         }
         if self.POSTGRESQL_SSLROOTCERT:
-            connection["sslrootcert"] = str(Path(self.POSTGRESQL_SSLROOTCERT).expanduser())
+            connection["sslrootcert"] = str(
+                Path(self.POSTGRESQL_SSLROOTCERT).expanduser()
+            )
         return connection
 
 
