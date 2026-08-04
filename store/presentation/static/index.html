@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width" />
+        <title>Apex — новое рядом</title>
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+        <nav>
+            <div class="brand">APEX®</div>
+            <div>Каталог &nbsp; История &nbsp; О нас</div>
+            <button class="pill" id="checkout">Оплатить · <span id="cart">0</span></button>
+        </nav>
+        <main>
+            <section class="hero">
+                <h1>НОВОЕ<br />РЯДОМ.</h1>
+                <p>Вещи для города без лишнего шума. Собраны внимательно, доставлены быстро.</p>
+            </section>
+            <div class="toolbar" id="filters"></div>
+            <section class="section"><div class="grid" id="products"></div></section>
+        </main>
+        <dialog id="captcha">
+            <h2>Подтвердите, что вы человек</h2>
+            <p class="muted">Перед переходом к оплате пройдите Yandex SmartCaptcha.</p>
+            <input
+                id="captchaToken"
+                value="demo-pass"
+                aria-label="Токен CAPTCHA"
+            /><br /><br /><button id="confirmPay">Проверить и оплатить</button>
+            <button class="chip" id="cancelPay">Отмена</button>
+            <p id="payStatus"></p>
+        </dialog>
+        <script src="shop.js"></script>
+    </body>
+</html>

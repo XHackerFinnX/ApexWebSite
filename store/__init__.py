@@ -1,0 +1,1 @@
+"""Apex Store clean-architecture application."""

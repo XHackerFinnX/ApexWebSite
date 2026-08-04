@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width" />
+        <title>Apex Admin</title>
+        <link rel="stylesheet" href="style.css" />
+    </head>
+    <body>
+        <div class="admin">
+            <aside class="side">
+                <div class="brand">APEX / ADMIN</div>
+                <br /><a class="active">Обзор</a><a>Товары</a><a>Заказы</a><a>Категории и размеры</a
+                ><a>Доставка и оплата</a><a>Аналитика</a><a href="/">← В магазин</a>
+            </aside>
+            <main class="content">
+                <div class="row">
+                    <div>
+                        <span class="muted">ПОНЕДЕЛЬНИК, 3 АВГУСТА</span>
+                        <h1>Доброе утро 👋</h1>
+                    </div>
+                    <button id="addProduct">+ Новый товар</button>
+                </div>
+                <div class="stats">
+                    <div class="stat"><span class="muted">Товаров</span><b id="count">—</b></div>
+                    <div class="stat"><span class="muted">Просмотры</span><b id="views">—</b></div>
+                    <div class="stat"><span class="muted">В корзину</span><b id="adds">—</b></div>
+                    <div class="stat"><span class="muted">Конверсия</span><b id="rate">—</b></div>
+                </div>
+                <section class="panel">
+                    <div class="row">
+                        <h2>Каталог</h2>
+                        <span class="muted">Живая статистика</span>
+                    </div>
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Товар</th>
+                                <th>Категория</th>
+                                <th>Остаток</th>
+                                <th>Просмотры</th>
+                                <th>В корзину</th>
+                                <th></th>
+                            </tr>
+                        </thead>
+                        <tbody id="rows"></tbody>
+                    </table>
+                </section>
+                <section class="panel" id="productForm" hidden>
+                    <h2>Новый товар</h2>
+                    <form class="form-grid">
+                        <input name="name" placeholder="Название" required /><input
+                            name="price"
+                            type="number"
+                            placeholder="Цена"
+                            required
+                        /><input name="category" placeholder="Категория" /><input
+                            name="stock"
+                            type="number"
+                            placeholder="Остаток"
+                        /><input name="sizes" placeholder="Размеры через запятую" /><textarea
+                            name="description"
+                            placeholder="Описание"
+                        ></textarea
+                        ><button>Сохранить товар</button>
+                    </form>
+                </section>
+                <section class="panel">
+                    <div class="row">
+                        <div>
+                            <h2>Доставка и оплата</h2>
+                            <p class="muted">Ключи шифруются и не отображаются после сохранения</p>
+                        </div>
+                    </div>
+                    <form id="integration" class="integration">
+                        <select name="provider">
+                            <option value="tbank">Т-Банк</option>
+                            <option value="alfabank">Альфа-Банк</option>
+                            <option value="yookassa">ЮKassa</option>
+                            <option value="cdek">СДЭК</option></select
+                        ><select name="environment">
+                            <option value="test">Тестовая среда</option>
+                            <option value="production">Production</option></select
+                        ><label><input name="enabled" type="checkbox" /> Включить</label
+                        ><input name="login" placeholder="ID / логин / terminal key" /><input
+                            name="secret"
+                            type="password"
+                            placeholder="Пароль / secret key"
+                        /><button>Сохранить</button>
+                    </form>
+                    <div id="configured"></div>
+                </section>
+            </main>
+        </div>
+        <script src="admin.js"></script>
+    </body>
+</html>
