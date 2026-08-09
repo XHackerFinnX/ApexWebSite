@@ -743,16 +743,6 @@ function initMobileMenu() {
         }),
     );
 }
-function initNewsletter() {
-    const form = document.getElementById("newsletter-form"),
-        status = document.getElementById("newsletter-status");
-    form.addEventListener("submit", (e) => {
-        e.preventDefault();
-        status.textContent =
-            "Добро пожаловать на стартовую решётку — проверьте почту.";
-        form.reset();
-    });
-}
 function initEvents() {
     document.getElementById("open-cart").addEventListener("click", openCart);
     document.getElementById("close-cart").addEventListener("click", closeCart);
@@ -785,8 +775,21 @@ function initEvents() {
         .getElementById("search-toggle")
         .addEventListener("click", () => toggleSearch());
     document
+        .getElementById("search-close")
+        .addEventListener("click", () => toggleSearch(false));
+    document
         .getElementById("search-input")
         .addEventListener("input", (e) => renderSearchResults(e.target.value));
+    document.addEventListener("click", (e) => {
+        const panel = document.getElementById("search-panel");
+        if (
+            panel.classList.contains("is-open") &&
+            !e.target.closest("#search-panel") &&
+            !e.target.closest("#search-toggle")
+        ) {
+            toggleSearch(false);
+        }
+    });
     ["category-filter", "size-filter", "sort-filter"].forEach((id) =>
         document
             .getElementById(id)
@@ -812,7 +815,6 @@ renderFaq();
 renderCommunity();
 renderCart();
 initMobileMenu();
-initNewsletter();
 initEvents();
 
 if (location.hash.startsWith("#product-"))

@@ -110,7 +110,20 @@
                             placeholder="Найти худи, куртку или футболку"
                             aria-label="Поиск товаров"
                         />
-                        <kbd>ESC</kbd>
+                        <button
+                            type="button"
+                            class="search-panel__close"
+                            id="search-close"
+                            aria-label="Закрыть поиск"
+                        >
+                            <svg
+                                class="icon"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
+                                <path d="M18 6 6 18M6 6l12 12" />
+                            </svg>
+                        </button>
                     </label>
                     <div
                         class="search-results"
@@ -348,39 +361,6 @@
                 </h2>
                 <div class="community__viewport">
                     <div class="community__track" id="community-track"></div>
-                </div>
-            </section>
-
-            <!-- Newsletter -->
-            <section class="newsletter">
-                <div class="newsletter__lines" aria-hidden="true"></div>
-                <div class="newsletter__inner">
-                    <p class="eyebrow">На стартовую решётку</p>
-                    <h2 class="display newsletter__title">
-                        Вступайте в клуб APEX
-                    </h2>
-                    <p class="newsletter__text">
-                        Ранний доступ, эксклюзивные дропы и 10% на первый заказ.
-                    </p>
-                    <form class="newsletter__form" id="newsletter-form">
-                        <input
-                            type="email"
-                            required
-                            placeholder="Электронная почта"
-                            aria-label="Электронная почта"
-                        />
-                        <button type="submit">
-                            Подписаться
-                            <svg class="icon" viewBox="0 0 24 24">
-                                <path d="M5 12h14M12 5l7 7-7 7" />
-                            </svg>
-                        </button>
-                    </form>
-                    <p
-                        class="newsletter__status"
-                        id="newsletter-status"
-                        role="status"
-                    ></p>
                 </div>
             </section>
         </main>
