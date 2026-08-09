@@ -4,7 +4,7 @@ import time
 from dataclasses import asdict
 from decimal import Decimal
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 
 class Encoder(json.JSONEncoder):
@@ -17,13 +17,14 @@ class Encoder(json.JSONEncoder):
 
 
 class WebApp:
-    def __init__(self, catalog, integrations, checkout, repo, limiter):
-        self.catalog, self.integrations, self.checkout, self.repo, self.limiter = (
+    def __init__(self, catalog, integrations, checkout, repo, limiter, delivery=None):
+        self.catalog, self.integrations, self.checkout, self.repo, self.limiter, self.delivery = (
             catalog,
             integrations,
             checkout,
             repo,
             limiter,
+            delivery,
         )
 
     def handler(self):
@@ -47,7 +48,7 @@ class WebApp:
                 self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
                 self.send_header(
                     "Content-Security-Policy",
-                    "default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'; img-src 'self' https: data:",
+                    "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; img-src 'self' https: data:; connect-src 'self' https://geoserv.tildacdn.com",
                 )
                 self.end_headers()
                 self.wfile.write(body)
@@ -61,7 +62,8 @@ class WebApp:
             def _route(self):
                 if not app.limiter.allow(self.client_address[0], time.monotonic()):
                     return self._send(429, {"error": "Слишком много запросов"})
-                path = urlparse(self.path).path
+                parsed = urlparse(self.path)
+                path = parsed.path
                 try:
                     if self.command == "GET" and path == "/api/products":
                         return self._send(data=[asdict(x) for x in app.catalog.list()])
@@ -74,6 +76,15 @@ class WebApp:
                     if self.command == "POST" and path == "/api/admin/integrations":
                         app.integrations.configure(self._body())
                         return self._send(data={"ok": True})
+                    if self.command == "POST" and path == "/api/delivery/calculate":
+                        if not app.delivery:
+                            raise ValueError("Доставка не настроена")
+                        return self._send(data=app.delivery.calculate(str(self._body().get("postal_code", ""))))
+                    if self.command == "GET" and path == "/api/delivery/pvz":
+                        if not app.delivery:
+                            raise ValueError("Доставка не настроена")
+                        postal_code = parse_qs(parsed.query).get("postalCode", [""])[0]
+                        return self._send(data=app.delivery.pvz(postal_code))
                     if self.command == "POST" and path == "/api/checkout/captcha":
                         return self._send(
                             data={

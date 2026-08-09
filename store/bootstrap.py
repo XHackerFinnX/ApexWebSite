@@ -7,6 +7,7 @@ from store.application.services import (
 )
 from store.config import Settings, get_settings
 from store.infrastructure.captcha import YandexCaptcha
+from store.infrastructure.cdek import CDEKDelivery
 from store.infrastructure.postgres_repo import PostgreSQLRepository
 from store.infrastructure.security import RateLimiter, SecretBox
 from store.presentation.web import WebApp
@@ -24,6 +25,7 @@ def create_app(settings: Settings | None = None):
         CheckoutService(YandexCaptcha()),
         repo,
         RateLimiter(),
+        CDEKDelivery(config),
     )
 
 

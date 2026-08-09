@@ -23,6 +23,13 @@ class Settings(BaseSettings):
     YANDEX_CAPTCHA_SERVER_KEY: SecretStr = SecretStr("")
     YANDEX_CAPTCHA_CLIENT_KEY: str = ""
     CAPTCHA_MODE: str = "mock"
+    
+    CDEK_CLIENT_ID: SecretStr = SecretStr("")
+    CDEK_CLIENT_SECRET: SecretStr = SecretStr("")
+    CDEK_FROM_POSTAL_CODE: str = "143911"
+    CDEK_TARIFF_CODE: int = 136
+    CDEK_DISPATCH_DELAY_DAYS: int = 10
+    CDEK_FINAL_MARKUP: int = 150
 
     model_config: SettingsConfigDict = SettingsConfigDict(
         env_file=".env",
