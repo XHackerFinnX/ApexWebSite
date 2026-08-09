@@ -1379,8 +1379,7 @@ a {
 .suggestions button:hover {
     background: rgba(0, 0, 0, 0.06);
 }
-.suggestions span,
-.pvz-info span {
+.suggestions span {
     font-size: 0.75rem;
     color: color-mix(in oklab, var(--background) 65%, transparent);
 }
@@ -1391,6 +1390,10 @@ a {
     padding-left: 0.75rem;
     font-size: 0.8rem;
     color: var(--muted-foreground);
+}
+.pvz-info span {
+    font-size: 0.75rem;
+    color: var(--primary-foreground);
 }
 .promo-row {
     display: grid;

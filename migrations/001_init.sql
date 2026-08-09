@@ -82,7 +82,7 @@ CREATE INDEX IF NOT EXISTS audit_log_entity_idx ON audit_log(entity_type, entity
 
 INSERT INTO categories(name, slug) VALUES
     ('Одежда', 'clothing'), ('Обувь', 'shoes'), ('Аксессуары', 'accessories')
-ON CONFLICT (name) DO NOTHING;
+ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name;
 
 INSERT INTO products(name, description, price, category_id, stock)
 SELECT seed.name, seed.description, seed.price, categories.id, seed.stock

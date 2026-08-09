@@ -1,6 +1,7 @@
 import tempfile
 import unittest
 from decimal import Decimal
+from pathlib import Path
 
 from store.application.services import (
     CatalogService,
@@ -109,6 +110,11 @@ class StoreTests(unittest.TestCase):
         self.assertTrue(limiter.allow("ip", 0))
         self.assertTrue(limiter.allow("ip", 1))
         self.assertFalse(limiter.allow("ip", 2))
+        
+    def test_initial_migration_seed_categories_are_idempotent_by_slug(self):
+        migration = Path("migrations/001_init.sql").read_text(encoding="utf-8")
+        self.assertIn("ON CONFLICT (slug) DO UPDATE", migration)
+        self.assertNotIn("ON CONFLICT (name) DO NOTHING", migration)
 
     def test_database_settings_are_loaded_from_environment(self):
         with tempfile.NamedTemporaryFile() as certificate:
