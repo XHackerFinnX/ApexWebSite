@@ -1305,7 +1305,6 @@ a {
 .checkout textarea:focus,
 .promo-row input:focus {
     border-color: var(--primary);
-    box-shadow: 0 0 0 2px color-mix(in oklab, var(--primary) 25%, transparent);
 }
 .checkout input.input-error,
 .checkout textarea.input-error {

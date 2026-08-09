@@ -437,7 +437,7 @@ async function refreshDelivery() {
         bindDeliveryType();
         bindPvzAutocomplete();
         point.disabled = false;
-        status.textContent = "Выберите пункт выдачи.";
+        status.textContent = "Выберите пункт получения (снизу).";
     } catch (err) {
         status.textContent =
             "К сожалению, доставку в выбранный город сейчас не удалось рассчитать.";
