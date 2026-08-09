@@ -60,7 +60,9 @@
                     <button
                         type="button"
                         class="header__icon-btn"
+                        id="search-toggle"
                         aria-label="Поиск"
+                        aria-expanded="false"
                     >
                         <svg class="icon" viewBox="0 0 24 24">
                             <circle cx="11" cy="11" r="8" />
@@ -89,6 +91,34 @@
                 <a href="#tees">Футболки</a>
                 <a href="#story">История</a>
             </nav>
+
+            <div class="search-panel" id="search-panel" aria-hidden="true">
+                <div class="search-panel__inner">
+                    <label class="search-panel__field">
+                        <svg
+                            class="icon"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                        >
+                            <circle cx="11" cy="11" r="8" />
+                            <path d="m21 21-4.3-4.3" />
+                        </svg>
+                        <input
+                            id="search-input"
+                            type="search"
+                            autocomplete="off"
+                            placeholder="Найти худи, куртку или футболку"
+                            aria-label="Поиск товаров"
+                        />
+                        <kbd>ESC</kbd>
+                    </label>
+                    <div
+                        class="search-results"
+                        id="search-results"
+                        role="listbox"
+                    ></div>
+                </div>
+            </div>
         </header>
 
         <main>
@@ -181,7 +211,55 @@
                 </div>
             </section>
 
-            <!-- Product sections injected here -->
+            <!-- Catalog filters and product sections -->
+            <section
+                class="catalog-toolbar"
+                aria-labelledby="catalog-filter-title"
+            >
+                <div>
+                    <p class="eyebrow">Каталог</p>
+                    <h2
+                        class="display catalog-toolbar__title"
+                        id="catalog-filter-title"
+                    >
+                        Выбери свой стиль
+                    </h2>
+                </div>
+                <div class="catalog-toolbar__controls">
+                    <label
+                        >Категория<select id="category-filter">
+                            <option value="all">Все товары</option>
+                            <option value="Худи">Худи</option>
+                            <option value="Куртки">Куртки</option>
+                            <option value="Футболки">Футболки</option>
+                        </select></label
+                    >
+                    <label
+                        >Размер<select id="size-filter">
+                            <option value="all">Все размеры</option>
+                            <option>XS</option>
+                            <option>S</option>
+                            <option>M</option>
+                            <option>L</option>
+                            <option>XL</option>
+                        </select></label
+                    >
+                    <label
+                        >Сортировка<select id="sort-filter">
+                            <option value="featured">По популярности</option>
+                            <option value="price-asc">Сначала дешевле</option>
+                            <option value="price-desc">Сначала дороже</option>
+                            <option value="discount">По размеру скидки</option>
+                        </select></label
+                    >
+                    <button type="button" id="filters-reset">Сбросить</button>
+                </div>
+                <p
+                    class="catalog-toolbar__count"
+                    id="catalog-count"
+                    aria-live="polite"
+                ></p>
+            </section>
             <div id="collections"></div>
 
             <!-- История -->
@@ -260,6 +338,17 @@
                     <h2 class="display faq__title">Вопросы</h2>
                 </div>
                 <div id="faq-list"></div>
+            </section>
+
+            <!-- Community loop -->
+            <section class="community" aria-labelledby="community-title">
+                <p class="eyebrow">На трассе и в городе</p>
+                <h2 class="display community__title" id="community-title">
+                    Наше сообщество
+                </h2>
+                <div class="community__viewport">
+                    <div class="community__track" id="community-track"></div>
+                </div>
             </section>
 
             <!-- Newsletter -->
@@ -372,6 +461,32 @@
             </header>
             <div class="cart__body" id="cart-body"></div>
         </aside>
+
+        <!-- Product quick view -->
+        <div class="product-modal" id="product-modal" aria-hidden="true">
+            <button
+                class="product-modal__backdrop"
+                type="button"
+                data-close-product
+                aria-label="Закрыть карточку товара"
+            ></button>
+            <div
+                class="product-modal__dialog"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="product-modal-title"
+            >
+                <button
+                    class="product-modal__close"
+                    type="button"
+                    data-close-product
+                    aria-label="Закрыть"
+                >
+                    ×
+                </button>
+                <div id="product-modal-content"></div>
+            </div>
+        </div>
 
         <!-- Add-to-bag toast -->
         <div class="toast" id="toast" role="status" aria-hidden="true"></div>

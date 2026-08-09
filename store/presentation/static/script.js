@@ -168,10 +168,70 @@ const deliveryState = {
 let activePromo = null;
 let cachedPvzList = [];
 
+const productDetails = {
+    "hoodie-apex": {
+        description:
+            "Тяжёлый хлопковый футер, свободная посадка и вышивка, вдохновлённая командными боксами.",
+        colors: ["Чёрный", "Красный"],
+        sizes: ["S", "M", "L", "XL"],
+    },
+    "hoodie-pole": {
+        description:
+            "Мягкое худи с объёмным капюшоном и графикой поул-позиции на спине.",
+        colors: ["Графит"],
+        sizes: ["M", "L", "XL"],
+    },
+    "hoodie-grid": {
+        description:
+            "Худи на молнии с контрастной сеткой и плотными манжетами для прохладных вечеров.",
+        colors: ["Чёрный", "Молочный"],
+        sizes: ["S", "M", "L"],
+    },
+    "jacket-circuit": {
+        description:
+            "Утеплённый бомбер с гоночными шевронами и прочной ветрозащитной тканью.",
+        colors: ["Чёрный"],
+        sizes: ["M", "L", "XL"],
+    },
+    "jacket-paddock": {
+        description:
+            "Лёгкая олимпийка в эстетике паддока: высокий воротник, сетчатая подкладка и вышивка.",
+        colors: ["Красный", "Чёрный"],
+        sizes: ["S", "M", "L"],
+    },
+    "jacket-gp": {
+        description:
+            "Куртка свободного кроя с архивной гоночной графикой и регулируемым низом.",
+        colors: ["Синий"],
+        sizes: ["M", "L", "XL"],
+    },
+    "tee-flag": {
+        description:
+            "Плотная футболка оверсайз с принтом клетчатого флага и мягкой горловиной.",
+        colors: ["Белый", "Чёрный"],
+        sizes: ["XS", "S", "M", "L", "XL"],
+    },
+    "tee-lap": {
+        description:
+            "Футболка из гребенного хлопка с графикой быстрого круга на груди и спине.",
+        colors: ["Чёрный"],
+        sizes: ["S", "M", "L", "XL"],
+    },
+    "tee-podium": {
+        description:
+            "Свободная футболка P1 с винтажной обработкой принта и усиленными швами.",
+        colors: ["Молочный", "Красный"],
+        sizes: ["XS", "S", "M", "L"],
+    },
+};
+
 /* ---------- Helpers ---------- */
 const money = (v) => `${Math.round(v).toLocaleString("ru-RU")} ₽`;
 const productById = {};
 collections.forEach((c) => c.products.forEach((p) => (productById[p.id] = p)));
+Object.values(productById).forEach((product) =>
+    Object.assign(product, productDetails[product.id]),
+);
 
 const ICONS = {
     arrow: '<svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>',
@@ -192,16 +252,44 @@ function renderAnnouncement() {
         .join("");
 }
 function renderCollections() {
+    const category = document.getElementById("category-filter")?.value || "all";
+    const size = document.getElementById("size-filter")?.value || "all";
+    const sort = document.getElementById("sort-filter")?.value || "featured";
+    let visibleCount = 0;
     document.getElementById("collections").innerHTML = collections
-        .map(
-            (c) =>
-                `<section id="${c.id}" class="section"><div class="section__head"><div><p class="eyebrow">${c.eyebrow}</p><h2 class="display section__title">${c.title}</h2></div><a href="#${c.id}" class="section__link">Смотреть всё ${ICONS.arrow}</a></div><div class="grid">${c.products.map(productCard).join("")}</div></section>`,
-        )
+        .map((c) => {
+            const products = c.products
+                .filter(
+                    (p) =>
+                        (category === "all" || p.category === category) &&
+                        (size === "all" || p.sizes.includes(size)),
+                )
+                .sort((a, b) =>
+                    sort === "price-asc"
+                        ? a.price - b.price
+                        : sort === "price-desc"
+                          ? b.price - a.price
+                          : sort === "discount"
+                            ? (b.compareAt || b.price) -
+                              b.price -
+                              ((a.compareAt || a.price) - a.price)
+                            : 0,
+                );
+            visibleCount += products.length;
+            return products.length
+                ? `<section id="${c.id}" class="section"><div class="section__head"><div><p class="eyebrow">${c.eyebrow}</p><h2 class="display section__title">${c.title}</h2></div><a href="#${c.id}" class="section__link">Смотреть всё ${ICONS.arrow}</a></div><div class="grid">${products.map(productCard).join("")}</div></section>`
+                : "";
+        })
         .join("");
+    const count = document.getElementById("catalog-count");
+    if (count)
+        count.textContent = visibleCount
+            ? `Показано товаров: ${visibleCount}`
+            : "По выбранным фильтрам товаров нет";
 }
 function productCard(p) {
     const saving = p.compareAt ? p.compareAt - p.price : 0;
-    return `<article class="card"><div class="card__media">${saving > 0 ? `<span class="card__badge">Скидка ${money(saving)}</span>` : ""}<img src="${p.image}" alt="${p.name}" loading="lazy" /><button type="button" class="card__add" data-add="${p.id}" aria-label="Добавить ${p.name} в корзину">Быстро добавить ${ICONS.plus}</button></div><div class="card__info"><div><p class="card__category">${p.category}</p><h3 class="card__name">${p.name}</h3></div><p class="card__prices"><span class="card__price">${money(p.price)}</span>${p.compareAt ? `<span class="card__compare">${money(p.compareAt)}</span>` : ""}</p></div></article>`;
+    return `<article class="card" id="product-${p.id}"><div class="card__media">${saving > 0 ? `<span class="card__badge">Скидка ${money(saving)}</span>` : ""}<img src="${p.image}" alt="${p.name}" loading="lazy" /><div class="card__actions"><button type="button" class="card__view" data-view="${p.id}">Посмотреть товар</button><button type="button" class="card__add" data-add="${p.id}" aria-label="Добавить ${p.name} в корзину">Быстро добавить ${ICONS.plus}</button></div></div><div class="card__info"><div><p class="card__category">${p.category}</p><h3 class="card__name">${p.name}</h3></div><p class="card__prices"><span class="card__price">${money(p.price)}</span>${p.compareAt ? `<span class="card__compare">${money(p.compareAt)}</span>` : ""}</p></div></article>`;
 }
 function renderReviews() {
     document.getElementById("reviews-grid").innerHTML = reviews
@@ -218,6 +306,82 @@ function renderFaq() {
                 `<details><summary>${f.q} ${ICONS.plus}</summary><p class="faq__answer">${f.a}</p></details>`,
         )
         .join("");
+}
+
+const communityMedia = [
+    ["images/story.png", "Гоночный автомобиль в боксах"],
+    ["images/hoodie-apex.png", "Худи Apex Racing"],
+    ["images/jacket-paddock.png", "Куртка Paddock"],
+    ["images/tee-flag.png", "Футболка Chequered Flag"],
+    ["images/promo.png", "Команда APEX GRID"],
+    ["images/jacket-gp.png", "Куртка Grand Prix"],
+];
+function renderCommunity() {
+    const items = [...communityMedia, ...communityMedia];
+    document.getElementById("community-track").innerHTML = items
+        .map(
+            ([src, alt], index) =>
+                `<figure class="community__item"><img src="${src}" alt="${index < communityMedia.length ? alt : ""}" loading="lazy" /></figure>`,
+        )
+        .join("");
+}
+
+function renderSearchResults(query = "") {
+    const box = document.getElementById("search-results");
+    const normalized = query.trim().toLocaleLowerCase("ru");
+    const matches = Object.values(productById).filter(
+        (p) =>
+            !normalized ||
+            `${p.name} ${p.category} ${p.description}`
+                .toLocaleLowerCase("ru")
+                .includes(normalized),
+    );
+    box.innerHTML = matches.length
+        ? matches
+              .map(
+                  (p) =>
+                      `<button type="button" class="search-result" data-view="${p.id}" role="option"><img src="${p.image}" alt="" /><span><b>${p.name}</b><small>${p.category} · ${p.sizes.join(" / ")}</small></span><strong>${money(p.price)}</strong>${ICONS.arrow}</button>`,
+              )
+              .join("")
+        : `<p class="search-results__empty">Ничего не нашли. Попробуйте изменить запрос.</p>`;
+}
+function toggleSearch(force) {
+    const panel = document.getElementById("search-panel");
+    const button = document.getElementById("search-toggle");
+    const open = force ?? !panel.classList.contains("is-open");
+    panel.classList.toggle("is-open", open);
+    panel.setAttribute("aria-hidden", String(!open));
+    button.setAttribute("aria-expanded", String(open));
+    if (open) {
+        renderSearchResults();
+        setTimeout(() => document.getElementById("search-input").focus(), 180);
+    }
+}
+
+function openProduct(id, updateHash = true) {
+    const p = productById[id];
+    if (!p) return;
+    const modal = document.getElementById("product-modal");
+    document.getElementById("product-modal-content").innerHTML =
+        `<div class="product-view"><div class="product-view__gallery"><img class="product-view__main" src="${p.image}" alt="${p.name}" /><div class="product-view__thumbs"><button class="is-active" type="button"><img src="${p.image}" alt="Вид товара спереди" /></button><button type="button"><img src="${p.image}" alt="Детали товара" /></button></div></div><div class="product-view__info"><p class="eyebrow">${p.category}</p><h2 class="display product-view__title" id="product-modal-title">${p.name}</h2><div class="product-view__prices"><strong>${money(p.price)}</strong>${p.compareAt ? `<s>${money(p.compareAt)}</s>` : ""}</div><p class="product-view__description">${p.description}</p><fieldset><legend>Цвет</legend><div class="product-view__options">${p.colors.map((color, i) => `<label><input type="radio" name="product-color" value="${color}" ${i === 0 ? "checked" : ""}/><span>${color}</span></label>`).join("")}</div></fieldset><fieldset><legend>Размер <small>— доступны сейчас</small></legend><div class="product-view__options product-view__sizes">${p.sizes.map((size, i) => `<label><input type="radio" name="product-size" value="${size}" ${i === 0 ? "checked" : ""}/><span>${size}</span></label>`).join("")}</div></fieldset><p class="product-view__stock">● В наличии — отправка в течение двух недель</p><button type="button" class="product-view__add" data-modal-add="${p.id}">${ICONS.bag} В корзину · ${money(p.price)}</button></div></div>`;
+    modal.classList.add("is-open");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    toggleSearch(false);
+    if (updateHash) history.replaceState(null, "", `#product-${id}`);
+    modal.querySelector(".product-modal__close").focus();
+}
+function closeProduct(clearHash = true) {
+    const modal = document.getElementById("product-modal");
+    modal.classList.remove("is-open");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
+    if (clearHash && location.hash.startsWith("#product-"))
+        history.replaceState(
+            null,
+            "",
+            `${location.pathname}${location.search}`,
+        );
 }
 
 /* ---------- Cart state ---------- */
@@ -594,19 +758,45 @@ function initEvents() {
     document.getElementById("close-cart").addEventListener("click", closeCart);
     overlayEl.addEventListener("click", closeCart);
     document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") closeCart();
+        if (e.key === "Escape") {
+            closeCart();
+            closeProduct();
+            toggleSearch(false);
+        }
     });
     document.addEventListener("click", (e) => {
         const t = e.target.closest(
-            "[data-add],[data-remove],[data-inc],[data-dec]",
+            "[data-add],[data-remove],[data-inc],[data-dec],[data-view],[data-modal-add],[data-close-product]",
         );
         if (!t) return;
-        if (t.dataset.add) addToCart(t.dataset.add);
+        if (t.dataset.closeProduct !== undefined) closeProduct();
+        else if (t.dataset.view) openProduct(t.dataset.view);
+        else if (t.dataset.modalAdd) {
+            addToCart(t.dataset.modalAdd);
+            closeProduct();
+        } else if (t.dataset.add) addToCart(t.dataset.add);
         else if (t.dataset.remove) removeFromCart(t.dataset.remove);
         else if (t.dataset.inc)
             setQty(t.dataset.inc, (cart.get(t.dataset.inc) || 0) + 1);
         else if (t.dataset.dec)
             setQty(t.dataset.dec, (cart.get(t.dataset.dec) || 0) - 1);
+    });
+    document
+        .getElementById("search-toggle")
+        .addEventListener("click", () => toggleSearch());
+    document
+        .getElementById("search-input")
+        .addEventListener("input", (e) => renderSearchResults(e.target.value));
+    ["category-filter", "size-filter", "sort-filter"].forEach((id) =>
+        document
+            .getElementById(id)
+            .addEventListener("change", renderCollections),
+    );
+    document.getElementById("filters-reset").addEventListener("click", () => {
+        ["category-filter", "size-filter", "sort-filter"].forEach(
+            (id) => (document.getElementById(id).selectedIndex = 0),
+        );
+        renderCollections();
     });
     document.addEventListener("click", (e) => {
         if (!e.target.closest(".suggest-wrap"))
@@ -619,7 +809,11 @@ renderAnnouncement();
 renderCollections();
 renderReviews();
 renderFaq();
+renderCommunity();
 renderCart();
 initMobileMenu();
 initNewsletter();
 initEvents();
+
+if (location.hash.startsWith("#product-"))
+    openProduct(location.hash.slice(9), false);
