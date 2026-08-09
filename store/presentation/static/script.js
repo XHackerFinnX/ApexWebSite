@@ -273,10 +273,6 @@ function renderCart() {
 
     document.getElementById("bag-count").textContent = count;
     document.getElementById("cart-count").textContent = count;
-    document.getElementById("cart-subtotal").textContent = money(cartTotal());
-    document.getElementById("cart-checkout-total").textContent =
-        money(grandTotal());
-    document.getElementById("cart-checkout").disabled = count === 0;
 
     const body = document.getElementById("cart-body");
     if (cart.size === 0) {
@@ -296,7 +292,7 @@ function renderCart() {
 }
 
 function renderCheckoutForm() {
-    return `<form class="checkout" id="checkout-form" novalidate><h3 class="checkout__title display">Оформление заказа</h3><div class="checkout__grid"><label>Имя<input id="customer-name" required placeholder="Иван" /></label><label>Почта<input id="customer-email" type="email" required placeholder="name@example.com" /></label><label class="checkout__wide">Телефон<input id="customer-phone" type="tel" required value="+7 " placeholder="+7 (999) 999-99-99" /></label></div><h4>Доставка</h4><label>Город<div class="suggest-wrap"><input id="delivery-city" autocomplete="off" placeholder="Начните вводить город" /><div class="suggestions" id="city-suggestions"></div></div></label><div class="checkout__hint" id="delivery-status">Выберите город — мы рассчитаем доставку СДЭК и загрузим пункты выдачи.</div><div class="checkout__radio" id="delivery-options"></div><label id="pvz-label">Пункт получения<div class="suggest-wrap"><input id="delivery-point" autocomplete="off" disabled placeholder="Сначала выберите город" /><div class="suggestions" id="pvz-suggestions"></div></div></label><div class="pvz-info" id="pvz-info"></div><label>ФИО получателя полностью<input id="recipient-name" required placeholder="Иванов Иван Иванович" /></label><label>Комментарий<textarea id="order-comment" placeholder="Комментарий к заказу"></textarea></label><h4>Промокод</h4><div class="promo-row"><input id="promo-code" placeholder="APEX10" /><button type="button" id="apply-promo">Применить</button></div><div class="checkout__hint" id="promo-status">Промокод может действовать на весь заказ или только на выбранные товары.</div><h4>Согласия</h4><label class="check"><input type="checkbox" id="privacy-consent" required />Я даю согласие на обработку персональных данных в соответствии с политикой конфиденциальности</label><label class="check"><input type="checkbox" id="delivery-consent" required />Срок отправки заказов зависит от загруженности магазина, отправка заказов осуществляется в течение 2 недель</label><h4>Способ оплаты</h4><div class="checkout__radio"><label><input type="radio" name="payment" value="card" required />Оплата картой</label><label><input type="radio" name="payment" value="sbp" />СБП</label><label><input type="radio" name="payment" value="dolyami" />Долями</label><label><input type="radio" name="payment" value="yandex" />Яндекс Пэй и Сплит</label></div><div class="checkout__totals" id="checkout-totals"></div><button type="submit" class="cart__checkout">Оформить заказ</button></form>`;
+    return `<form class="checkout" id="checkout-form" novalidate><h3 class="checkout__title display">Оформление заказа</h3><div class="checkout__grid"><label>Имя<input id="customer-name" required placeholder="Иван" /></label><label>Почта<input id="customer-email" type="email" required placeholder="name@example.com" /></label><label class="checkout__wide">Телефон<input id="customer-phone" type="tel" required value="+7 " placeholder="+7 (999) 999-99-99" /></label></div><h4>Доставка</h4><label>Город<div class="suggest-wrap"><input id="delivery-city" autocomplete="off" placeholder="Начните вводить город" /><div class="suggestions" id="city-suggestions"></div></div></label><div class="checkout__hint" id="delivery-status">Выберите город — мы рассчитаем доставку СДЭК и загрузим пункты выдачи.</div><div class="checkout__radio" id="delivery-options"></div><label id="pvz-label">Пункт получения<div class="suggest-wrap"><input id="delivery-point" autocomplete="off" disabled placeholder="Сначала выберите город" /><div class="suggestions" id="pvz-suggestions"></div></div></label><div class="pvz-info" id="pvz-info"></div><label>ФИО получателя полностью<input id="recipient-name" required placeholder="Иванов Иван Иванович" /></label><label>Комментарий<textarea id="order-comment" placeholder="Комментарий к заказу"></textarea></label><h4>Промокод</h4><div class="promo-row"><input id="promo-code" placeholder="APEX10" /><button type="button" id="apply-promo">Применить</button></div><div class="checkout__hint" id="promo-status">Промокод может действовать на весь заказ или только на выбранные товары.</div><h4>Согласия</h4><label class="check"><input type="checkbox" id="privacy-consent" required />Я даю согласие на обработку персональных данных в соответствии с политикой конфиденциальности</label><label class="check"><input type="checkbox" id="delivery-consent" required />Срок отправки заказов зависит от загруженности магазина, отправка заказов осуществляется в течение 2 недель</label><h4>Способ оплаты</h4><div class="checkout__radio"><label><input type="radio" name="payment" value="card" required />Оплата картой, СБП или Долями</label><label><input type="radio" name="payment" value="yandex" />Яндекс Пэй и Сплит</label></div><div class="checkout__totals" id="checkout-totals"></div><button type="submit" class="cart__checkout">Оформить заказ</button></form>`;
 }
 
 /* ---------- Delivery / checkout ---------- */
@@ -337,8 +333,6 @@ function renderTotals() {
     const delivery =
         deliveryState.type === "pvz" ? deliveryState.price || 0 : 0;
     el.innerHTML = `<div><span>Товары</span><b>${money(cartTotal())}</b></div>${discount ? `<div><span>Скидка</span><b>−${money(discount)}</b></div>` : ""}<div><span>Доставка</span><b>${delivery ? money(delivery) : "0 ₽"}</b></div><div><span>Итого</span><b>${money(grandTotal())}</b></div>`;
-    document.getElementById("cart-checkout-total").textContent =
-        money(grandTotal());
 }
 function formatPhone(input) {
     let digits = input.value.replace(/\D/g, "");
@@ -598,13 +592,6 @@ function initNewsletter() {
 function initEvents() {
     document.getElementById("open-cart").addEventListener("click", openCart);
     document.getElementById("close-cart").addEventListener("click", closeCart);
-    document
-        .getElementById("cart-checkout")
-        .addEventListener("click", () =>
-            document
-                .getElementById("checkout-form")
-                ?.scrollIntoView({ behavior: "smooth" }),
-        );
     overlayEl.addEventListener("click", closeCart);
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") closeCart();
