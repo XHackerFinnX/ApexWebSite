@@ -18,6 +18,8 @@ class Settings(BaseSettings):
     # Локальный запуск. В production значения переопределяются через .env/env.
     APP_HOST: str = "localhost"
     APP_PORT: int = 8000
+    ADMIN_USERNAME: str = "admin"
+    ADMIN_PASSWORD: SecretStr
 
     STORE_MASTER_KEY: SecretStr = SecretStr("unsafe-development-key")
     YANDEX_CAPTCHA_SERVER_KEY: SecretStr = SecretStr("")

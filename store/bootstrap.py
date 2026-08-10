@@ -26,6 +26,8 @@ def create_app(settings: Settings | None = None):
         repo,
         RateLimiter(),
         CDEKDelivery(config),
+        config.ADMIN_USERNAME,
+        config.ADMIN_PASSWORD.get_secret_value(),
     )
 
 

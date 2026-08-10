@@ -2,96 +2,299 @@
 <html lang="ru">
     <head>
         <meta charset="utf-8" />
-        <meta name="viewport" content="width=device-width" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
         <title>Apex Admin</title>
-        <link rel="stylesheet" href="style.css" />
+        <link rel="stylesheet" href="admin.css" />
     </head>
     <body>
-        <div class="admin">
-            <aside class="side">
-                <div class="brand">APEX / ADMIN</div>
-                <br /><a class="active">Обзор</a><a>Товары</a><a>Заказы</a><a>Категории и размеры</a
-                ><a>Доставка и оплата</a><a>Аналитика</a><a href="/">← В магазин</a>
+        <div class="admin-shell">
+            <aside class="sidebar">
+                <a class="admin-logo" href="/admin">APEX<span>/</span>ADMIN</a>
+                <nav>
+                    <button class="nav-item active" data-tab="overview">
+                        ⌁ <span>Обзор</span></button
+                    ><button class="nav-item" data-tab="catalog">
+                        ▦ <span>Каталог</span></button
+                    ><button class="nav-item" data-tab="orders">
+                        ▤ <span>Заказы</span></button
+                    ><button class="nav-item" data-tab="settings">
+                        ⚙ <span>Интеграции</span>
+                    </button>
+                </nav>
+                <div class="sidebar-bottom">
+                    <a href="/">↗ <span>Открыть магазин</span></a
+                    ><button id="logout">⇥ <span>Выйти</span></button>
+                </div>
             </aside>
-            <main class="content">
-                <div class="row">
+            <main class="workspace">
+                <header class="topbar">
                     <div>
-                        <span class="muted">ПОНЕДЕЛЬНИК, 3 АВГУСТА</span>
-                        <h1>Доброе утро 👋</h1>
+                        <span class="eyebrow">ПАНЕЛЬ УПРАВЛЕНИЯ</span>
+                        <h1 id="pageTitle">Обзор</h1>
                     </div>
-                    <button id="addProduct">+ Новый товар</button>
-                </div>
-                <div class="stats">
-                    <div class="stat"><span class="muted">Товаров</span><b id="count">—</b></div>
-                    <div class="stat"><span class="muted">Просмотры</span><b id="views">—</b></div>
-                    <div class="stat"><span class="muted">В корзину</span><b id="adds">—</b></div>
-                    <div class="stat"><span class="muted">Конверсия</span><b id="rate">—</b></div>
-                </div>
-                <section class="panel">
-                    <div class="row">
-                        <h2>Каталог</h2>
-                        <span class="muted">Живая статистика</span>
-                    </div>
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Товар</th>
-                                <th>Категория</th>
-                                <th>Остаток</th>
-                                <th>Просмотры</th>
-                                <th>В корзину</th>
-                                <th></th>
-                            </tr>
-                        </thead>
-                        <tbody id="rows"></tbody>
-                    </table>
-                </section>
-                <section class="panel" id="productForm" hidden>
-                    <h2>Новый товар</h2>
-                    <form class="form-grid">
-                        <input name="name" placeholder="Название" required /><input
-                            name="price"
-                            type="number"
-                            placeholder="Цена"
-                            required
-                        /><input name="category" placeholder="Категория" /><input
-                            name="stock"
-                            type="number"
-                            placeholder="Остаток"
-                        /><input name="sizes" placeholder="Размеры через запятую" /><textarea
-                            name="description"
-                            placeholder="Описание"
-                        ></textarea
-                        ><button>Сохранить товар</button>
-                    </form>
-                </section>
-                <section class="panel">
-                    <div class="row">
+                    <button class="button primary" data-open-product>
+                        + Добавить товар
+                    </button>
+                </header>
+                <section class="tab active" id="overview">
+                    <div class="welcome">
                         <div>
-                            <h2>Доставка и оплата</h2>
-                            <p class="muted">Ключи шифруются и не отображаются после сохранения</p>
+                            <span>С возвращением</span>
+                            <h2>Держите магазин под контролем.</h2>
+                            <p>
+                                Ключевые показатели каталога обновляются в
+                                реальном времени.
+                            </p>
+                        </div>
+                        <div class="live">● Система работает</div>
+                    </div>
+                    <div class="stats">
+                        <article>
+                            <i>▦</i><span>Всего товаров</span
+                            ><strong id="count">—</strong
+                            ><small>позиций в каталоге</small>
+                        </article>
+                        <article>
+                            <i>◎</i><span>Просмотры</span
+                            ><strong id="views">—</strong
+                            ><small>интерес к товарам</small>
+                        </article>
+                        <article>
+                            <i>＋</i><span>В корзину</span
+                            ><strong id="adds">—</strong
+                            ><small>добавлений всего</small>
+                        </article>
+                        <article>
+                            <i>↗</i><span>Конверсия</span
+                            ><strong id="rate">—</strong
+                            ><small>просмотр → корзина</small>
+                        </article>
+                    </div>
+                    <div class="grid-two">
+                        <section class="panel">
+                            <div class="panel-head">
+                                <div>
+                                    <span class="eyebrow">БЫСТРЫЙ ДОСТУП</span>
+                                    <h2>Управление</h2>
+                                </div>
+                            </div>
+                            <div class="quick-actions">
+                                <button data-open-product>
+                                    <b>＋</b
+                                    ><span
+                                        >Новый товар<small
+                                            >Добавить позицию</small
+                                        ></span
+                                    ></button
+                                ><button data-go="catalog">
+                                    <b>▦</b
+                                    ><span
+                                        >Каталог<small
+                                            >Остатки и цены</small
+                                        ></span
+                                    ></button
+                                ><button data-go="settings">
+                                    <b>⚙</b
+                                    ><span
+                                        >Интеграции<small
+                                            >Оплата и доставка</small
+                                        ></span
+                                    >
+                                </button>
+                            </div>
+                        </section>
+                        <section class="panel">
+                            <div class="panel-head">
+                                <div>
+                                    <span class="eyebrow">ВНИМАНИЕ</span>
+                                    <h2>Состояние склада</h2>
+                                </div>
+                            </div>
+                            <div id="stockAlerts" class="alerts"></div>
+                        </section>
+                    </div>
+                </section>
+                <section class="tab" id="catalog">
+                    <div class="toolbar">
+                        <div class="search">
+                            ⌕
+                            <input
+                                id="search"
+                                placeholder="Поиск по названию или категории"
+                            />
+                        </div>
+                        <select id="categoryFilter">
+                            <option value="">Все категории</option></select
+                        ><button class="button secondary" id="refresh">
+                            ↻ Обновить
+                        </button>
+                    </div>
+                    <section class="panel catalog-panel">
+                        <div class="panel-head">
+                            <div>
+                                <span class="eyebrow">АССОРТИМЕНТ</span>
+                                <h2>Все товары</h2>
+                            </div>
+                            <span id="catalogCount" class="pill"
+                                >0 позиций</span
+                            >
+                        </div>
+                        <div class="table-wrap">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Товар</th>
+                                        <th>Категория</th>
+                                        <th>Цена</th>
+                                        <th>Остаток</th>
+                                        <th>Эффективность</th>
+                                        <th>Действия</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="rows"></tbody>
+                            </table>
+                        </div>
+                    </section>
+                </section>
+                <section class="tab" id="orders">
+                    <div class="empty-state">
+                        <b>▤</b>
+                        <h2>Управление заказами</h2>
+                        <p>
+                            Раздел подготовлен для подключения оформления
+                            заказов. Здесь появятся статусы, покупатели и
+                            отгрузки.
+                        </p>
+                        <div>
+                            <button class="button secondary">
+                                Экспорт заказов</button
+                            ><button
+                                class="button secondary"
+                                data-go="settings"
+                            >
+                                Настроить оплату
+                            </button>
                         </div>
                     </div>
-                    <form id="integration" class="integration">
-                        <select name="provider">
-                            <option value="tbank">Т-Банк</option>
-                            <option value="alfabank">Альфа-Банк</option>
-                            <option value="yookassa">ЮKassa</option>
-                            <option value="cdek">СДЭК</option></select
-                        ><select name="environment">
-                            <option value="test">Тестовая среда</option>
-                            <option value="production">Production</option></select
-                        ><label><input name="enabled" type="checkbox" /> Включить</label
-                        ><input name="login" placeholder="ID / логин / terminal key" /><input
-                            name="secret"
-                            type="password"
-                            placeholder="Пароль / secret key"
-                        /><button>Сохранить</button>
-                    </form>
-                    <div id="configured"></div>
+                </section>
+                <section class="tab" id="settings">
+                    <div class="settings-grid">
+                        <section class="panel">
+                            <div class="panel-head">
+                                <div>
+                                    <span class="eyebrow">ПОДКЛЮЧЕНИЕ</span>
+                                    <h2>Оплата и доставка</h2>
+                                    <p>
+                                        Секретные ключи шифруются и не
+                                        отображаются после сохранения.
+                                    </p>
+                                </div>
+                            </div>
+                            <form id="integration" class="integration-form">
+                                <label
+                                    >Провайдер<select name="provider">
+                                        <option value="tbank">Т-Банк</option>
+                                        <option value="alfabank">
+                                            Альфа-Банк
+                                        </option>
+                                        <option value="cdek">СДЭК</option>
+                                    </select></label
+                                ><label
+                                    >Среда<select name="environment">
+                                        <option value="test">Тестовая</option>
+                                        <option value="production">
+                                            Production
+                                        </option>
+                                    </select></label
+                                ><label
+                                    >ID / логин<input
+                                        name="login"
+                                        placeholder="Идентификатор аккаунта" /></label
+                                ><label
+                                    >Пароль / Secret<input
+                                        name="secret"
+                                        type="password"
+                                        placeholder="••••••••" /></label
+                                ><label class="switch"
+                                    ><input
+                                        name="enabled"
+                                        type="checkbox"
+                                    /><span></span>Включить интеграцию</label
+                                ><button class="button primary">
+                                    Сохранить настройки
+                                </button>
+                            </form>
+                        </section>
+                        <section class="panel">
+                            <div class="panel-head">
+                                <div>
+                                    <span class="eyebrow">СТАТУС</span>
+                                    <h2>Подключённые сервисы</h2>
+                                </div>
+                            </div>
+                            <div id="configured" class="configured"></div>
+                        </section>
+                    </div>
                 </section>
             </main>
         </div>
+        <dialog id="productDialog">
+            <form id="productForm">
+                <div class="dialog-head">
+                    <div>
+                        <span class="eyebrow">КАТАЛОГ</span>
+                        <h2 id="formTitle">Новый товар</h2>
+                    </div>
+                    <button type="button" class="close" data-close>×</button>
+                </div>
+                <input name="id" type="hidden" />
+                <div class="form-grid">
+                    <label
+                        >Название<input
+                            name="name"
+                            required
+                            placeholder="Например, Racing Hoodie" /></label
+                    ><label
+                        >Цена, ₽<input
+                            name="price"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            required /></label
+                    ><label
+                        >Категория<input
+                            name="category"
+                            placeholder="Худи" /></label
+                    ><label
+                        >Остаток<input
+                            name="stock"
+                            type="number"
+                            min="0"
+                            value="0" /></label
+                    ><label class="full"
+                        >Размеры<input
+                            name="sizes"
+                            placeholder="S, M, L, XL" /></label
+                    ><label class="full"
+                        >Ссылка на изображение<input
+                            name="image_url"
+                            type="url"
+                            placeholder="https://..." /></label
+                    ><label class="full"
+                        >Описание<textarea
+                            name="description"
+                            rows="4"
+                        ></textarea>
+                    </label>
+                </div>
+                <div class="dialog-actions">
+                    <button type="button" class="button secondary" data-close>
+                        Отмена</button
+                    ><button class="button primary">Сохранить товар</button>
+                </div>
+            </form>
+        </dialog>
+        <div id="toast" class="toast"></div>
         <script src="admin.js"></script>
     </body>
 </html>

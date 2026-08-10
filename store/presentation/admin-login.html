@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Вход — Apex Admin</title>
+        <link rel="stylesheet" href="admin.css" />
+    </head>
+    <body class="login-page">
+        <main class="login-card">
+            <a class="admin-logo" href="/">APEX<span>/</span>ADMIN</a>
+            <div class="login-badge">Защищённая зона</div>
+            <h1>Вход в панель</h1>
+            <p>Управление каталогом, остатками и интеграциями магазина.</p>
+            <form id="loginForm">
+                <label
+                    >Логин<input
+                        name="username"
+                        autocomplete="username"
+                        required
+                        autofocus /></label
+                ><label
+                    >Пароль<input
+                        name="password"
+                        type="password"
+                        autocomplete="current-password"
+                        required
+                /></label>
+                <div class="form-error" id="loginError" role="alert"></div>
+                <button class="button primary" type="submit">
+                    Войти в систему <span>→</span>
+                </button>
+            </form>
+            <a class="back-link" href="/">← Вернуться в магазин</a>
+        </main>
+        <script src="admin-login.js"></script>
+    </body>
+</html>

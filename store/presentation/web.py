@@ -1,4 +1,8 @@
 import json
+import base64
+import binascii
+import hashlib
+import hmac
 import mimetypes
 import time
 from dataclasses import asdict
@@ -17,7 +21,17 @@ class Encoder(json.JSONEncoder):
 
 
 class WebApp:
-    def __init__(self, catalog, integrations, checkout, repo, limiter, delivery=None):
+    def __init__(
+        self,
+        catalog,
+        integrations,
+        checkout,
+        repo,
+        limiter,
+        delivery=None,
+        admin_username="admin",
+        admin_password="admin",
+    ):
         self.catalog, self.integrations, self.checkout, self.repo, self.limiter, self.delivery = (
             catalog,
             integrations,
@@ -26,6 +40,27 @@ class WebApp:
             limiter,
             delivery,
         )
+        self.admin_username = admin_username
+        self.admin_password = admin_password
+
+    def _session_token(self, expires):
+        payload = str(expires)
+        signature = hmac.new(
+            self.admin_password.encode(), payload.encode(), hashlib.sha256
+        ).hexdigest()
+        return base64.urlsafe_b64encode(f"{payload}.{signature}".encode()).decode()
+
+    def valid_session(self, token):
+        try:
+            payload, signature = (
+                base64.urlsafe_b64decode(token.encode()).decode().split(".", 1)
+            )
+            expected = hmac.new(
+                self.admin_password.encode(), payload.encode(), hashlib.sha256
+            ).hexdigest()
+            return int(payload) > time.time() and hmac.compare_digest(signature, expected)
+        except (ValueError, TypeError, binascii.Error):
+            return False
 
     def handler(self):
         app = self
@@ -33,7 +68,7 @@ class WebApp:
 
         class Handler(BaseHTTPRequestHandler):
             def _send(
-                self, status=200, data=None, ctype="application/json; charset=utf-8"
+                self, status=200, data=None, ctype="application/json; charset=utf-8", headers=None
             ):
                 body = (
                     json.dumps(data, cls=Encoder, ensure_ascii=False).encode()
@@ -46,6 +81,8 @@ class WebApp:
                 self.send_header("X-Content-Type-Options", "nosniff")
                 self.send_header("X-Frame-Options", "DENY")
                 self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+                for key, value in (headers or {}).items():
+                    self.send_header(key, value)
                 self.send_header(
                     "Content-Security-Policy",
                     "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; img-src 'self' https: data:; connect-src 'self' https://geoserv.tildacdn.com",
@@ -58,6 +95,35 @@ class WebApp:
                 if length > 1_000_000:
                     raise ValueError("Запрос слишком большой")
                 return json.loads(self.rfile.read(length) or b"{}")
+            
+            def _serve_static(self, filename):
+                """Serve a file only from the application's bundled static directory."""
+                root = (Path(__file__).parent / "static").resolve()
+                target = (root / filename).resolve()
+                if not target.is_relative_to(root) or not target.is_file():
+                    return self._send(404, {"error": "Не найдено"})
+                return self._send(
+                    200,
+                    target.read_bytes(),
+                    mimetypes.guess_type(target.name)[0]
+                    or "application/octet-stream",
+                )
+
+            def _authenticated(self):
+                cookies = {}
+                for item in self.headers.get("Cookie", "").split(";"):
+                    if "=" in item:
+                        key, value = item.strip().split("=", 1)
+                        cookies[key] = value
+                return app.valid_session(cookies.get("apex_admin", ""))
+
+            def _redirect(self, location, cookie=None):
+                self.send_response(303)
+                self.send_header("Location", location)
+                if cookie:
+                    self.send_header("Set-Cookie", cookie)
+                self.send_header("Content-Length", "0")
+                self.end_headers()
 
             def _route(self):
                 if not app.limiter.allow(self.client_address[0], time.monotonic()):
@@ -65,6 +131,46 @@ class WebApp:
                 parsed = urlparse(self.path)
                 path = parsed.path
                 try:
+                    # Keep the entry point explicit: it must never fall through to
+                    # generic path-to-file handling (or depend on a trailing slash).
+                    if self.command == "GET" and path in {"/admin", "/admin/"}:
+                        page = (
+                            "admin.html"
+                            if self._authenticated()
+                            else "admin-login.html"
+                        )
+                        return self._serve_static(page)
+                    if self.command == "GET" and path == "/favicon.ico":
+                        return self._send(204, b"", "image/x-icon")
+                    if self.command == "POST" and path == "/api/admin/login":
+                        credentials = self._body()
+                        valid = hmac.compare_digest(
+                            str(credentials.get("username", "")), app.admin_username
+                        ) and hmac.compare_digest(
+                            str(credentials.get("password", "")), app.admin_password
+                        )
+                        if not valid:
+                            return self._send(401, {"error": "Неверный логин или пароль"})
+                        token = app._session_token(int(time.time()) + 8 * 60 * 60)
+                        return self._send(
+                            data={"ok": True},
+                            headers={
+                                "Set-Cookie": f"apex_admin={token}; Path=/; "
+                                "HttpOnly; SameSite=Strict; Max-Age=28800"
+                            },
+                        )
+                    if self.command == "POST" and path == "/api/admin/logout":
+                        return self._send(
+                            data={"ok": True},
+                            headers={
+                                "Set-Cookie": "apex_admin=; Path=/; HttpOnly; "
+                                "SameSite=Strict; Max-Age=0"
+                            },
+                        )
+                    if path.startswith("/api/admin/") and not self._authenticated():
+                        return self._send(401, {"error": "Требуется вход"})
+                    if self.command == "GET" and path == "/admin.html":
+                        return self._redirect("/admin")
                     if self.command == "GET" and path == "/api/products":
                         return self._send(data=[asdict(x) for x in app.catalog.list()])
                     if self.command == "GET" and path == "/api/admin/integrations":
@@ -115,20 +221,8 @@ class WebApp:
                             data={"ok": app.repo.delete_product(int(parts[3]))}
                         )
                     if self.command == "GET":
-                        file = (
-                            "admin.html"
-                            if path == "/admin"
-                            else ("index.html" if path == "/" else path.lstrip("/"))
-                        )
-                        target = (Path(__file__).parent / "static" / file).resolve()
-                        root = (Path(__file__).parent / "static").resolve()
-                        if root in target.parents and target.is_file():
-                            return self._send(
-                                200,
-                                target.read_bytes(),
-                                mimetypes.guess_type(target.name)[0]
-                                or "application/octet-stream",
-                            )
+                        file = "index.html" if path == "/" else path.lstrip("/")
+                        return self._serve_static(file)
                     return self._send(404, {"error": "Не найдено"})
                 except (ValueError, LookupError, KeyError) as e:
                     return self._send(400, {"error": str(e)})

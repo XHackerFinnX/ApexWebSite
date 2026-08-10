@@ -1,7 +1,10 @@
 import tempfile
+import threading
 import unittest
 from decimal import Decimal
+from http.server import ThreadingHTTPServer
 from pathlib import Path
+from urllib.request import Request, urlopen
 
 from store.application.services import (
     CatalogService,
@@ -11,6 +14,7 @@ from store.application.services import (
 from store.config import Settings
 from store.domain import Integration, Product
 from store.infrastructure.security import RateLimiter, SecretBox
+from store.presentation.web import WebApp
 
 
 class MemoryRepository:
@@ -58,6 +62,11 @@ class MemoryRepository:
 class Captcha:
     def verify(self, token, ip):
         return token == "ok"
+    
+
+class AllowAllLimiter:
+    def allow(self, *_args):
+        return True
 
 
 class StoreTests(unittest.TestCase):
@@ -140,6 +149,36 @@ class StoreTests(unittest.TestCase):
                 POSTGRESQL_PASSWORD="secret",
                 POSTGRESQL_SSLMODE="verify-full",
             )
+    
+    def test_admin_session_is_signed_and_expires(self):
+        app = WebApp(None, None, None, None, None, admin_password="secret")
+        self.assertTrue(app.valid_session(app._session_token(4_000_000_000)))
+        self.assertFalse(app.valid_session(app._session_token(1)))
+        self.assertFalse(app.valid_session("invalid"))
+
+    def test_admin_routes_serve_login_for_both_url_variants(self):
+        app = WebApp(None, None, None, None, AllowAllLimiter())
+        server = ThreadingHTTPServer(("127.0.0.1", 0), app.handler())
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            for path in ("/admin", "/admin/"):
+                with urlopen(
+                    f"http://127.0.0.1:{server.server_port}{path}"
+                ) as response:
+                    self.assertEqual(response.status, 200)
+                    self.assertIn(b"loginForm", response.read())
+            with urlopen(
+                Request(
+                    f"http://127.0.0.1:{server.server_port}/favicon.ico",
+                    method="GET",
+                )
+            ) as response:
+                self.assertEqual(response.status, 204)
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
 
 
 if __name__ == "__main__":
