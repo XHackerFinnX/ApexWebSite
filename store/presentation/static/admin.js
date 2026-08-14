@@ -1,4 +1,5 @@
 let products = [];
+let categories = [];
 const $ = (selector) => document.querySelector(selector);
 const esc = (value) =>
     String(value ?? "").replace(
@@ -12,11 +13,52 @@ const esc = (value) =>
                 '"': "&quot;",
             })[c],
     );
-const toast = (message) => {
+const toast = (message, error = false) => {
     $("#toast").textContent = message;
+    $("#toast").classList.toggle("error", error);
     $("#toast").classList.add("show");
     setTimeout(() => $("#toast").classList.remove("show"), 2400);
 };
+async function errorMessage(
+    response,
+    fallback = "Не удалось выполнить запрос",
+) {
+    try {
+        const data = await response.json();
+        return data.error || `${fallback} (HTTP ${response.status})`;
+    } catch {
+        return `${fallback} (HTTP ${response.status})`;
+    }
+}
+function renderCategories() {
+    const options = categories
+        .map(
+            (category) =>
+                `<option value="${esc(category.name)}">${esc(category.name)}</option>`,
+        )
+        .join("");
+    $("#categoryFilter").innerHTML =
+        '<option value="">Все категории</option>' + options;
+    $("#productCategory").innerHTML =
+        '<option value="">Выберите категорию</option>' + options;
+    $("#categoryList").innerHTML = categories.length
+        ? categories
+              .map(
+                  (category) =>
+                      `<div><span><b>${esc(category.name)}</b><br><small>Товаров: ${category.product_count}</small></span><button type="button" class="icon-btn danger" data-delete-category="${category.id}" ${category.product_count ? 'disabled title="Сначала удалите или перенесите товары"' : ""}>Удалить</button></div>`,
+              )
+              .join("")
+        : "<small>Категорий пока нет</small>";
+}
+async function loadCategories() {
+    const response = await fetch("/api/admin/categories");
+    if (!response.ok)
+        throw new Error(
+            await errorMessage(response, "Не удалось загрузить категории"),
+        );
+    categories = await response.json();
+    renderCategories();
+}
 function switchTab(id) {
     document
         .querySelectorAll(".tab,.nav-item")
@@ -68,6 +110,11 @@ function renderProducts() {
         );
 }
 async function load() {
+    try {
+        await loadCategories();
+    } catch (error) {
+        toast(error.message, true);
+    }
     const response = await fetch("/api/products");
     products = await response.json();
     $("#count").textContent = products.length;
@@ -77,10 +124,6 @@ async function load() {
     $("#adds").textContent = adds.toLocaleString("ru");
     $("#rate").textContent =
         (views ? (adds / views) * 100 : 0).toFixed(1) + "%";
-    const categories = [...new Set(products.map((p) => p.category))];
-    $("#categoryFilter").innerHTML =
-        '<option value="">Все категории</option>' +
-        categories.map((c) => `<option>${esc(c)}</option>`).join("");
     const low = products.filter((p) => p.stock < 5);
     $("#stockAlerts").innerHTML = low.length
         ? low
@@ -106,10 +149,15 @@ function openProduct(p = null) {
     const f = $("#productForm");
     f.reset();
     $("#formTitle").textContent = p ? "Редактирование товара" : "Новый товар";
-    if (p)
+    if (p) {
+        if (!categories.some((category) => category.name === p.category)) {
+            categories.push({ id: "", name: p.category, product_count: 1 });
+            renderCategories();
+        }
         ["id", "name", "category", "description"].forEach((key) => {
             f.elements[key].value = p[key] ?? "";
         });
+    }
     const variants = p?.variants?.length
         ? p.variants
         : p
@@ -280,16 +328,20 @@ $("#productForm").onsubmit = async (e) => {
         },
     );
     if (!d.variants.length) return toast("Добавьте хотя бы одну вариацию");
-    const r = await fetch("/api/admin/products", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(d),
-    });
-    if (r.ok) {
+    try {
+        const r = await fetch("/api/admin/products", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(d),
+        });
+        if (!r.ok)
+            return toast(await errorMessage(r, "Товар не сохранён"), true);
         $("#productDialog").close();
         toast(d.id ? "Товар обновлён" : "Товар добавлен");
         load();
-    } else toast((await r.json()).error);
+    } catch (error) {
+        toast(`Товар не сохранён: ${error.message}`, true);
+    }
 };
 async function removeProduct(id) {
     if (confirm("Удалить товар из каталога?")) {
@@ -302,6 +354,55 @@ async function removeProduct(id) {
         }
     }
 }
+document.querySelectorAll("[data-open-categories]").forEach((button) => {
+    button.onclick = () => {
+        renderCategories();
+        $("#categoryDialog").showModal();
+    };
+});
+document.querySelector("[data-close-category]").onclick = () =>
+    $("#categoryDialog").close();
+$("#categoryForm").onsubmit = async (event) => {
+    event.preventDefault();
+    try {
+        const response = await fetch("/api/admin/categories", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                name: new FormData(event.target).get("name"),
+            }),
+        });
+        if (!response.ok)
+            return toast(
+                await errorMessage(response, "Категория не добавлена"),
+                true,
+            );
+        event.target.reset();
+        await loadCategories();
+        toast("Категория добавлена");
+    } catch (error) {
+        toast(`Категория не добавлена: ${error.message}`, true);
+    }
+};
+$("#categoryList").onclick = async (event) => {
+    const button = event.target.closest("[data-delete-category]");
+    if (!button || button.disabled || !confirm("Удалить категорию?")) return;
+    try {
+        const response = await fetch(
+            `/api/admin/categories/${button.dataset.deleteCategory}`,
+            { method: "DELETE" },
+        );
+        if (!response.ok)
+            return toast(
+                await errorMessage(response, "Категория не удалена"),
+                true,
+            );
+        await loadCategories();
+        toast("Категория удалена");
+    } catch (error) {
+        toast(`Категория не удалена: ${error.message}`, true);
+    }
+};
 $("#integration").onsubmit = async (e) => {
     e.preventDefault();
     const f = new FormData(e.target),

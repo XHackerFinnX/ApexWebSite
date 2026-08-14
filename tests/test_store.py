@@ -21,6 +21,7 @@ class MemoryRepository:
     def __init__(self):
         self.products = {1: Product(1, "Demo", "", Decimal(10), "A", (), "", 1)}
         self.integrations = {}
+        self.categories = [{"id": 1, "name": "A", "slug": "a", "product_count": 1}]
 
     def list_products(self):
         return list(self.products.values())
@@ -43,6 +44,19 @@ class MemoryRepository:
             getattr(self.products[product_id], metric) + 1,
         )
 
+    def list_categories(self):
+        return self.categories
+
+    def save_category(self, name):
+        category = {"id": 2, "name": name, "slug": name.lower(), "product_count": 0}
+        self.categories.append(category)
+        return category
+
+    def delete_category(self, category_id):
+        before = len(self.categories)
+        self.categories = [item for item in self.categories if item["id"] != category_id]
+        return len(self.categories) != before
+    
     def list_integrations(self):
         return [
             Integration(
@@ -221,6 +235,21 @@ class StoreTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join()
+    
+    def test_variant_data_supports_color_specific_catalog_view(self):
+        product = CatalogService(self.repo).save(
+            {
+                "name": "Color product",
+                "category": "A",
+                "variants": [
+                    {"sku": "WHITE-S", "price": 100, "stock": 2, "color": "Белый", "size": "S", "images": ["white.jpg"]},
+                    {"sku": "BLACK-M", "price": 150, "stock": 3, "color": "Чёрный", "size": "M", "images": ["black.jpg"]},
+                ],
+            }
+        )
+        self.assertEqual(product.color, "Белый, Чёрный")
+        self.assertEqual(product.variants[1]["price"], "150")
+        self.assertEqual(product.variants[1]["images"], ["black.jpg"])
 
 
 if __name__ == "__main__":

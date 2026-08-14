@@ -247,17 +247,87 @@ function toggleSearch(force) {
 }
 
 let galleryIndex = 0;
+let activeProductId = "";
+let activeColor = "";
+
+function colorOptions(p) {
+    const variants = p.variants || [];
+    const colors = [
+        ...new Set(variants.map((item) => item.color).filter(Boolean)),
+    ];
+    return colors.length ? colors : p.colors;
+}
+function variantsForColor(p, color) {
+    return (p.variants || []).filter((variant) => variant.color === color);
+}
+function selectedProductView(p, color = activeColor) {
+    const variants = variantsForColor(p, color);
+    const images =
+        variants.find((variant) => variant.images?.length)?.images || p.images;
+    const prices = variants.map((variant) => Number(variant.price));
+    return {
+        images: images.length ? images : [""],
+        price: prices.length ? Math.min(...prices) : Number(p.price),
+        sizes: variants.length
+            ? [
+                  ...new Set(
+                      variants
+                          .filter((variant) => Number(variant.stock) > 0)
+                          .map((variant) => variant.size)
+                          .filter(Boolean),
+                  ),
+              ]
+            : p.sizes,
+        stock: variants.length
+            ? variants.reduce((sum, variant) => sum + Number(variant.stock), 0)
+            : p.stock,
+    };
+}
 function galleryMarkup(p) {
-    const images = p.images.length ? p.images : [""];
-    return `<div class="product-view"><div class="product-view__gallery"><button type="button" class="product-view__main-button" data-open-lightbox aria-label="Открыть фотографию полностью"><img class="product-view__main" src="${esc(images[0])}" alt="${esc(p.name)}" /></button><div class="product-view__thumbs">${images.map((image, index) => `<button class="${index === 0 ? "is-active" : ""}" type="button" data-gallery-index="${index}"><img src="${esc(image)}" alt="Фото товара ${index + 1}" /></button>`).join("")}</div></div><div class="product-view__info"><p class="eyebrow">${esc(p.category)}</p><h2 class="display product-view__title" id="product-modal-title">${esc(p.name)}</h2><div class="product-view__prices"><strong>${money(p.price)}</strong></div><p class="product-view__description">${esc(p.description)}</p>${p.colors.length ? `<fieldset><legend>Цвет</legend><div class="product-view__options"><label><input type="radio" name="product-color" checked/><span>${esc(p.colors[0])}</span></label></div></fieldset>` : ""}<fieldset><legend>Размер <small>— доступны сейчас</small></legend><div class="product-view__options product-view__sizes">${p.sizes.map((size, i) => `<label><input type="radio" name="product-size" value="${esc(size)}" ${i === 0 ? "checked" : ""}/><span>${esc(size)}</span></label>`).join("")}</div></fieldset><p class="product-view__stock">● В наличии — ${p.stock} шт.</p><button type="button" class="product-view__add" data-modal-add="${p.id}">${ICONS.bag} В корзину · ${money(p.price)}</button></div></div>`;
+    const colors = colorOptions(p);
+    activeColor = colors[0] || "";
+    const view = selectedProductView(p);
+    return `<div class="product-view"><div class="product-view__gallery"><button type="button" class="product-view__main-button" data-open-lightbox aria-label="Открыть фотографию полностью"><img class="product-view__main" src="${esc(view.images[0])}" alt="${esc(p.name)}" /></button><div class="product-view__thumbs"></div></div><div class="product-view__info"><p class="eyebrow">${esc(p.category)}</p><h2 class="display product-view__title" id="product-modal-title">${esc(p.name)}</h2><div class="product-view__prices"><strong></strong></div><p class="product-view__description">${esc(p.description)}</p>${colors.length ? `<fieldset><legend>Цвет</legend><div class="product-view__options product-view__colors">${colors.map((color, index) => `<label><input type="radio" name="product-color" value="${esc(color)}" ${index === 0 ? "checked" : ""}/><span>${esc(color)}</span></label>`).join("")}</div></fieldset>` : ""}<fieldset><legend>Размер <small>— доступны сейчас</small></legend><div class="product-view__options product-view__sizes"></div></fieldset><p class="product-view__stock"></p><button type="button" class="product-view__add" data-modal-add="${p.id}">${ICONS.bag} <span></span></button></div></div>`;
+}
+function updateProductView() {
+    const p = productById[activeProductId];
+    if (!p) return;
+    const view = selectedProductView(p);
+    galleryIndex = 0;
+    document.querySelector(".product-view__prices strong").textContent = money(
+        view.price,
+    );
+    document.querySelector(".product-view__sizes").innerHTML = view.sizes.length
+        ? view.sizes
+              .map(
+                  (size, index) =>
+                      `<label><input type="radio" name="product-size" value="${esc(size)}" ${index === 0 ? "checked" : ""}/><span>${esc(size)}</span></label>`,
+              )
+              .join("")
+        : `<span class="product-view__unavailable">Нет доступных размеров</span>`;
+    document.querySelector(".product-view__stock").textContent = view.stock
+        ? `● В наличии — ${view.stock} шт.`
+        : "Нет в наличии";
+    document.querySelector(".product-view__add span").textContent =
+        `В корзину · ${money(view.price)}`;
+    document.querySelector(".product-view__add").disabled = !view.stock;
+    document.querySelector(".product-view__thumbs").innerHTML = view.images
+        .map(
+            (image, index) =>
+                `<button class="${index === 0 ? "is-active" : ""}" type="button" data-gallery-index="${index}"><img src="${esc(image)}" alt="Фото товара ${index + 1}" /></button>`,
+        )
+        .join("");
+    document.querySelector(".product-view__main").src = view.images[0];
 }
 
 function openProduct(id, updateHash = true) {
     const p = productById[id];
     if (!p) return;
+    activeProductId = String(id);
     galleryIndex = 0;
     document.getElementById("product-modal-content").innerHTML =
         galleryMarkup(p);
+    updateProductView();
     const modal = document.getElementById("product-modal");
     modal.classList.add("is-open");
     modal.setAttribute("aria-hidden", "false");
@@ -268,20 +338,18 @@ function openProduct(id, updateHash = true) {
     modal.querySelector(".product-modal__close").focus();
 }
 function setGalleryImage(index) {
-    const id = location.hash.startsWith("#product-")
-        ? location.hash.slice(9)
-        : document.querySelector("[data-modal-add]")?.dataset.modalAdd;
-    const p = productById[id];
-    if (!p?.images.length) return;
-    galleryIndex = (index + p.images.length) % p.images.length;
-    document.querySelector(".product-view__main").src = p.images[galleryIndex];
+    const p = productById[activeProductId];
+    if (!p) return;
+    const images = selectedProductView(p).images;
+    galleryIndex = (index + images.length) % images.length;
+    document.querySelector(".product-view__main").src = images[galleryIndex];
     document
         .querySelectorAll("[data-gallery-index]")
         .forEach((button, i) =>
             button.classList.toggle("is-active", i === galleryIndex),
         );
     const lightboxImage = document.getElementById("lightbox-image");
-    if (lightboxImage) lightboxImage.src = p.images[galleryIndex];
+    if (lightboxImage) lightboxImage.src = images[galleryIndex];
 }
 function openLightbox() {
     const box = document.getElementById("image-lightbox");
@@ -709,6 +777,33 @@ function initEvents() {
         else if (t.dataset.dec)
             setQty(t.dataset.dec, (cart.get(t.dataset.dec) || 0) - 1);
     });
+    document.addEventListener("change", (event) => {
+        if (event.target.name === "product-color") {
+            activeColor = event.target.value;
+            updateProductView();
+        }
+    });
+    const gallery = document.getElementById("product-modal-content");
+    let swipeStartX = null;
+    gallery.addEventListener(
+        "touchstart",
+        (event) => {
+            if (event.target.closest(".product-view__main-button"))
+                swipeStartX = event.touches[0].clientX;
+        },
+        { passive: true },
+    );
+    gallery.addEventListener(
+        "touchend",
+        (event) => {
+            if (swipeStartX === null) return;
+            const distance = event.changedTouches[0].clientX - swipeStartX;
+            if (Math.abs(distance) > 45)
+                setGalleryImage(galleryIndex + (distance < 0 ? 1 : -1));
+            swipeStartX = null;
+        },
+        { passive: true },
+    );
     document
         .getElementById("search-toggle")
         .addEventListener("click", () => toggleSearch());

@@ -117,6 +117,44 @@ class PostgreSQLRepository:
                 db.execute("DELETE FROM products WHERE id=%s", (product_id,)).rowcount
                 > 0
             )
+    
+    def list_categories(self) -> list[dict[str, object]]:
+        with self._db() as db:
+            return list(
+                db.execute(
+                    """SELECT c.id,c.name,c.slug,count(p.id)::int AS product_count
+                       FROM categories c LEFT JOIN products p ON p.category_id=c.id
+                       GROUP BY c.id ORDER BY c.name"""
+                ).fetchall()
+            )
+
+    def save_category(self, name: str) -> dict[str, object]:
+        name = name.strip()
+        if not name:
+            raise ValueError("Введите название категории")
+        with self._db() as db:
+            row = db.execute(
+                """INSERT INTO categories(name,slug) VALUES(%s,%s)
+                   ON CONFLICT(name) DO UPDATE SET name=excluded.name
+                   RETURNING id,name,slug""",
+                (name, self._slug(name)),
+            ).fetchone()
+            return {**row, "product_count": 0}
+
+    def delete_category(self, category_id: int) -> bool:
+        with self._db() as db:
+            used = db.execute(
+                "SELECT count(*) AS count FROM products WHERE category_id=%s",
+                (category_id,),
+            ).fetchone()["count"]
+            if used:
+                raise ValueError(
+                    f"Нельзя удалить категорию: в ней товаров — {used}"
+                )
+            return (
+                db.execute("DELETE FROM categories WHERE id=%s", (category_id,)).rowcount
+                > 0
+            )
 
     def increment(self, product_id: int, metric: str) -> None:
         if metric not in {"views", "cart_adds"}:

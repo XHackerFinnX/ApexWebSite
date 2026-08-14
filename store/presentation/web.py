@@ -177,6 +177,13 @@ class WebApp:
                         return self._send(
                             data=[asdict(x) for x in app.integrations.list()]
                         )
+                    if self.command == "GET" and path == "/api/admin/categories":
+                        return self._send(data=app.repo.list_categories())
+                    if self.command == "POST" and path == "/api/admin/categories":
+                        category = app.repo.save_category(
+                            str(self._body().get("name", ""))
+                        )
+                        return self._send(201, category)
                     if self.command == "POST" and path == "/api/admin/products":
                         return self._send(201, asdict(app.catalog.save(self._body())))
                     if self.command == "POST" and path == "/api/admin/integrations":
@@ -220,6 +227,15 @@ class WebApp:
                         return self._send(
                             data={"ok": app.repo.delete_product(int(parts[3]))}
                         )
+                    if (
+                        self.command == "DELETE"
+                        and len(parts) == 4
+                        and parts[:3] == ["api", "admin", "categories"]
+                    ):
+                        deleted = app.repo.delete_category(int(parts[3]))
+                        if not deleted:
+                            return self._send(404, {"error": "Категория не найдена"})
+                        return self._send(data={"ok": True})
                     if self.command == "GET":
                         file = "index.html" if path == "/" else path.lstrip("/")
                         return self._serve_static(file)

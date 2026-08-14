@@ -466,12 +466,51 @@ dialog form {
     font-size: 12px;
 }
 .form-grid input,
-.form-grid textarea {
+.form-grid textarea,
+.form-grid select {
     background: #101115;
     color: #fff;
     border: 1px solid var(--line);
     padding: 11px;
     border-radius: 7px;
+}
+.topbar-actions,
+.category-add {
+    display: flex;
+    gap: 10px;
+}
+.category-dialog {
+    width: min(620px, calc(100% - 30px));
+}
+.category-add input {
+    flex: 1;
+    min-width: 0;
+    background: #101115;
+    color: #fff;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+    padding: 11px;
+}
+.category-list {
+    display: grid;
+    gap: 8px;
+    margin-top: 20px;
+}
+.category-list > div {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 7px;
+}
+.category-list small {
+    color: var(--muted);
+}
+.toast.error {
+    background: #ffdbdc;
+    color: #85080b;
 }
 .full {
     grid-column: 1/3;

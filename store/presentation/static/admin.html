@@ -32,9 +32,14 @@
                         <span class="eyebrow">ПАНЕЛЬ УПРАВЛЕНИЯ</span>
                         <h1 id="pageTitle">Обзор</h1>
                     </div>
-                    <button class="button primary" data-open-product>
-                        + Добавить товар
-                    </button>
+                    <div class="topbar-actions">
+                        <button class="button secondary" data-open-categories>
+                            Категории
+                        </button>
+                        <button class="button primary" data-open-product>
+                            + Добавить товар
+                        </button>
+                    </div>
                 </header>
                 <section class="tab active" id="overview">
                     <div class="welcome">
@@ -125,6 +130,8 @@
                         </div>
                         <select id="categoryFilter">
                             <option value="">Все категории</option></select
+                        ><button class="button secondary" data-open-categories>
+                            + Добавить / удалить категорию</button
                         ><button class="button secondary" id="refresh">
                             ↻ Обновить
                         </button>
@@ -255,9 +262,13 @@
                             required
                             placeholder="Например, Racing Hoodie" /></label
                     ><label
-                        >Категория<input
+                        >Категория<select
                             name="category"
-                            placeholder="Худи" /></label
+                            id="productCategory"
+                            required
+                        >
+                            <option value="">Выберите категорию</option>
+                        </select></label
                     ><label class="full"
                         >Описание<textarea
                             name="description"
@@ -290,6 +301,28 @@
                         Отмена</button
                     ><button class="button primary">Сохранить товар</button>
                 </div>
+            </form>
+        </dialog>
+        <dialog id="categoryDialog" class="category-dialog">
+            <form id="categoryForm">
+                <div class="dialog-head">
+                    <div>
+                        <span class="eyebrow">КАТАЛОГ</span>
+                        <h2>Категории</h2>
+                    </div>
+                    <button type="button" class="close" data-close-category>
+                        ×
+                    </button>
+                </div>
+                <div class="category-add">
+                    <input
+                        name="name"
+                        required
+                        maxlength="80"
+                        placeholder="Название новой категории"
+                    /><button class="button primary">Добавить</button>
+                </div>
+                <div id="categoryList" class="category-list"></div>
             </form>
         </dialog>
         <div id="toast" class="toast"></div>
