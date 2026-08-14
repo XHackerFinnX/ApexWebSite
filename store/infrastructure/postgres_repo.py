@@ -2,6 +2,7 @@ import json
 from pathlib import Path
 
 import psycopg
+from psycopg.types.json import Jsonb
 from psycopg.rows import dict_row
 
 from store.domain import Integration, Product
@@ -48,6 +49,7 @@ class PostgreSQLRepository:
             row["cart_adds"],
             row["color"],
             tuple(row["images"] or ([row["image_url"]] if row["image_url"] else [])),
+            tuple(row["variants"] or []),
         )
 
     def list_products(self) -> list[Product]:
@@ -85,11 +87,12 @@ class PostgreSQLRepository:
                 product.stock,
                 product.color,
                 list(product.images),
+                Jsonb(list(product.variants)),
             )
             if product.id:
                 db.execute(
                     """UPDATE products SET name=%s,description=%s,price=%s,category_id=%s,
-                           image_url=%s,stock=%s,color=%s,images=%s,updated_at=now() WHERE id=%s""",
+                           image_url=%s,stock=%s,color=%s,images=%s,variants=%s,updated_at=now() WHERE id=%s""",
                     values + (product.id,),
                 )
                 db.execute(
@@ -97,14 +100,15 @@ class PostgreSQLRepository:
                 )
             else:
                 product.id = db.execute(
-                    """INSERT INTO products(name,description,price,category_id,image_url,stock,color,images)
-                        VALUES(%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                    """INSERT INTO products(name,description,price,category_id,image_url,stock,color,images,variants)
+                        VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
                     values,
                 ).fetchone()["id"]
-            db.executemany(
-                "INSERT INTO product_sizes(product_id,size) VALUES(%s,%s)",
-                [(product.id, size) for size in product.sizes],
-            )
+            with db.cursor() as cursor:
+                cursor.executemany(
+                    "INSERT INTO product_sizes(product_id,size) VALUES(%s,%s)",
+                    [(product.id, size) for size in product.sizes],
+                )
         return product
 
     def delete_product(self, product_id: int) -> bool:

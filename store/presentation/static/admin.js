@@ -107,22 +107,45 @@ function openProduct(p = null) {
     f.reset();
     $("#formTitle").textContent = p ? "Редактирование товара" : "Новый товар";
     if (p)
-        Object.keys(p).forEach((k) => {
-            if (f.elements[k])
-                f.elements[k].value = k === "sizes" ? p[k].join(", ") : p[k];
+        ["id", "name", "category", "description"].forEach((key) => {
+            f.elements[key].value = p[key] ?? "";
         });
-    f.dataset.images = JSON.stringify(
-        p?.images || (p?.image_url ? [p.image_url] : []),
-    );
-    renderImagePreview(JSON.parse(f.dataset.images));
+    const variants = p?.variants?.length
+        ? p.variants
+        : p
+          ? [
+                {
+                    sku: `APEX-${p.id}`,
+                    price: p.price,
+                    old_price: "",
+                    stock: p.stock,
+                    color: p.color,
+                    size: p.sizes?.[0] || "",
+                    dimensions: "",
+                    weight: 0,
+                    images: p.images || (p.image_url ? [p.image_url] : []),
+                },
+            ]
+          : [];
+    renderColorGroups(groupVariants(variants));
+    if (!variants.length) addColorGroup();
     $("#productDialog").showModal();
 }
-function renderImagePreview(images) {
-    $("#imagePreview").innerHTML = images
-        .map(
-            (src, index) => `<img src="${esc(src)}" alt="Фото ${index + 1}" />`,
-        )
-        .join("");
+function groupVariants(variants) {
+    const groups = [];
+    variants.forEach((variant) => {
+        let group = groups.find((item) => item.color === variant.color);
+        if (!group) {
+            group = {
+                color: variant.color || "",
+                images: variant.images || [],
+                variants: [],
+            };
+            groups.push(group);
+        }
+        group.variants.push(variant);
+    });
+    return groups;
 }
 const readImage = (file) =>
     new Promise((resolve, reject) => {
@@ -131,11 +154,106 @@ const readImage = (file) =>
         reader.onerror = reject;
         reader.readAsDataURL(file);
     });
-$("#productImages").onchange = async (event) => {
-    const images = await Promise.all([...event.target.files].map(readImage));
-    $("#productForm").dataset.images = JSON.stringify(images);
-    renderImagePreview(images);
-};
+const variantRow = (variant = {}) => `<tr class="variant-row">
+    <td><input data-field="sku" required value="${esc(variant.sku || "")}" placeholder="ART-001"></td>
+    <td><input data-field="price" required type="number" min="0" step="0.01" value="${esc(variant.price ?? "")}"></td>
+    <td><input data-field="old_price" type="number" min="0" step="0.01" value="${esc(variant.old_price || "")}"></td>
+    <td><input data-field="stock" required type="number" min="0" value="${esc(variant.stock ?? 0)}"></td>
+    <td class="variant-color-label"></td>
+    <td><input data-field="size" value="${esc(variant.size || "")}" placeholder="M"></td>
+    <td><input data-field="dimensions" value="${esc(variant.dimensions || "")}" placeholder="300x200x40"></td>
+    <td><input data-field="weight" type="number" min="0" value="${esc(variant.weight ?? 0)}"></td>
+    <td><button type="button" class="remove-row" title="Удалить вариацию">×</button></td>
+</tr>`;
+function colorGroup(group = { color: "", images: [], variants: [] }) {
+    return `<article class="color-group" data-images="${esc(JSON.stringify(group.images || []))}">
+        <div class="color-head"><label>Цвет<input class="color-name" required value="${esc(group.color)}" placeholder="Например, белый"></label><button type="button" class="remove-color" title="Удалить цвет">Удалить цвет</button></div>
+        <div class="image-editor"><div class="image-list"></div><label class="image-add" title="Добавить фотографии">+<input class="image-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple></label></div>
+        <div class="variant-table-wrap"><table class="variant-table"><thead><tr><th>Артикул</th><th>Цена</th><th>Старая цена</th><th>Количество</th><th>Цвет</th><th>Размер</th><th>Габариты, мм (Д×Ш×В)</th><th>Вес, г</th><th></th></tr></thead><tbody>${(group.variants || []).map(variantRow).join("")}</tbody></table></div>
+        <button type="button" class="add-variant">+ Добавить размер / вариацию</button>
+    </article>`;
+}
+function renderColorGroups(groups) {
+    $("#colorGroups").innerHTML = groups.map(colorGroup).join("");
+    document.querySelectorAll(".color-group").forEach(bindColorGroup);
+}
+function addColorGroup() {
+    $("#colorGroups").insertAdjacentHTML("beforeend", colorGroup());
+    bindColorGroup($("#colorGroups").lastElementChild);
+}
+function renderGroupImages(group) {
+    const images = JSON.parse(group.dataset.images || "[]");
+    group.querySelector(".image-list").innerHTML = images
+        .map(
+            (src, index) =>
+                `<div class="image-card" draggable="true" data-index="${index}"><img src="${esc(src)}" alt="Фото ${index + 1}"><button type="button" class="delete-image" title="Удалить фотографию">×</button><span>⋮⋮</span></div>`,
+        )
+        .join("");
+}
+function bindColorGroup(group) {
+    renderGroupImages(group);
+    const syncColor = () =>
+        group.querySelectorAll(".variant-color-label").forEach((cell) => {
+            cell.textContent = group.querySelector(".color-name").value || "—";
+        });
+    syncColor();
+    group.querySelector(".color-name").oninput = syncColor;
+    group.querySelector(".add-variant").onclick = () => {
+        group
+            .querySelector("tbody")
+            .insertAdjacentHTML("beforeend", variantRow());
+        syncColor();
+    };
+    group.querySelector(".remove-color").onclick = () => {
+        if (document.querySelectorAll(".color-group").length > 1)
+            group.remove();
+        else toast("У товара должен быть хотя бы один цвет");
+    };
+    group.querySelector(".image-input").onchange = async (event) => {
+        const current = JSON.parse(group.dataset.images || "[]");
+        group.dataset.images = JSON.stringify(
+            current.concat(
+                await Promise.all([...event.target.files].map(readImage)),
+            ),
+        );
+        event.target.value = "";
+        renderGroupImages(group);
+    };
+    group.onclick = (event) => {
+        if (event.target.closest(".remove-row"))
+            event.target.closest("tr").remove();
+        const remove = event.target.closest(".delete-image");
+        if (remove) {
+            const images = JSON.parse(group.dataset.images || "[]");
+            images.splice(
+                Number(remove.closest(".image-card").dataset.index),
+                1,
+            );
+            group.dataset.images = JSON.stringify(images);
+            renderGroupImages(group);
+        }
+    };
+    let dragged;
+    group.ondragstart = (event) => {
+        dragged = Number(event.target.closest(".image-card")?.dataset.index);
+    };
+    group.ondragover = (event) => event.preventDefault();
+    group.ondrop = (event) => {
+        event.preventDefault();
+        const target = event.target.closest(".image-card");
+        if (!target || dragged === undefined) return;
+        const images = JSON.parse(group.dataset.images || "[]");
+        images.splice(
+            Number(target.dataset.index),
+            0,
+            images.splice(dragged, 1)[0],
+        );
+        group.dataset.images = JSON.stringify(images);
+        dragged = undefined;
+        renderGroupImages(group);
+    };
+}
+$("#addColor").onclick = addColorGroup;
 document
     .querySelectorAll("[data-open-product]")
     .forEach((b) => (b.onclick = () => openProduct()));
@@ -145,13 +263,23 @@ document
 $("#productForm").onsubmit = async (e) => {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.target));
-    delete d.image_files;
-    d.images = JSON.parse(e.target.dataset.images || "[]");
-    d.image_url = d.images[0] || "";
-    d.sizes = d.sizes
-        .split(",")
-        .map((x) => x.trim())
-        .filter(Boolean);
+    d.variants = [...document.querySelectorAll(".color-group")].flatMap(
+        (group) => {
+            const color = group.querySelector(".color-name").value.trim();
+            const images = JSON.parse(group.dataset.images || "[]");
+            return [...group.querySelectorAll(".variant-row")].map((row) => ({
+                ...Object.fromEntries(
+                    [...row.querySelectorAll("[data-field]")].map((input) => [
+                        input.dataset.field,
+                        input.value,
+                    ]),
+                ),
+                color,
+                images,
+            }));
+        },
+    );
+    if (!d.variants.length) return toast("Добавьте хотя бы одну вариацию");
     const r = await fetch("/api/admin/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },

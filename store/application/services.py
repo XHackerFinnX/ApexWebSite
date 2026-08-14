@@ -19,6 +19,39 @@ class CatalogService:
         self.repo.increment(product_id, metric)
 
     def save(self, data: dict) -> Product:
+        variants = []
+        for raw in data.get("variants", []):
+            try:
+                variant_price = Decimal(str(raw.get("price", 0)))
+                old_price = (
+                    Decimal(str(raw["old_price"])) if raw.get("old_price") else None
+                )
+            except InvalidOperation as exc:
+                raise ValueError("Некорректная цена вариации") from exc
+            variant = {
+                "sku": str(raw.get("sku", "")).strip(),
+                "price": str(variant_price),
+                "old_price": str(old_price) if old_price is not None else "",
+                "stock": int(raw.get("stock", 0)),
+                "color": str(raw.get("color", "")).strip(),
+                "size": str(raw.get("size", "")).strip(),
+                "dimensions": str(raw.get("dimensions", "")).strip(),
+                "weight": int(raw.get("weight", 0) or 0),
+                "images": [str(image) for image in raw.get("images", []) if image],
+            }
+            variants.append(variant)
+        if variants:
+            data = dict(data)
+            data["price"] = min(Decimal(x["price"]) for x in variants)
+            data["stock"] = sum(int(x["stock"]) for x in variants)
+            data["sizes"] = list(
+                dict.fromkeys(x["size"] for x in variants if x["size"])
+            )
+            data["color"] = ", ".join(
+                dict.fromkeys(x["color"] for x in variants if x["color"])
+            )
+            variant_images = next((x["images"] for x in variants if x["images"]), [])
+            data["images"] = variant_images
         try:
             price = Decimal(str(data.get("price", 0)))
         except InvalidOperation as exc:
@@ -36,6 +69,7 @@ class CatalogService:
             int(data.get("cart_adds", 0)),
             str(data.get("color", "")),
             tuple(str(x) for x in data.get("images", []) if str(x)),
+            tuple(variants),
         )
         if not product.images and product.image_url:
             product.images = (product.image_url,)

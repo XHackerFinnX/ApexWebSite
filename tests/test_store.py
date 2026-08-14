@@ -84,6 +84,22 @@ class StoreTests(unittest.TestCase):
                 "sizes": ["M"],
                 "color": "Чёрный",
                 "images": ["data:image/png;base64,first", "data:image/png;base64,second"],
+                "variants": [
+                    {
+                        "sku": "TEE-BLK-M",
+                        "price": "12.50",
+                        "old_price": "15.00",
+                        "stock": 2,
+                        "color": "Чёрный",
+                        "size": "M",
+                        "dimensions": "300x200x40",
+                        "weight": 250,
+                        "images": [
+                            "data:image/png;base64,first",
+                            "data:image/png;base64,second",
+                        ],
+                    }
+                ],
             }
         )
         service.record(p.id, "views")
@@ -93,6 +109,27 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(saved.color, "Чёрный")
         self.assertEqual(len(saved.images), 2)
         self.assertEqual(saved.image_url, saved.images[0])
+        self.assertEqual(saved.variants[0]["sku"], "TEE-BLK-M")
+        self.assertEqual(saved.sizes, ("M",))
+
+    def test_product_variant_requires_sku(self):
+        service = CatalogService(self.repo)
+        with self.assertRaisesRegex(ValueError, "Артикул"):
+            service.save(
+                {
+                    "name": "Test",
+                    "category": "A",
+                    "variants": [{"price": 10, "stock": 1, "color": "Белый"}],
+                }
+            )
+
+    def test_postgres_repository_uses_cursor_for_executemany(self):
+        source = Path("store/infrastructure/postgres_repo.py").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("with db.cursor() as cursor:", source)
+        self.assertIn("cursor.executemany(", source)
+        self.assertNotIn("db.executemany(", source)
 
     def test_integration_secrets_are_masked(self):
         service = IntegrationService(self.repo)

@@ -16,12 +16,21 @@ class Product:
     cart_adds: int = 0
     color: str = ""
     images: tuple[str, ...] = field(default_factory=tuple)
+    variants: tuple[dict[str, object], ...] = field(default_factory=tuple)
 
     def validate(self) -> None:
         if not self.name.strip():
             raise ValueError("Название товара обязательно")
         if self.price < 0 or self.stock < 0:
             raise ValueError("Цена и остаток не могут быть отрицательными")
+        for variant in self.variants:
+            if not str(variant.get("sku", "")).strip():
+                raise ValueError("Артикул обязателен для каждой вариации")
+            if (
+                Decimal(str(variant.get("price", 0))) < 0
+                or int(variant.get("stock", 0)) < 0
+            ):
+                raise ValueError("Цена и количество вариации не могут быть отрицательными")
 
 
 @dataclass(slots=True)
