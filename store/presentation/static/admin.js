@@ -115,7 +115,7 @@ async function load() {
     } catch (error) {
         toast(error.message, true);
     }
-    const response = await fetch("/api/products");
+    const response = await fetch("/api/admin/products");
     products = await response.json();
     $("#count").textContent = products.length;
     const views = products.reduce((n, p) => n + p.views, 0),
@@ -148,6 +148,7 @@ async function load() {
 function openProduct(p = null) {
     const f = $("#productForm");
     f.reset();
+    f.elements.id.value = "";
     $("#formTitle").textContent = p ? "Редактирование товара" : "Новый товар";
     if (p) {
         if (!categories.some((category) => category.name === p.category)) {
@@ -157,6 +158,7 @@ function openProduct(p = null) {
         ["id", "name", "category", "description"].forEach((key) => {
             f.elements[key].value = p[key] ?? "";
         });
+        f.elements.is_active.checked = Boolean(p.is_active);
     }
     const variants = p?.variants?.length
         ? p.variants
@@ -198,7 +200,28 @@ function groupVariants(variants) {
 const readImage = (file) =>
     new Promise((resolve, reject) => {
         const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
+        reader.onload = () => {
+            // GIF may be animated, so keep it intact. Other photographs are
+            // reduced before being embedded into the JSON request.
+            if (file.type === "image/gif") return resolve(reader.result);
+            const image = new Image();
+            image.onerror = () =>
+                reject(new Error(`Не удалось прочитать ${file.name}`));
+            image.onload = () => {
+                const scale = Math.min(
+                    1,
+                    1920 / Math.max(image.width, image.height),
+                );
+                const canvas = document.createElement("canvas");
+                canvas.width = Math.max(1, Math.round(image.width * scale));
+                canvas.height = Math.max(1, Math.round(image.height * scale));
+                canvas
+                    .getContext("2d")
+                    .drawImage(image, 0, 0, canvas.width, canvas.height);
+                resolve(canvas.toDataURL("image/webp", 0.82));
+            };
+            image.src = reader.result;
+        };
         reader.onerror = reject;
         reader.readAsDataURL(file);
     });
@@ -258,14 +281,19 @@ function bindColorGroup(group) {
         else toast("У товара должен быть хотя бы один цвет");
     };
     group.querySelector(".image-input").onchange = async (event) => {
-        const current = JSON.parse(group.dataset.images || "[]");
-        group.dataset.images = JSON.stringify(
-            current.concat(
-                await Promise.all([...event.target.files].map(readImage)),
-            ),
-        );
-        event.target.value = "";
-        renderGroupImages(group);
+        try {
+            const current = JSON.parse(group.dataset.images || "[]");
+            group.dataset.images = JSON.stringify(
+                current.concat(
+                    await Promise.all([...event.target.files].map(readImage)),
+                ),
+            );
+            renderGroupImages(group);
+        } catch (error) {
+            toast(error.message || "Не удалось обработать фотографию", true);
+        } finally {
+            event.target.value = "";
+        }
     };
     group.onclick = (event) => {
         if (event.target.closest(".remove-row"))
@@ -311,29 +339,39 @@ document
 $("#productForm").onsubmit = async (e) => {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.target));
+    d.is_active = e.target.elements.is_active.checked;
     d.variants = [...document.querySelectorAll(".color-group")].flatMap(
         (group) => {
             const color = group.querySelector(".color-name").value.trim();
             const images = JSON.parse(group.dataset.images || "[]");
-            return [...group.querySelectorAll(".variant-row")].map((row) => ({
-                ...Object.fromEntries(
-                    [...row.querySelectorAll("[data-field]")].map((input) => [
-                        input.dataset.field,
-                        input.value,
-                    ]),
-                ),
-                color,
-                images,
-            }));
+            return [...group.querySelectorAll(".variant-row")].map(
+                (row, index) => ({
+                    ...Object.fromEntries(
+                        [...row.querySelectorAll("[data-field]")].map(
+                            (input) => [input.dataset.field, input.value],
+                        ),
+                    ),
+                    color,
+                    // Send a color's photos once instead of repeating several
+                    // megabytes for every size of the same product.
+                    images: index === 0 ? images : [],
+                }),
+            );
         },
     );
     if (!d.variants.length) return toast("Добавьте хотя бы одну вариацию");
     try {
-        const r = await fetch("/api/admin/products", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(d),
-        });
+        const editingId = e.target.elements.id.value;
+        const r = await fetch(
+            editingId
+                ? `/api/admin/products/${editingId}`
+                : "/api/admin/products",
+            {
+                method: editingId ? "PUT" : "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(d),
+            },
+        );
         if (!r.ok)
             return toast(await errorMessage(r, "Товар не сохранён"), true);
         $("#productDialog").close();

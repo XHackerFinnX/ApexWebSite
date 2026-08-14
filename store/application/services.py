@@ -20,6 +20,7 @@ class CatalogService:
 
     def save(self, data: dict) -> Product:
         variants = []
+        color_images: dict[str, list[str]] = {}
         for raw in data.get("variants", []):
             try:
                 variant_price = Decimal(str(raw.get("price", 0)))
@@ -39,7 +40,12 @@ class CatalogService:
                 "weight": int(raw.get("weight", 0) or 0),
                 "images": [str(image) for image in raw.get("images", []) if image],
             }
+            if variant["images"]:
+                color_images[variant["color"]] = variant["images"]
             variants.append(variant)
+        for variant in variants:
+            if not variant["images"]:
+                variant["images"] = color_images.get(variant["color"], [])
         if variants:
             data = dict(data)
             data["price"] = min(Decimal(x["price"]) for x in variants)
@@ -70,6 +76,7 @@ class CatalogService:
             str(data.get("color", "")),
             tuple(str(x) for x in data.get("images", []) if str(x)),
             tuple(variants),
+            bool(data.get("is_active", False)),
         )
         if not product.images and product.image_url:
             product.images = (product.image_url,)

@@ -18,6 +18,10 @@ class Encoder(json.JSONEncoder):
         if isinstance(o, tuple):
             return list(o)
         return super().default(o)
+    
+
+class RequestTooLarge(ValueError):
+    """Raised before parsing a request whose declared body is too large."""
 
 
 class WebApp:
@@ -93,7 +97,9 @@ class WebApp:
             def _body(self):
                 length = int(self.headers.get("Content-Length", "0"))
                 if length > 25_000_000:
-                    raise ValueError("Запрос слишком большой")
+                    raise RequestTooLarge(
+                        "Фотографии слишком большие: размер запроса превышает 25 МБ"
+                    )
                 return json.loads(self.rfile.read(length) or b"{}")
             
             def _serve_static(self, filename):
@@ -173,6 +179,10 @@ class WebApp:
                         return self._redirect("/admin")
                     if self.command == "GET" and path == "/api/products":
                         return self._send(data=[asdict(x) for x in app.catalog.list()])
+                    if self.command == "GET" and path == "/api/admin/products":
+                        return self._send(
+                            data=[asdict(x) for x in app.repo.list_products(True)]
+                        )
                     if self.command == "GET" and path == "/api/admin/integrations":
                         return self._send(
                             data=[asdict(x) for x in app.integrations.list()]
@@ -185,7 +195,9 @@ class WebApp:
                         )
                         return self._send(201, category)
                     if self.command == "POST" and path == "/api/admin/products":
-                        return self._send(201, asdict(app.catalog.save(self._body())))
+                        data = self._body()
+                        data.pop("id", None)
+                        return self._send(201, asdict(app.catalog.save(data)))
                     if self.command == "POST" and path == "/api/admin/integrations":
                         app.integrations.configure(self._body())
                         return self._send(data={"ok": True})
@@ -208,6 +220,16 @@ class WebApp:
                             }
                         )
                     parts = path.strip("/").split("/")
+                    if (
+                        self.command == "PUT"
+                        and len(parts) == 4
+                        and parts[:3] == ["api", "admin", "products"]
+                    ):
+                        data = self._body()
+                        data["id"] = int(parts[3])
+                        if not app.repo.get_product(data["id"]):
+                            return self._send(404, {"error": "Товар не найден"})
+                        return self._send(data=asdict(app.catalog.save(data)))
                     if (
                         self.command == "POST"
                         and len(parts) == 4
@@ -240,11 +262,18 @@ class WebApp:
                         file = "index.html" if path == "/" else path.lstrip("/")
                         return self._serve_static(file)
                     return self._send(404, {"error": "Не найдено"})
+                except RequestTooLarge as e:
+                    # Do not try to reuse a connection containing an unread body.
+                    self.close_connection = True
+                    return self._send(
+                        413, {"error": str(e)}, headers={"Connection": "close"}
+                    )
                 except (ValueError, LookupError, KeyError) as e:
                     return self._send(400, {"error": str(e)})
 
             do_GET = _route
             do_POST = _route
+            do_PUT = _route
             do_DELETE = _route
 
             def log_message(self, fmt, *args):

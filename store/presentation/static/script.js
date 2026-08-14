@@ -177,7 +177,7 @@ function productCard(p) {
     const pictures = primary
         ? `<img class="card__image card__image--primary" src="${esc(primary)}" alt="${esc(p.name)}" loading="lazy" />${secondary ? `<img class="card__image card__image--hover" src="${esc(secondary)}" alt="" loading="lazy" />` : ""}`
         : `<span class="card__no-image">Фото скоро появится</span>`;
-    return `<article class="card" id="product-${p.id}"><div class="card__media">${pictures}<div class="card__actions"><button type="button" class="card__view" data-view="${p.id}">Посмотреть товар</button><button type="button" class="card__add" data-add="${p.id}" aria-label="Добавить ${esc(p.name)} в корзину">Быстро добавить ${ICONS.plus}</button></div></div><div class="card__info"><div><p class="card__category">${esc(p.category)}</p><h3 class="card__name">${esc(p.name)}</h3></div><p class="card__prices"><span class="card__price">${money(p.price)}</span></p></div></article>`;
+    return `<article class="card" id="product-${p.id}" data-product-card="${p.id}" tabindex="0"><div class="card__media">${pictures}<div class="card__actions"><button type="button" class="card__view" data-view="${p.id}">Посмотреть товар</button><button type="button" class="card__add" data-quick-add="${p.id}" aria-label="Быстро добавить ${esc(p.name)} в корзину">Быстро добавить ${ICONS.plus}</button></div></div><div class="card__info"><div><p class="card__category">${esc(p.category)}</p><h3 class="card__name">${esc(p.name)}</h3></div><p class="card__prices"><span class="card__price">${money(p.price)}</span></p></div></article>`;
 }
 function renderReviews() {
     document.getElementById("reviews-grid").innerHTML = reviews
@@ -289,14 +289,18 @@ function galleryMarkup(p) {
     const view = selectedProductView(p);
     return `<div class="product-view"><div class="product-view__gallery"><button type="button" class="product-view__main-button" data-open-lightbox aria-label="Открыть фотографию полностью"><img class="product-view__main" src="${esc(view.images[0])}" alt="${esc(p.name)}" /></button><div class="product-view__thumbs"></div></div><div class="product-view__info"><p class="eyebrow">${esc(p.category)}</p><h2 class="display product-view__title" id="product-modal-title">${esc(p.name)}</h2><div class="product-view__prices"><strong></strong></div><p class="product-view__description">${esc(p.description)}</p>${colors.length ? `<fieldset><legend>Цвет</legend><div class="product-view__options product-view__colors">${colors.map((color, index) => `<label><input type="radio" name="product-color" value="${esc(color)}" ${index === 0 ? "checked" : ""}/><span>${esc(color)}</span></label>`).join("")}</div></fieldset>` : ""}<fieldset><legend>Размер <small>— доступны сейчас</small></legend><div class="product-view__options product-view__sizes"></div></fieldset><p class="product-view__stock"></p><button type="button" class="product-view__add" data-modal-add="${p.id}">${ICONS.bag} <span></span></button></div></div>`;
 }
+function quickAddMarkup(p) {
+    const colors = colorOptions(p);
+    activeColor = colors[0] || "";
+    return `<div class="quick-add-view"><p class="eyebrow">Быстрое добавление</p><h2 class="display product-view__title" id="product-modal-title">${esc(p.name)}</h2>${colors.length ? `<fieldset><legend>Цвет</legend><div class="product-view__options product-view__colors">${colors.map((color, index) => `<label><input type="radio" name="product-color" value="${esc(color)}" ${index === 0 ? "checked" : ""}/><span>${esc(color)}</span></label>`).join("")}</div></fieldset>` : ""}<fieldset><legend>Размер</legend><div class="product-view__options product-view__sizes"></div></fieldset><button type="button" class="product-view__add" data-modal-add="${p.id}">${ICONS.bag} <span></span></button></div>`;
+}
 function updateProductView() {
     const p = productById[activeProductId];
     if (!p) return;
     const view = selectedProductView(p);
     galleryIndex = 0;
-    document.querySelector(".product-view__prices strong").textContent = money(
-        view.price,
-    );
+    const price = document.querySelector(".product-view__prices strong");
+    if (price) price.textContent = money(view.price);
     document.querySelector(".product-view__sizes").innerHTML = view.sizes.length
         ? view.sizes
               .map(
@@ -305,13 +309,17 @@ function updateProductView() {
               )
               .join("")
         : `<span class="product-view__unavailable">Нет доступных размеров</span>`;
-    document.querySelector(".product-view__stock").textContent = view.stock
-        ? `● В наличии — ${view.stock} шт.`
-        : "Нет в наличии";
+    const stock = document.querySelector(".product-view__stock");
+    if (stock)
+        stock.textContent = view.stock
+            ? `● В наличии — ${view.stock} шт.`
+            : "Нет в наличии";
     document.querySelector(".product-view__add span").textContent =
         `В корзину · ${money(view.price)}`;
     document.querySelector(".product-view__add").disabled = !view.stock;
-    document.querySelector(".product-view__thumbs").innerHTML = view.images
+    const thumbs = document.querySelector(".product-view__thumbs");
+    if (!thumbs) return;
+    thumbs.innerHTML = view.images
         .map(
             (image, index) =>
                 `<button class="${index === 0 ? "is-active" : ""}" type="button" data-gallery-index="${index}"><img src="${esc(image)}" alt="Фото товара ${index + 1}" /></button>`,
@@ -329,6 +337,7 @@ function openProduct(id, updateHash = true) {
         galleryMarkup(p);
     updateProductView();
     const modal = document.getElementById("product-modal");
+    modal.classList.remove("is-quick-add");
     modal.classList.add("is-open");
     modal.setAttribute("aria-hidden", "false");
     document.body.style.overflow = "hidden";
@@ -336,6 +345,18 @@ function openProduct(id, updateHash = true) {
     fetch(`/api/products/${p.id}/view`, { method: "POST" });
     if (updateHash) history.replaceState(null, "", `#product-${id}`);
     modal.querySelector(".product-modal__close").focus();
+}
+function openQuickAdd(id) {
+    const p = productById[id];
+    if (!p) return;
+    activeProductId = String(id);
+    document.getElementById("product-modal-content").innerHTML =
+        quickAddMarkup(p);
+    const modal = document.getElementById("product-modal");
+    modal.classList.add("is-open", "is-quick-add");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    updateProductView();
 }
 function setGalleryImage(index) {
     const p = productById[activeProductId];
@@ -377,6 +398,24 @@ function closeProduct(clearHash = true) {
 
 /* ---------- Cart state ---------- */
 const cart = new Map(JSON.parse(localStorage.getItem("apex-cart") || "[]"));
+const cartKey = (id, color = "", size = "") =>
+    `${id}::${encodeURIComponent(color)}::${encodeURIComponent(size)}`;
+function cartSelection(key) {
+    const [id, color = "", size = ""] = String(key).split("::");
+    return {
+        id,
+        color: decodeURIComponent(color),
+        size: decodeURIComponent(size),
+    };
+}
+function cartProduct(key) {
+    return productById[cartSelection(key).id];
+}
+function selectionVariant(p, color, size) {
+    return (p?.variants || []).find(
+        (v) => (!color || v.color === color) && (!size || v.size === size),
+    );
+}
 function saveCart() {
     localStorage.setItem("apex-cart", JSON.stringify([...cart]));
 }
@@ -387,15 +426,28 @@ function cartCount() {
 }
 function cartTotal() {
     let t = 0;
-    cart.forEach((qty, id) => (t += qty * productById[id].price));
+    cart.forEach((qty, key) => {
+        const { color, size } = cartSelection(key),
+            p = cartProduct(key);
+        if (p)
+            t +=
+                qty *
+                Number(selectionVariant(p, color, size)?.price ?? p.price);
+    });
     return t;
 }
 function promoDiscount() {
     if (!activePromo) return 0;
     let eligible = 0;
-    cart.forEach((qty, id) => {
+    cart.forEach((qty, key) => {
+        const { id, color, size } = cartSelection(key),
+            p = productById[id];
+        if (!p) return;
+        const price = Number(
+            selectionVariant(p, color, size)?.price ?? p.price,
+        );
         if (activePromo.products === "all" || activePromo.products.includes(id))
-            eligible += qty * productById[id].price;
+            eligible += qty * price;
     });
     return activePromo.type === "percent"
         ? Math.round((eligible * activePromo.value) / 100)
@@ -407,9 +459,10 @@ function grandTotal() {
         (deliveryState.type === "pvz" ? deliveryState.price || 0 : 0)
     );
 }
-function addToCart(id) {
+function addToCart(id, color = "", size = "") {
     if (!productById[id]) return;
-    cart.set(id, (cart.get(id) || 0) + 1);
+    const key = cartKey(id, color, size);
+    cart.set(key, (cart.get(key) || 0) + 1);
     fetch(`/api/products/${id}/cart`, { method: "POST" });
     renderCart();
     showToast(`Добавлено — ${productById[id].name}`);
@@ -438,14 +491,24 @@ function renderCart() {
     }
 
     const lines = [];
-    cart.forEach((qty, id) => {
-        const p = productById[id];
+    cart.forEach((qty, key) => {
+        const selection = cartSelection(key),
+            p = productById[selection.id];
         if (!p) {
-            cart.delete(id);
+            cart.delete(key);
             return;
         }
+        const variant = selectionVariant(p, selection.color, selection.size);
+        const price = Number(variant?.price ?? p.price);
+        const image = variant?.images?.[0] || p.image;
+        const details = [
+            selection.color && `Цвет: ${esc(selection.color)}`,
+            selection.size && `Размер: ${esc(selection.size)}`,
+        ]
+            .filter(Boolean)
+            .join(" · ");
         lines.push(
-            `<div class="cart__line"><img src="${p.image}" alt="${p.name}" /><div class="cart__line-body"><div class="cart__line-top"><h3 class="cart__line-name">${p.name}</h3><button type="button" class="cart__line-remove" data-remove="${id}" aria-label="Удалить ${p.name}">${ICONS.close}</button></div><p class="cart__line-category">${p.category}</p><div class="cart__line-bottom"><div class="qty"><button type="button" data-dec="${id}" aria-label="Уменьшить количество">${ICONS.minus}</button><span>${qty}</span><button type="button" data-inc="${id}" aria-label="Увеличить количество">${ICONS.plus}</button></div><span class="cart__line-total">${money(p.price * qty)}</span></div></div></div>`,
+            `<div class="cart__line"><img src="${esc(image)}" alt="${esc(p.name)}" /><div class="cart__line-body"><div class="cart__line-top"><h3 class="cart__line-name">${esc(p.name)}</h3><button type="button" class="cart__line-remove" data-remove="${esc(key)}" aria-label="Удалить ${esc(p.name)}">${ICONS.close}</button></div><p class="cart__line-category">${esc(p.category)}</p>${details ? `<p class="cart__line-options">${details}</p>` : ""}<div class="cart__line-bottom"><div class="qty"><button type="button" data-dec="${esc(key)}" aria-label="Уменьшить количество">${ICONS.minus}</button><span>${qty}</span><button type="button" data-inc="${esc(key)}" aria-label="Увеличить количество">${ICONS.plus}</button></div><span class="cart__line-total">${money(price * qty)}</span></div></div></div>`,
         );
     });
     body.innerHTML = lines.join("") + renderCheckoutForm();
@@ -754,9 +817,13 @@ function initEvents() {
     });
     document.addEventListener("click", (e) => {
         const t = e.target.closest(
-            "[data-add],[data-remove],[data-inc],[data-dec],[data-view],[data-modal-add],[data-close-product],[data-gallery-index],[data-open-lightbox],[data-lightbox-close],[data-lightbox-prev],[data-lightbox-next]",
+            "[data-quick-add],[data-remove],[data-inc],[data-dec],[data-view],[data-modal-add],[data-close-product],[data-gallery-index],[data-open-lightbox],[data-lightbox-close],[data-lightbox-prev],[data-lightbox-next]",
         );
-        if (!t) return;
+        if (!t) {
+            const card = e.target.closest("[data-product-card]");
+            if (card) openProduct(card.dataset.productCard);
+            return;
+        }
         if (t.dataset.lightboxClose !== undefined) closeLightbox();
         else if (t.dataset.lightboxPrev !== undefined)
             setGalleryImage(galleryIndex - 1);
@@ -768,9 +835,15 @@ function initEvents() {
         else if (t.dataset.closeProduct !== undefined) closeProduct();
         else if (t.dataset.view) openProduct(t.dataset.view);
         else if (t.dataset.modalAdd) {
-            addToCart(t.dataset.modalAdd);
+            const color =
+                document.querySelector('[name="product-color"]:checked')
+                    ?.value || "";
+            const size =
+                document.querySelector('[name="product-size"]:checked')
+                    ?.value || "";
+            addToCart(t.dataset.modalAdd, color, size);
             closeProduct();
-        } else if (t.dataset.add) addToCart(t.dataset.add);
+        } else if (t.dataset.quickAdd) openQuickAdd(t.dataset.quickAdd);
         else if (t.dataset.remove) removeFromCart(t.dataset.remove);
         else if (t.dataset.inc)
             setQty(t.dataset.inc, (cart.get(t.dataset.inc) || 0) + 1);
@@ -781,6 +854,13 @@ function initEvents() {
         if (event.target.name === "product-color") {
             activeColor = event.target.value;
             updateProductView();
+        }
+    });
+    document.addEventListener("keydown", (event) => {
+        const card = event.target.closest?.("[data-product-card]");
+        if (card && (event.key === "Enter" || event.key === " ")) {
+            event.preventDefault();
+            openProduct(card.dataset.productCard);
         }
     });
     const gallery = document.getElementById("product-modal-content");

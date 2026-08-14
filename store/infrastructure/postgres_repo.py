@@ -50,14 +50,18 @@ class PostgreSQLRepository:
             row["color"],
             tuple(row["images"] or ([row["image_url"]] if row["image_url"] else [])),
             tuple(row["variants"] or []),
+            row["is_active"],
         )
 
-    def list_products(self) -> list[Product]:
+    def list_products(self, include_inactive: bool = False) -> list[Product]:
         query = """SELECT p.*, c.name AS category,
                    COALESCE(array_agg(s.size ORDER BY s.size) FILTER (WHERE s.size IS NOT NULL), '{}') AS sizes
                    FROM products p JOIN categories c ON c.id=p.category_id
                    LEFT JOIN product_sizes s ON s.product_id=p.id
-                   GROUP BY p.id,c.name ORDER BY p.id DESC"""
+                   {where}
+                   GROUP BY p.id,c.name ORDER BY p.id DESC""".format(
+            where="" if include_inactive else "WHERE p.is_active = true"
+        )
         with self._db() as db:
             return [self._product(row) for row in db.execute(query).fetchall()]
 
@@ -88,11 +92,12 @@ class PostgreSQLRepository:
                 product.color,
                 list(product.images),
                 Jsonb(list(product.variants)),
+                product.is_active,
             )
             if product.id:
                 db.execute(
                     """UPDATE products SET name=%s,description=%s,price=%s,category_id=%s,
-                           image_url=%s,stock=%s,color=%s,images=%s,variants=%s,updated_at=now() WHERE id=%s""",
+                           image_url=%s,stock=%s,color=%s,images=%s,variants=%s,is_active=%s,updated_at=now() WHERE id=%s""",
                     values + (product.id,),
                 )
                 db.execute(
@@ -100,8 +105,8 @@ class PostgreSQLRepository:
                 )
             else:
                 product.id = db.execute(
-                    """INSERT INTO products(name,description,price,category_id,image_url,stock,color,images,variants)
-                        VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                    """INSERT INTO products(name,description,price,category_id,image_url,stock,color,images,variants,is_active)
+                        VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
                     values,
                 ).fetchone()["id"]
             with db.cursor() as cursor:

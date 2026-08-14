@@ -1,6 +1,7 @@
 import tempfile
 import threading
 import unittest
+from http.client import HTTPConnection
 from decimal import Decimal
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -23,8 +24,9 @@ class MemoryRepository:
         self.integrations = {}
         self.categories = [{"id": 1, "name": "A", "slug": "a", "product_count": 1}]
 
-    def list_products(self):
-        return list(self.products.values())
+    def list_products(self, include_inactive=False):
+        products = list(self.products.values())
+        return products if include_inactive else [p for p in products if p.is_active]
 
     def get_product(self, product_id):
         return self.products.get(product_id)
@@ -137,6 +139,28 @@ class StoreTests(unittest.TestCase):
                 }
             )
 
+    def test_new_product_is_draft_until_explicitly_published(self):
+        service = CatalogService(self.repo)
+        draft = service.save(
+            {
+                "name": "Draft",
+                "category": "A",
+                "variants": [{"sku": "DRAFT-S", "price": 10, "stock": 1}],
+            }
+        )
+        published = service.save(
+            {
+                "name": "Published",
+                "category": "A",
+                "is_active": True,
+                "variants": [{"sku": "LIVE-S", "price": 10, "stock": 1}],
+            }
+        )
+
+        self.assertFalse(draft.is_active)
+        self.assertEqual([product.id for product in service.list()], [published.id])
+        self.assertIn(draft, self.repo.list_products(include_inactive=True))
+    
     def test_postgres_repository_uses_cursor_for_executemany(self):
         source = Path("store/infrastructure/postgres_repo.py").read_text(
             encoding="utf-8"
@@ -235,6 +259,31 @@ class StoreTests(unittest.TestCase):
             server.shutdown()
             server.server_close()
             thread.join()
+            
+    def test_oversized_product_request_returns_readable_413(self):
+        app = WebApp(
+            CatalogService(self.repo), None, None, self.repo, AllowAllLimiter()
+        )
+        server = ThreadingHTTPServer(("127.0.0.1", 0), app.handler())
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        connection = HTTPConnection("127.0.0.1", server.server_port)
+        try:
+            connection.putrequest("POST", "/api/admin/products")
+            connection.putheader("Content-Type", "application/json")
+            connection.putheader("Content-Length", "25000001")
+            connection.putheader(
+                "Cookie", f"apex_admin={app._session_token(4_000_000_000)}"
+            )
+            connection.endheaders()
+            response = connection.getresponse()
+            self.assertEqual(response.status, 413)
+            self.assertIn("Фотографии слишком большие".encode(), response.read())
+        finally:
+            connection.close()
+            server.shutdown()
+            server.server_close()
+            thread.join()
     
     def test_variant_data_supports_color_specific_catalog_view(self):
         product = CatalogService(self.repo).save(
@@ -250,6 +299,33 @@ class StoreTests(unittest.TestCase):
         self.assertEqual(product.color, "Белый, Чёрный")
         self.assertEqual(product.variants[1]["price"], "150")
         self.assertEqual(product.variants[1]["images"], ["black.jpg"])
+        
+    def test_color_images_are_reused_without_repeating_them_in_request(self):
+        product = CatalogService(self.repo).save(
+            {
+                "name": "Color sizes",
+                "category": "A",
+                "variants": [
+                    {
+                        "sku": "WHITE-S",
+                        "price": 100,
+                        "stock": 1,
+                        "color": "Белый",
+                        "size": "S",
+                        "images": ["white.jpg"],
+                    },
+                    {
+                        "sku": "WHITE-M",
+                        "price": 100,
+                        "stock": 1,
+                        "color": "Белый",
+                        "size": "M",
+                        "images": [],
+                    },
+                ],
+            }
+        )
+        self.assertEqual(product.variants[1]["images"], ["white.jpg"])
 
 
 if __name__ == "__main__":
