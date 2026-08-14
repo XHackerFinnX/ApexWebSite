@@ -277,6 +277,19 @@ button {
 .danger-text {
     color: #ff6568;
 }
+.image-preview {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+    overflow-x: auto;
+}
+.image-preview img {
+    width: 76px;
+    height: 92px;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    object-fit: cover;
+}
 .toolbar {
     display: flex;
     gap: 10px;

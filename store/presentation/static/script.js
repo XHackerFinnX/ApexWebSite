@@ -3,110 +3,7 @@
    ============================================================ */
 
 /* ---------- Данные ---------- */
-const collections = [
-    {
-        id: "hoodies",
-        eyebrow: "Флис из паддока",
-        title: "Гоночные худи",
-        products: [
-            {
-                id: "hoodie-apex",
-                name: "Худи Apex Racing",
-                price: 11800,
-                compareAt: 16000,
-                image: "images/hoodie-apex.png",
-                category: "Худи",
-                promoEligible: true,
-            },
-            {
-                id: "hoodie-pole",
-                name: "Худи Pole Position",
-                price: 11200,
-                compareAt: null,
-                image: "images/hoodie-pole.png",
-                category: "Худи",
-                promoEligible: true,
-            },
-            {
-                id: "hoodie-grid",
-                name: "Худи Grid Wall на молнии",
-                price: 12400,
-                compareAt: 15000,
-                image: "images/hoodie-grid.png",
-                category: "Худи",
-                promoEligible: false,
-            },
-        ],
-    },
-    {
-        id: "jackets",
-        eyebrow: "Архивная распродажа — скидки до 30%",
-        title: "Винтажные куртки",
-        products: [
-            {
-                id: "jacket-circuit",
-                name: "Бомбер Circuit",
-                price: 18900,
-                compareAt: 24000,
-                image: "images/jacket-circuit.png",
-                category: "Куртки",
-                promoEligible: true,
-            },
-            {
-                id: "jacket-paddock",
-                name: "Олимпийка Paddock",
-                price: 17500,
-                compareAt: 22000,
-                image: "images/jacket-paddock.png",
-                category: "Куртки",
-                promoEligible: false,
-            },
-            {
-                id: "jacket-gp",
-                name: "Куртка Grand Prix",
-                price: 19800,
-                compareAt: null,
-                image: "images/jacket-gp.png",
-                category: "Куртки",
-                promoEligible: true,
-            },
-        ],
-    },
-    {
-        id: "tees",
-        eyebrow: "Новинки",
-        title: "Футболки с принтами",
-        products: [
-            {
-                id: "tee-flag",
-                name: "Футболка Chequered Flag",
-                price: 5500,
-                compareAt: 7500,
-                image: "images/tee-flag.png",
-                category: "Футболки",
-                promoEligible: true,
-            },
-            {
-                id: "tee-lap",
-                name: "Футболка Fastest Lap",
-                price: 5500,
-                compareAt: null,
-                image: "images/tee-lap.png",
-                category: "Футболки",
-                promoEligible: true,
-            },
-            {
-                id: "tee-podium",
-                name: "Футболка Podium P1",
-                price: 5200,
-                compareAt: 7000,
-                image: "images/tee-podium.png",
-                category: "Футболки",
-                promoEligible: true,
-            },
-        ],
-    },
-];
+let collections = [];
 
 const reviews = [
     {
@@ -168,70 +65,57 @@ const deliveryState = {
 let activePromo = null;
 let cachedPvzList = [];
 
-const productDetails = {
-    "hoodie-apex": {
-        description:
-            "Тяжёлый хлопковый футер, свободная посадка и вышивка, вдохновлённая командными боксами.",
-        colors: ["Чёрный", "Красный"],
-        sizes: ["S", "M", "L", "XL"],
-    },
-    "hoodie-pole": {
-        description:
-            "Мягкое худи с объёмным капюшоном и графикой поул-позиции на спине.",
-        colors: ["Графит"],
-        sizes: ["M", "L", "XL"],
-    },
-    "hoodie-grid": {
-        description:
-            "Худи на молнии с контрастной сеткой и плотными манжетами для прохладных вечеров.",
-        colors: ["Чёрный", "Молочный"],
-        sizes: ["S", "M", "L"],
-    },
-    "jacket-circuit": {
-        description:
-            "Утеплённый бомбер с гоночными шевронами и прочной ветрозащитной тканью.",
-        colors: ["Чёрный"],
-        sizes: ["M", "L", "XL"],
-    },
-    "jacket-paddock": {
-        description:
-            "Лёгкая олимпийка в эстетике паддока: высокий воротник, сетчатая подкладка и вышивка.",
-        colors: ["Красный", "Чёрный"],
-        sizes: ["S", "M", "L"],
-    },
-    "jacket-gp": {
-        description:
-            "Куртка свободного кроя с архивной гоночной графикой и регулируемым низом.",
-        colors: ["Синий"],
-        sizes: ["M", "L", "XL"],
-    },
-    "tee-flag": {
-        description:
-            "Плотная футболка оверсайз с принтом клетчатого флага и мягкой горловиной.",
-        colors: ["Белый", "Чёрный"],
-        sizes: ["XS", "S", "M", "L", "XL"],
-    },
-    "tee-lap": {
-        description:
-            "Футболка из гребенного хлопка с графикой быстрого круга на груди и спине.",
-        colors: ["Чёрный"],
-        sizes: ["S", "M", "L", "XL"],
-    },
-    "tee-podium": {
-        description:
-            "Свободная футболка P1 с винтажной обработкой принта и усиленными швами.",
-        colors: ["Молочный", "Красный"],
-        sizes: ["XS", "S", "M", "L"],
-    },
-};
-
 /* ---------- Helpers ---------- */
 const money = (v) => `${Math.round(v).toLocaleString("ru-RU")} ₽`;
 const productById = {};
-collections.forEach((c) => c.products.forEach((p) => (productById[p.id] = p)));
-Object.values(productById).forEach((product) =>
-    Object.assign(product, productDetails[product.id]),
-);
+const esc = (value) =>
+    String(value ?? "").replace(
+        /[&<>'"]/g,
+        (char) =>
+            ({
+                "&": "&amp;",
+                "<": "&lt;",
+                ">": "&gt;",
+                "\'": "&#39;",
+                '"': "&quot;",
+            })[char],
+    );
+
+async function loadCatalog() {
+    const response = await fetch("/api/products");
+    const items = response.ok ? await response.json() : [];
+    const grouped = new Map();
+    items.forEach((item) => {
+        const product = {
+            ...item,
+            id: String(item.id),
+            image: item.images?.[0] || item.image_url || "",
+            images: item.images?.length
+                ? item.images
+                : item.image_url
+                  ? [item.image_url]
+                  : [],
+            colors: item.color ? [item.color] : [],
+            compareAt: null,
+            promoEligible: true,
+        };
+        productById[product.id] = product;
+        if (!grouped.has(product.category)) grouped.set(product.category, []);
+        grouped.get(product.category).push(product);
+    });
+    collections = [...grouped].map(([category, products], index) => ({
+        id: `catalog-${index}`,
+        eyebrow: "Каталог",
+        title: category,
+        products,
+    }));
+    document.getElementById("category-filter").innerHTML =
+        `<option value="all">Все категории</option>${[...grouped.keys()].map((category) => `<option>${esc(category)}</option>`).join("")}`;
+    renderCollections();
+    renderCart();
+    if (location.hash.startsWith("#product-"))
+        openProduct(location.hash.slice(9), false);
+}
 
 const ICONS = {
     arrow: '<svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>',
@@ -288,8 +172,12 @@ function renderCollections() {
             : "По выбранным фильтрам товаров нет";
 }
 function productCard(p) {
-    const saving = p.compareAt ? p.compareAt - p.price : 0;
-    return `<article class="card" id="product-${p.id}"><div class="card__media">${saving > 0 ? `<span class="card__badge">Скидка ${money(saving)}</span>` : ""}<img src="${p.image}" alt="${p.name}" loading="lazy" /><div class="card__actions"><button type="button" class="card__view" data-view="${p.id}">Посмотреть товар</button><button type="button" class="card__add" data-add="${p.id}" aria-label="Добавить ${p.name} в корзину">Быстро добавить ${ICONS.plus}</button></div></div><div class="card__info"><div><p class="card__category">${p.category}</p><h3 class="card__name">${p.name}</h3></div><p class="card__prices"><span class="card__price">${money(p.price)}</span>${p.compareAt ? `<span class="card__compare">${money(p.compareAt)}</span>` : ""}</p></div></article>`;
+    const primary = p.images[0] || "";
+    const secondary = p.images[1];
+    const pictures = primary
+        ? `<img class="card__image card__image--primary" src="${esc(primary)}" alt="${esc(p.name)}" loading="lazy" />${secondary ? `<img class="card__image card__image--hover" src="${esc(secondary)}" alt="" loading="lazy" />` : ""}`
+        : `<span class="card__no-image">Фото скоро появится</span>`;
+    return `<article class="card" id="product-${p.id}"><div class="card__media">${pictures}<div class="card__actions"><button type="button" class="card__view" data-view="${p.id}">Посмотреть товар</button><button type="button" class="card__add" data-add="${p.id}" aria-label="Добавить ${esc(p.name)} в корзину">Быстро добавить ${ICONS.plus}</button></div></div><div class="card__info"><div><p class="card__category">${esc(p.category)}</p><h3 class="card__name">${esc(p.name)}</h3></div><p class="card__prices"><span class="card__price">${money(p.price)}</span></p></div></article>`;
 }
 function renderReviews() {
     document.getElementById("reviews-grid").innerHTML = reviews
@@ -358,18 +246,53 @@ function toggleSearch(force) {
     }
 }
 
+let galleryIndex = 0;
+function galleryMarkup(p) {
+    const images = p.images.length ? p.images : [""];
+    return `<div class="product-view"><div class="product-view__gallery"><button type="button" class="product-view__main-button" data-open-lightbox aria-label="Открыть фотографию полностью"><img class="product-view__main" src="${esc(images[0])}" alt="${esc(p.name)}" /></button><div class="product-view__thumbs">${images.map((image, index) => `<button class="${index === 0 ? "is-active" : ""}" type="button" data-gallery-index="${index}"><img src="${esc(image)}" alt="Фото товара ${index + 1}" /></button>`).join("")}</div></div><div class="product-view__info"><p class="eyebrow">${esc(p.category)}</p><h2 class="display product-view__title" id="product-modal-title">${esc(p.name)}</h2><div class="product-view__prices"><strong>${money(p.price)}</strong></div><p class="product-view__description">${esc(p.description)}</p>${p.colors.length ? `<fieldset><legend>Цвет</legend><div class="product-view__options"><label><input type="radio" name="product-color" checked/><span>${esc(p.colors[0])}</span></label></div></fieldset>` : ""}<fieldset><legend>Размер <small>— доступны сейчас</small></legend><div class="product-view__options product-view__sizes">${p.sizes.map((size, i) => `<label><input type="radio" name="product-size" value="${esc(size)}" ${i === 0 ? "checked" : ""}/><span>${esc(size)}</span></label>`).join("")}</div></fieldset><p class="product-view__stock">● В наличии — ${p.stock} шт.</p><button type="button" class="product-view__add" data-modal-add="${p.id}">${ICONS.bag} В корзину · ${money(p.price)}</button></div></div>`;
+}
+
 function openProduct(id, updateHash = true) {
     const p = productById[id];
     if (!p) return;
-    const modal = document.getElementById("product-modal");
+    galleryIndex = 0;
     document.getElementById("product-modal-content").innerHTML =
-        `<div class="product-view"><div class="product-view__gallery"><img class="product-view__main" src="${p.image}" alt="${p.name}" /><div class="product-view__thumbs"><button class="is-active" type="button"><img src="${p.image}" alt="Вид товара спереди" /></button><button type="button"><img src="${p.image}" alt="Детали товара" /></button></div></div><div class="product-view__info"><p class="eyebrow">${p.category}</p><h2 class="display product-view__title" id="product-modal-title">${p.name}</h2><div class="product-view__prices"><strong>${money(p.price)}</strong>${p.compareAt ? `<s>${money(p.compareAt)}</s>` : ""}</div><p class="product-view__description">${p.description}</p><fieldset><legend>Цвет</legend><div class="product-view__options">${p.colors.map((color, i) => `<label><input type="radio" name="product-color" value="${color}" ${i === 0 ? "checked" : ""}/><span>${color}</span></label>`).join("")}</div></fieldset><fieldset><legend>Размер <small>— доступны сейчас</small></legend><div class="product-view__options product-view__sizes">${p.sizes.map((size, i) => `<label><input type="radio" name="product-size" value="${size}" ${i === 0 ? "checked" : ""}/><span>${size}</span></label>`).join("")}</div></fieldset><p class="product-view__stock">● В наличии — отправка в течение двух недель</p><button type="button" class="product-view__add" data-modal-add="${p.id}">${ICONS.bag} В корзину · ${money(p.price)}</button></div></div>`;
+        galleryMarkup(p);
+    const modal = document.getElementById("product-modal");
     modal.classList.add("is-open");
     modal.setAttribute("aria-hidden", "false");
     document.body.style.overflow = "hidden";
     toggleSearch(false);
+    fetch(`/api/products/${p.id}/view`, { method: "POST" });
     if (updateHash) history.replaceState(null, "", `#product-${id}`);
     modal.querySelector(".product-modal__close").focus();
+}
+function setGalleryImage(index) {
+    const id = location.hash.startsWith("#product-")
+        ? location.hash.slice(9)
+        : document.querySelector("[data-modal-add]")?.dataset.modalAdd;
+    const p = productById[id];
+    if (!p?.images.length) return;
+    galleryIndex = (index + p.images.length) % p.images.length;
+    document.querySelector(".product-view__main").src = p.images[galleryIndex];
+    document
+        .querySelectorAll("[data-gallery-index]")
+        .forEach((button, i) =>
+            button.classList.toggle("is-active", i === galleryIndex),
+        );
+    const lightboxImage = document.getElementById("lightbox-image");
+    if (lightboxImage) lightboxImage.src = p.images[galleryIndex];
+}
+function openLightbox() {
+    const box = document.getElementById("image-lightbox");
+    setGalleryImage(galleryIndex);
+    box.classList.add("is-open");
+    box.setAttribute("aria-hidden", "false");
+}
+function closeLightbox() {
+    const box = document.getElementById("image-lightbox");
+    box.classList.remove("is-open");
+    box.setAttribute("aria-hidden", "true");
 }
 function closeProduct(clearHash = true) {
     const modal = document.getElementById("product-modal");
@@ -417,7 +340,9 @@ function grandTotal() {
     );
 }
 function addToCart(id) {
+    if (!productById[id]) return;
     cart.set(id, (cart.get(id) || 0) + 1);
+    fetch(`/api/products/${id}/cart`, { method: "POST" });
     renderCart();
     showToast(`Добавлено — ${productById[id].name}`);
 }
@@ -447,6 +372,10 @@ function renderCart() {
     const lines = [];
     cart.forEach((qty, id) => {
         const p = productById[id];
+        if (!p) {
+            cart.delete(id);
+            return;
+        }
         lines.push(
             `<div class="cart__line"><img src="${p.image}" alt="${p.name}" /><div class="cart__line-body"><div class="cart__line-top"><h3 class="cart__line-name">${p.name}</h3><button type="button" class="cart__line-remove" data-remove="${id}" aria-label="Удалить ${p.name}">${ICONS.close}</button></div><p class="cart__line-category">${p.category}</p><div class="cart__line-bottom"><div class="qty"><button type="button" data-dec="${id}" aria-label="Уменьшить количество">${ICONS.minus}</button><span>${qty}</span><button type="button" data-inc="${id}" aria-label="Увеличить количество">${ICONS.plus}</button></div><span class="cart__line-total">${money(p.price * qty)}</span></div></div></div>`,
         );
@@ -750,16 +679,25 @@ function initEvents() {
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
             closeCart();
+            closeLightbox();
             closeProduct();
             toggleSearch(false);
         }
     });
     document.addEventListener("click", (e) => {
         const t = e.target.closest(
-            "[data-add],[data-remove],[data-inc],[data-dec],[data-view],[data-modal-add],[data-close-product]",
+            "[data-add],[data-remove],[data-inc],[data-dec],[data-view],[data-modal-add],[data-close-product],[data-gallery-index],[data-open-lightbox],[data-lightbox-close],[data-lightbox-prev],[data-lightbox-next]",
         );
         if (!t) return;
-        if (t.dataset.closeProduct !== undefined) closeProduct();
+        if (t.dataset.lightboxClose !== undefined) closeLightbox();
+        else if (t.dataset.lightboxPrev !== undefined)
+            setGalleryImage(galleryIndex - 1);
+        else if (t.dataset.lightboxNext !== undefined)
+            setGalleryImage(galleryIndex + 1);
+        else if (t.dataset.openLightbox !== undefined) openLightbox();
+        else if (t.dataset.galleryIndex !== undefined)
+            setGalleryImage(Number(t.dataset.galleryIndex));
+        else if (t.dataset.closeProduct !== undefined) closeProduct();
         else if (t.dataset.view) openProduct(t.dataset.view);
         else if (t.dataset.modalAdd) {
             addToCart(t.dataset.modalAdd);
@@ -809,13 +747,9 @@ function initEvents() {
     });
 }
 renderAnnouncement();
-renderCollections();
+loadCatalog();
 renderReviews();
 renderFaq();
 renderCommunity();
-renderCart();
 initMobileMenu();
 initEvents();
-
-if (location.hash.startsWith("#product-"))
-    openProduct(location.hash.slice(9), false);

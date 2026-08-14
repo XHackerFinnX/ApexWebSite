@@ -111,8 +111,31 @@ function openProduct(p = null) {
             if (f.elements[k])
                 f.elements[k].value = k === "sizes" ? p[k].join(", ") : p[k];
         });
+    f.dataset.images = JSON.stringify(
+        p?.images || (p?.image_url ? [p.image_url] : []),
+    );
+    renderImagePreview(JSON.parse(f.dataset.images));
     $("#productDialog").showModal();
 }
+function renderImagePreview(images) {
+    $("#imagePreview").innerHTML = images
+        .map(
+            (src, index) => `<img src="${esc(src)}" alt="Фото ${index + 1}" />`,
+        )
+        .join("");
+}
+const readImage = (file) =>
+    new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+    });
+$("#productImages").onchange = async (event) => {
+    const images = await Promise.all([...event.target.files].map(readImage));
+    $("#productForm").dataset.images = JSON.stringify(images);
+    renderImagePreview(images);
+};
 document
     .querySelectorAll("[data-open-product]")
     .forEach((b) => (b.onclick = () => openProduct()));
@@ -122,6 +145,9 @@ document
 $("#productForm").onsubmit = async (e) => {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.target));
+    delete d.image_files;
+    d.images = JSON.parse(e.target.dataset.images || "[]");
+    d.image_url = d.images[0] || "";
     d.sizes = d.sizes
         .split(",")
         .map((x) => x.trim())

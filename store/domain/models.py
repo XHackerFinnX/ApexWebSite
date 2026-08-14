@@ -14,6 +14,8 @@ class Product:
     stock: int = 0
     views: int = 0
     cart_adds: int = 0
+    color: str = ""
+    images: tuple[str, ...] = field(default_factory=tuple)
 
     def validate(self) -> None:
         if not self.name.strip():

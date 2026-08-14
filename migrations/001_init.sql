@@ -19,6 +19,9 @@ CREATE TABLE IF NOT EXISTS products (
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE products ADD COLUMN IF NOT EXISTS color TEXT NOT NULL DEFAULT '';
+ALTER TABLE products ADD COLUMN IF NOT EXISTS images TEXT[] NOT NULL DEFAULT '{}';
+
 CREATE TABLE IF NOT EXISTS product_sizes (
     product_id BIGINT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
     size TEXT NOT NULL,
@@ -79,27 +82,3 @@ CREATE INDEX IF NOT EXISTS products_category_idx ON products(category_id);
 CREATE INDEX IF NOT EXISTS products_created_at_idx ON products(created_at DESC);
 CREATE INDEX IF NOT EXISTS orders_status_created_idx ON orders(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS audit_log_entity_idx ON audit_log(entity_type, entity_id);
-
-INSERT INTO categories(name, slug) VALUES
-    ('Одежда', 'clothing'), ('Обувь', 'shoes'), ('Аксессуары', 'accessories')
-ON CONFLICT (slug) DO UPDATE SET name = EXCLUDED.name;
-
-INSERT INTO products(name, description, price, category_id, stock)
-SELECT seed.name, seed.description, seed.price, categories.id, seed.stock
-FROM (VALUES
-    ('Aurora Hoodie', 'Плотный хлопок, свободный силуэт', 7490.00, 'Одежда', 24),
-    ('Orbit Sneakers', 'Лёгкие городские кроссовки', 11990.00, 'Обувь', 12),
-    ('Mono Pack', 'Минималистичный рюкзак', 5290.00, 'Аксессуары', 31)
-) AS seed(name, description, price, category, stock)
-JOIN categories ON categories.name = seed.category
-WHERE NOT EXISTS (SELECT 1 FROM products);
-
-INSERT INTO product_sizes(product_id, size)
-SELECT products.id, sizes.size
-FROM products
-JOIN (VALUES
-    ('Aurora Hoodie', 'S'), ('Aurora Hoodie', 'M'), ('Aurora Hoodie', 'L'), ('Aurora Hoodie', 'XL'),
-    ('Orbit Sneakers', '39'), ('Orbit Sneakers', '40'), ('Orbit Sneakers', '41'),
-    ('Orbit Sneakers', '42'), ('Orbit Sneakers', '43')
-) AS sizes(product_name, size) ON sizes.product_name = products.name
-ON CONFLICT DO NOTHING;

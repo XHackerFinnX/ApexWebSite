@@ -82,12 +82,17 @@ class StoreTests(unittest.TestCase):
                 "category": "A",
                 "stock": 2,
                 "sizes": ["M"],
+                "color": "Чёрный",
+                "images": ["data:image/png;base64,first", "data:image/png;base64,second"],
             }
         )
         service.record(p.id, "views")
         saved = self.repo.get_product(p.id)
         self.assertEqual(saved.price, Decimal("12.50"))
         self.assertEqual(saved.views, 1)
+        self.assertEqual(saved.color, "Чёрный")
+        self.assertEqual(len(saved.images), 2)
+        self.assertEqual(saved.image_url, saved.images[0])
 
     def test_integration_secrets_are_masked(self):
         service = IntegrationService(self.repo)

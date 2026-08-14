@@ -92,7 +92,7 @@ class WebApp:
 
             def _body(self):
                 length = int(self.headers.get("Content-Length", "0"))
-                if length > 1_000_000:
+                if length > 25_000_000:
                     raise ValueError("Запрос слишком большой")
                 return json.loads(self.rfile.read(length) or b"{}")
             

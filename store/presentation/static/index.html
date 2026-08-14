@@ -468,6 +468,40 @@
             </div>
         </div>
 
+        <div class="image-lightbox" id="image-lightbox" aria-hidden="true">
+            <button
+                class="image-lightbox__backdrop"
+                type="button"
+                data-lightbox-close
+                aria-label="Закрыть фотографию"
+            ></button>
+            <button
+                class="image-lightbox__close"
+                type="button"
+                data-lightbox-close
+                aria-label="Закрыть"
+            >
+                ×
+            </button>
+            <button
+                class="image-lightbox__arrow image-lightbox__arrow--prev"
+                type="button"
+                data-lightbox-prev
+                aria-label="Предыдущая фотография"
+            >
+                ‹
+            </button>
+            <img id="lightbox-image" alt="Фотография товара в полном размере" />
+            <button
+                class="image-lightbox__arrow image-lightbox__arrow--next"
+                type="button"
+                data-lightbox-next
+                aria-label="Следующая фотография"
+            >
+                ›
+            </button>
+        </div>
+
         <!-- Add-to-bag toast -->
         <div class="toast" id="toast" role="status" aria-hidden="true"></div>
 

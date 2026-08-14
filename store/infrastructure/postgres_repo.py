@@ -46,6 +46,8 @@ class PostgreSQLRepository:
             row["stock"],
             row["views"],
             row["cart_adds"],
+            row["color"],
+            tuple(row["images"] or ([row["image_url"]] if row["image_url"] else [])),
         )
 
     def list_products(self) -> list[Product]:
@@ -81,11 +83,13 @@ class PostgreSQLRepository:
                 category_id,
                 product.image_url,
                 product.stock,
+                product.color,
+                list(product.images),
             )
             if product.id:
                 db.execute(
                     """UPDATE products SET name=%s,description=%s,price=%s,category_id=%s,
-                           image_url=%s,stock=%s,updated_at=now() WHERE id=%s""",
+                           image_url=%s,stock=%s,color=%s,images=%s,updated_at=now() WHERE id=%s""",
                     values + (product.id,),
                 )
                 db.execute(
@@ -93,8 +97,8 @@ class PostgreSQLRepository:
                 )
             else:
                 product.id = db.execute(
-                    """INSERT INTO products(name,description,price,category_id,image_url,stock)
-                                        VALUES(%s,%s,%s,%s,%s,%s) RETURNING id""",
+                    """INSERT INTO products(name,description,price,category_id,image_url,stock,color,images)
+                        VALUES(%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
                     values,
                 ).fetchone()["id"]
             db.executemany(

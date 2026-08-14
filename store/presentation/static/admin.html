@@ -276,10 +276,18 @@
                             name="sizes"
                             placeholder="S, M, L, XL" /></label
                     ><label class="full"
-                        >Ссылка на изображение<input
-                            name="image_url"
-                            type="url"
-                            placeholder="https://..." /></label
+                        >Цвет<input
+                            name="color"
+                            placeholder="Например, чёрный" /></label
+                    ><label class="full"
+                        >Фотографии товара<input
+                            id="productImages"
+                            name="image_files"
+                            type="file"
+                            accept="image/jpeg,image/png,image/webp,image/gif"
+                            multiple />
+                            <small>Выберите несколько файлов. Первая фотография будет основной, вторая — показана при наведении.</small>
+                            <span id="imagePreview" class="image-preview"></span></label
                     ><label class="full"
                         >Описание<textarea
                             name="description"

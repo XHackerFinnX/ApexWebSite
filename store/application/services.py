@@ -34,7 +34,13 @@ class CatalogService:
             int(data.get("stock", 0)),
             int(data.get("views", 0)),
             int(data.get("cart_adds", 0)),
+            str(data.get("color", "")),
+            tuple(str(x) for x in data.get("images", []) if str(x)),
         )
+        if not product.images and product.image_url:
+            product.images = (product.image_url,)
+        if product.images:
+            product.image_url = product.images[0]
         product.validate()
         return self.repo.save_product(product)
 
