@@ -1,3 +1,4 @@
+import json
 import tempfile
 import threading
 import unittest
@@ -279,6 +280,36 @@ class StoreTests(unittest.TestCase):
             response = connection.getresponse()
             self.assertEqual(response.status, 413)
             self.assertIn("Фотографии слишком большие".encode(), response.read())
+        finally:
+            connection.close()
+            server.shutdown()
+            server.server_close()
+            thread.join()
+            
+    def test_admin_product_failure_returns_json_error_instead_of_dropping_connection(self):
+        class BrokenRepository(MemoryRepository):
+            def list_products(self, include_inactive=False):
+                raise RuntimeError("database unavailable")
+
+        repo = BrokenRepository()
+        app = WebApp(CatalogService(repo), None, None, repo, AllowAllLimiter())
+        server = ThreadingHTTPServer(("127.0.0.1", 0), app.handler())
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        connection = HTTPConnection("127.0.0.1", server.server_port)
+        try:
+            connection.request(
+                "GET",
+                "/api/admin/products",
+                headers={
+                    "Cookie": f"apex_admin={app._session_token(4_000_000_000)}"
+                },
+            )
+            response = connection.getresponse()
+            payload = json.loads(response.read())
+            self.assertEqual(response.status, 500)
+            self.assertIn("Попробуйте повторить", payload["error"])
+            self.assertNotIn("database unavailable", payload["error"])
         finally:
             connection.close()
             server.shutdown()

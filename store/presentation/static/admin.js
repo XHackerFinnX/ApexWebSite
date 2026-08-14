@@ -30,6 +30,37 @@ async function errorMessage(
         return `${fallback} (HTTP ${response.status})`;
     }
 }
+async function apiJson(
+    url,
+    options = {},
+    fallback = "Не удалось загрузить данные",
+) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+        const response = await fetch(url, {
+            ...options,
+            signal: controller.signal,
+        });
+        if (response.status === 401) {
+            location.replace("/admin");
+            throw new Error(
+                "Сессия истекла. Выполняется переход на страницу входа",
+            );
+        }
+        if (!response.ok)
+            throw new Error(await errorMessage(response, fallback));
+        return await response.json();
+    } catch (error) {
+        if (error.name === "AbortError")
+            throw new Error(
+                "Сервер не ответил за 15 секунд. Попробуйте ещё раз",
+            );
+        throw error;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
 function renderCategories() {
     const options = categories
         .map(
@@ -51,12 +82,13 @@ function renderCategories() {
         : "<small>Категорий пока нет</small>";
 }
 async function loadCategories() {
-    const response = await fetch("/api/admin/categories");
-    if (!response.ok)
-        throw new Error(
-            await errorMessage(response, "Не удалось загрузить категории"),
-        );
-    categories = await response.json();
+    categories = await apiJson(
+        "/api/admin/categories",
+        {},
+        "Не удалось загрузить категории",
+    );
+    if (!Array.isArray(categories))
+        throw new Error("Сервер вернул некорректный список категорий");
     renderCategories();
 }
 function switchTab(id) {
@@ -90,7 +122,7 @@ function renderProducts() {
         shown
             .map(
                 (p) =>
-                    `<tr><td><b>${esc(p.name)}</b><br><small>#${p.id}</small></td><td>${esc(p.category)}</td><td><b>${Number(p.price).toLocaleString("ru")} ₽</b></td><td><span class="stock ${p.stock < 5 ? "low" : ""}">${p.stock} шт.</span></td><td><small>${p.views} просм. · ${p.cart_adds} в корзину</small></td><td><button class="icon-btn" data-edit="${p.id}">Изменить</button> <button class="icon-btn danger" data-delete="${p.id}">Удалить</button></td></tr>`,
+                    `<tr><td><b>${esc(p.name)}</b><br><small>#${p.id} · ${p.is_active ? "Опубликован" : "Черновик"}</small></td><td>${esc(p.category)}</td><td><b>${Number(p.price).toLocaleString("ru")} ₽</b></td><td><span class="stock ${p.stock < 5 ? "low" : ""}">${p.stock} шт.</span></td><td><small>${p.views} просм. · ${p.cart_adds} в корзину</small></td><td><button class="icon-btn" data-edit="${p.id}">Изменить</button> <button class="icon-btn danger" data-delete="${p.id}">Удалить</button></td></tr>`,
             )
             .join("") ||
         `<tr><td colspan="6"><small>Товары не найдены</small></td></tr>`;
@@ -110,13 +142,35 @@ function renderProducts() {
         );
 }
 async function load() {
+    const refresh = $("#refresh");
+    refresh.disabled = true;
+    refresh.textContent = "↻ Загрузка…";
+    $("#rows").innerHTML =
+        '<tr><td colspan="6"><small>Загружаем товары…</small></td></tr>';
     try {
         await loadCategories();
     } catch (error) {
         toast(error.message, true);
     }
-    const response = await fetch("/api/admin/products");
-    products = await response.json();
+    try {
+        products = await apiJson(
+            "/api/admin/products",
+            {},
+            "Не удалось загрузить список товаров",
+        );
+        if (!Array.isArray(products))
+            throw new Error("Сервер вернул некорректный список товаров");
+    } catch (error) {
+        products = [];
+        $("#rows").innerHTML =
+            `<tr><td colspan="6"><small class="danger-text">${esc(error.message)}</small><br><button class="icon-btn" id="retryProducts">Повторить</button></td></tr>`;
+        $("#catalogCount").textContent = "Ошибка загрузки";
+        $("#retryProducts").onclick = load;
+        toast(error.message, true);
+        refresh.disabled = false;
+        refresh.textContent = "↻ Обновить";
+        return;
+    }
     $("#count").textContent = products.length;
     const views = products.reduce((n, p) => n + p.views, 0),
         adds = products.reduce((n, p) => n + p.cart_adds, 0);
@@ -135,15 +189,23 @@ async function load() {
               .join("")
         : "<div><span>Все товары в наличии</span><b>✓</b></div>";
     renderProducts();
-    const ir = await fetch("/api/admin/integrations");
-    if (ir.status === 401) return location.replace("/admin");
-    const integrations = await ir.json();
-    $("#configured").innerHTML = integrations
-        .map(
-            (x) =>
-                `<div><span><b>${esc(x.provider.toUpperCase())}</b><br><small>${esc(x.public_config.environment)}</small></span><b class="${x.enabled ? "" : "danger-text"}">${x.enabled ? "Активна" : "Выключена"}</b></div>`,
-        )
-        .join("");
+    try {
+        const integrations = await apiJson("/api/admin/integrations");
+        $("#configured").innerHTML = integrations.length
+            ? integrations
+                  .map(
+                      (x) =>
+                          `<div><span><b>${esc(x.provider.toUpperCase())}</b><br><small>${esc(x.public_config.environment)}</small></span><b class="${x.enabled ? "" : "danger-text"}">${x.enabled ? "Активна" : "Выключена"}</b></div>`,
+                  )
+                  .join("")
+            : "<small>Интеграции пока не настроены</small>";
+    } catch (error) {
+        $("#configured").innerHTML =
+            `<small class="danger-text">${esc(error.message)}</small>`;
+    } finally {
+        refresh.disabled = false;
+        refresh.textContent = "↻ Обновить";
+    }
 }
 function openProduct(p = null) {
     const f = $("#productForm");

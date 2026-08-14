@@ -82,39 +82,53 @@ const esc = (value) =>
     );
 
 async function loadCatalog() {
-    const response = await fetch("/api/products");
-    const items = response.ok ? await response.json() : [];
-    const grouped = new Map();
-    items.forEach((item) => {
-        const product = {
-            ...item,
-            id: String(item.id),
-            image: item.images?.[0] || item.image_url || "",
-            images: item.images?.length
-                ? item.images
-                : item.image_url
-                  ? [item.image_url]
-                  : [],
-            colors: item.color ? [item.color] : [],
-            compareAt: null,
-            promoEligible: true,
-        };
-        productById[product.id] = product;
-        if (!grouped.has(product.category)) grouped.set(product.category, []);
-        grouped.get(product.category).push(product);
-    });
-    collections = [...grouped].map(([category, products], index) => ({
-        id: `catalog-${index}`,
-        eyebrow: "Каталог",
-        title: category,
-        products,
-    }));
-    document.getElementById("category-filter").innerHTML =
-        `<option value="all">Все категории</option>${[...grouped.keys()].map((category) => `<option>${esc(category)}</option>`).join("")}`;
-    renderCollections();
-    renderCart();
-    if (location.hash.startsWith("#product-"))
-        openProduct(location.hash.slice(9), false);
+    const catalog = document.getElementById("collections");
+    catalog.setAttribute("aria-busy", "true");
+    try {
+        const response = await fetch("/api/products");
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const items = await response.json();
+        if (!Array.isArray(items))
+            throw new Error("Некорректный ответ сервера");
+        Object.keys(productById).forEach((id) => delete productById[id]);
+        const grouped = new Map();
+        items.forEach((item) => {
+            const product = {
+                ...item,
+                id: String(item.id),
+                image: item.images?.[0] || item.image_url || "",
+                images: item.images?.length
+                    ? item.images
+                    : item.image_url
+                      ? [item.image_url]
+                      : [],
+                colors: item.color ? [item.color] : [],
+                compareAt: null,
+                promoEligible: true,
+            };
+            productById[product.id] = product;
+            if (!grouped.has(product.category))
+                grouped.set(product.category, []);
+            grouped.get(product.category).push(product);
+        });
+        collections = [...grouped].map(([category, products], index) => ({
+            id: `catalog-${index}`,
+            eyebrow: "Каталог",
+            title: category,
+            products,
+        }));
+        document.getElementById("category-filter").innerHTML =
+            `<option value="all">Все категории</option>${[...grouped.keys()].map((category) => `<option>${esc(category)}</option>`).join("")}`;
+        renderCollections();
+        renderCart();
+        if (location.hash.startsWith("#product-"))
+            openProduct(location.hash.slice(9), false);
+    } catch (error) {
+        catalog.innerHTML = `<section class="section"><div class="empty-state"><h2>Каталог временно недоступен</h2><p>Не удалось получить товары. Проверьте соединение и повторите попытку.</p><button class="button button--dark" type="button" data-retry-catalog>Попробовать снова</button></div></section>`;
+        console.error("Catalog loading failed", error);
+    } finally {
+        catalog.removeAttribute("aria-busy");
+    }
 }
 
 const ICONS = {
@@ -817,14 +831,15 @@ function initEvents() {
     });
     document.addEventListener("click", (e) => {
         const t = e.target.closest(
-            "[data-quick-add],[data-remove],[data-inc],[data-dec],[data-view],[data-modal-add],[data-close-product],[data-gallery-index],[data-open-lightbox],[data-lightbox-close],[data-lightbox-prev],[data-lightbox-next]",
+            "[data-quick-add],[data-remove],[data-inc],[data-dec],[data-view],[data-modal-add],[data-close-product],[data-gallery-index],[data-open-lightbox],[data-lightbox-close],[data-lightbox-prev],[data-lightbox-next],[data-retry-catalog]",
         );
         if (!t) {
             const card = e.target.closest("[data-product-card]");
             if (card) openProduct(card.dataset.productCard);
             return;
         }
-        if (t.dataset.lightboxClose !== undefined) closeLightbox();
+        if (t.dataset.retryCatalog !== undefined) loadCatalog();
+        else if (t.dataset.lightboxClose !== undefined) closeLightbox();
         else if (t.dataset.lightboxPrev !== undefined)
             setGalleryImage(galleryIndex - 1);
         else if (t.dataset.lightboxNext !== undefined)

@@ -1,4 +1,5 @@
 import json
+import logging
 import base64
 import binascii
 import hashlib
@@ -10,6 +11,8 @@ from decimal import Decimal
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+
+logger = logging.getLogger(__name__)
 
 class Encoder(json.JSONEncoder):
     def default(self, o):
@@ -270,7 +273,15 @@ class WebApp:
                     )
                 except (ValueError, LookupError, KeyError) as e:
                     return self._send(400, {"error": str(e)})
-
+                except Exception:
+                    logger.exception(
+                        "Unhandled error while processing %s %s", self.command, path
+                    )
+                    return self._send(
+                        500,
+                        {"error": "Внутренняя ошибка сервера. Попробуйте повторить запрос"},
+                    )
+                    
             do_GET = _route
             do_POST = _route
             do_PUT = _route
