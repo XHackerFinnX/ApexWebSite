@@ -59,8 +59,8 @@ class PostgreSQLRepository:
                    FROM products p JOIN categories c ON c.id=p.category_id
                    LEFT JOIN product_sizes s ON s.product_id=p.id
                    {where}
-                   GROUP BY p.id,c.name ORDER BY p.id DESC""".format(
-            where="" if include_inactive else "WHERE p.is_active = true"
+                   GROUP BY p.id,c.name ORDER BY p.id DESC""".replace(
+            "{where}", "" if include_inactive else "WHERE p.is_active = true"
         )
         with self._db() as db:
             return [self._product(row) for row in db.execute(query).fetchall()]

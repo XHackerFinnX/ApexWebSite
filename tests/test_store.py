@@ -16,6 +16,7 @@ from store.application.services import (
 from store.config import Settings
 from store.domain import Integration, Product
 from store.infrastructure.security import RateLimiter, SecretBox
+from store.infrastructure.postgres_repo import PostgreSQLRepository
 from store.presentation.web import WebApp
 
 
@@ -169,6 +170,37 @@ class StoreTests(unittest.TestCase):
         self.assertIn("with db.cursor() as cursor:", source)
         self.assertIn("cursor.executemany(", source)
         self.assertNotIn("db.executemany(", source)
+        
+    def test_postgres_product_query_preserves_empty_array_literal(self):
+        class EmptyResult:
+            def fetchall(self):
+                return []
+
+        class RecordingDatabase:
+            def __init__(self):
+                self.queries = []
+
+            def __enter__(self):
+                return self
+
+            def __exit__(self, *_args):
+                return None
+
+            def execute(self, query):
+                self.queries.append(query)
+                return EmptyResult()
+
+        database = RecordingDatabase()
+        repository = PostgreSQLRepository.__new__(PostgreSQLRepository)
+        repository._db = lambda: database
+
+        self.assertEqual(repository.list_products(), [])
+        self.assertIn("'{}'", database.queries[-1])
+        self.assertIn("WHERE p.is_active = true", database.queries[-1])
+
+        self.assertEqual(repository.list_products(include_inactive=True), [])
+        self.assertIn("'{}'", database.queries[-1])
+        self.assertNotIn("WHERE p.is_active = true", database.queries[-1])
 
     def test_integration_secrets_are_masked(self):
         service = IntegrationService(self.repo)

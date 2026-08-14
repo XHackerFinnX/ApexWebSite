@@ -82,20 +82,27 @@ class WebApp:
                     if ctype.startswith("application/json")
                     else data
                 )
-                self.send_response(status)
-                self.send_header("Content-Type", ctype)
-                self.send_header("Content-Length", str(len(body)))
-                self.send_header("X-Content-Type-Options", "nosniff")
-                self.send_header("X-Frame-Options", "DENY")
-                self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
-                for key, value in (headers or {}).items():
-                    self.send_header(key, value)
-                self.send_header(
-                    "Content-Security-Policy",
-                    "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; img-src 'self' https: data:; connect-src 'self' https://geoserv.tildacdn.com",
-                )
-                self.end_headers()
-                self.wfile.write(body)
+                try:
+                    self.send_response(status)
+                    self.send_header("Content-Type", ctype)
+                    self.send_header("Content-Length", str(len(body)))
+                    self.send_header("X-Content-Type-Options", "nosniff")
+                    self.send_header("X-Frame-Options", "DENY")
+                    self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
+                    for key, value in (headers or {}).items():
+                        self.send_header(key, value)
+                    self.send_header(
+                        "Content-Security-Policy",
+                        "default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; script-src 'self'; img-src 'self' https: data:; connect-src 'self' https://geoserv.tildacdn.com",
+                    )
+                    self.end_headers()
+                    self.wfile.write(body)
+                except (BrokenPipeError, ConnectionAbortedError, ConnectionResetError):
+                    # Browsers can cancel an in-flight request during navigation or
+                    # refresh. The response can no longer be delivered, so do not
+                    # attempt to send a second error response on the closed socket.
+                    self.close_connection = True
+                    logger.debug("Client disconnected while sending %s", self.path)
 
             def _body(self):
                 length = int(self.headers.get("Content-Length", "0"))
