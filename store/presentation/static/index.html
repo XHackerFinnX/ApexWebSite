@@ -45,10 +45,7 @@
                     </svg>
                 </button>
 
-                <nav class="header__nav">
-                    <a href="#hoodies">Худи</a>
-                    <a href="#jackets">Куртки</a>
-                    <a href="#tees">Футболки</a>
+                <nav class="header__nav" id="desktop-nav">
                     <a href="#story">История</a>
                 </nav>
 
@@ -86,9 +83,6 @@
             </div>
 
             <nav class="header__mobile-nav hidden" id="mobile-nav">
-                <a href="#hoodies">Худи</a>
-                <a href="#jackets">Куртки</a>
-                <a href="#tees">Футболки</a>
                 <a href="#story">История</a>
             </nav>
 
@@ -242,19 +236,11 @@
                     <label
                         >Категория<select id="category-filter">
                             <option value="all">Все товары</option>
-                            <option value="Худи">Худи</option>
-                            <option value="Куртки">Куртки</option>
-                            <option value="Футболки">Футболки</option>
                         </select></label
                     >
                     <label
                         >Размер<select id="size-filter">
                             <option value="all">Все размеры</option>
-                            <option>XS</option>
-                            <option>S</option>
-                            <option>M</option>
-                            <option>L</option>
-                            <option>XL</option>
                         </select></label
                     >
                     <label
@@ -273,7 +259,15 @@
                     aria-live="polite"
                 ></p>
             </section>
-            <div id="collections"></div>
+            <div id="collections">
+                <div class="catalog-loading" role="status" aria-live="polite">
+                    <span
+                        class="catalog-loading__spinner"
+                        aria-hidden="true"
+                    ></span>
+                    <span>Загрузка товаров</span>
+                </div>
+            </div>
 
             <!-- История -->
             <section id="story" class="story">
@@ -379,12 +373,15 @@
                         </p>
                     </div>
                     <div class="footer__col">
-                        <p class="footer__heading">Магазин</p>
+                        <p class="footer__heading">Документы</p>
                         <ul>
-                            <li><a href="#hoodies">Худи</a></li>
-                            <li><a href="#jackets">Куртки</a></li>
-                            <li><a href="#tees">Футболки</a></li>
-                            <li><a href="#jackets">Архивная распродажа</a></li>
+                            <li>
+                                <a href="/privacy"
+                                    >Политика конфиденциальности</a
+                                >
+                            </li>
+                            <li><a href="/oferta">Публичная оферта</a></li>
+                            <li><a href="/cookie">Cookie</a></li>
                         </ul>
                     </div>
                     <div class="footer__col">

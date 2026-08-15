@@ -84,6 +84,7 @@ const esc = (value) =>
 async function loadCatalog() {
     const catalog = document.getElementById("collections");
     catalog.setAttribute("aria-busy", "true");
+    catalog.innerHTML = `<div class="catalog-loading" role="status" aria-live="polite"><span class="catalog-loading__spinner" aria-hidden="true"></span><span>Загрузка товаров</span></div>`;
     try {
         const response = await fetch("/api/products");
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
@@ -103,7 +104,12 @@ async function loadCatalog() {
                       ? [item.image_url]
                       : [],
                 colors: item.color ? [item.color] : [],
-                compareAt: null,
+                compareAt: Math.max(
+                    Number(item.price) || 0,
+                    ...(item.variants || []).map(
+                        (variant) => Number(variant.old_price) || 0,
+                    ),
+                ),
                 promoEligible: true,
             };
             productById[product.id] = product;
@@ -119,6 +125,16 @@ async function loadCatalog() {
         }));
         document.getElementById("category-filter").innerHTML =
             `<option value="all">Все категории</option>${[...grouped.keys()].map((category) => `<option>${esc(category)}</option>`).join("")}`;
+        const sizes = [
+            ...new Set(
+                items.flatMap((item) =>
+                    Array.isArray(item.sizes) ? item.sizes : [],
+                ),
+            ),
+        ].filter(Boolean);
+        document.getElementById("size-filter").innerHTML =
+            `<option value="all">Все размеры</option>${sizes.map((size) => `<option value="${esc(size)}">${esc(size)}</option>`).join("")}`;
+        renderCatalogNavigation();
         renderCollections();
         renderCart();
         if (location.hash.startsWith("#product-"))
@@ -149,6 +165,18 @@ function renderAnnouncement() {
         .map((item) => `<span>${item}<i aria-hidden="true">/////</i></span>`)
         .join("");
 }
+function renderCatalogNavigation() {
+    const links = collections
+        .map(
+            (collection) =>
+                `<a href="#${collection.id}">${esc(collection.title)}</a>`,
+        )
+        .join("");
+    document.getElementById("desktop-nav").innerHTML =
+        `${links}<a href="#story">История</a>`;
+    document.getElementById("mobile-nav").innerHTML =
+        `${links}<a href="#story">История</a>`;
+}
 function renderCollections() {
     const category = document.getElementById("category-filter")?.value || "all";
     const size = document.getElementById("size-filter")?.value || "all";
@@ -156,11 +184,11 @@ function renderCollections() {
     let visibleCount = 0;
     document.getElementById("collections").innerHTML = collections
         .map((c) => {
-            const products = c.products
+            const products = [...c.products]
                 .filter(
                     (p) =>
                         (category === "all" || p.category === category) &&
-                        (size === "all" || p.sizes.includes(size)),
+                        (size === "all" || (p.sizes || []).includes(size)),
                 )
                 .sort((a, b) =>
                     sort === "price-asc"
@@ -171,7 +199,10 @@ function renderCollections() {
                             ? (b.compareAt || b.price) -
                               b.price -
                               ((a.compareAt || a.price) - a.price)
-                            : 0,
+                            : (Number(b.cart_adds) || 0) * 3 +
+                              (Number(b.views) || 0) -
+                              ((Number(a.cart_adds) || 0) * 3 +
+                                  (Number(a.views) || 0)),
                 );
             visibleCount += products.length;
             return products.length
@@ -808,14 +839,14 @@ function initMobileMenu() {
         openIcon.classList.toggle("hidden", isOpen);
         closeIcon.classList.toggle("hidden", !isOpen);
     });
-    nav.querySelectorAll("a").forEach((a) =>
-        a.addEventListener("click", () => {
+    nav.addEventListener("click", (event) => {
+        if (event.target.closest("a")) {
             nav.classList.add("hidden");
             toggle.setAttribute("aria-expanded", "false");
             openIcon.classList.remove("hidden");
             closeIcon.classList.add("hidden");
-        }),
-    );
+        }
+    });
 }
 function initEvents() {
     document.getElementById("open-cart").addEventListener("click", openCart);
