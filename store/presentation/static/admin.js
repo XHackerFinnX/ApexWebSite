@@ -1,5 +1,6 @@
 let products = [];
 let categories = [];
+let integrations = [];
 const $ = (selector) => document.querySelector(selector);
 const esc = (value) =>
     String(value ?? "").replace(
@@ -190,12 +191,12 @@ async function load() {
         : "<div><span>Все товары в наличии</span><b>✓</b></div>";
     renderProducts();
     try {
-        const integrations = await apiJson("/api/admin/integrations");
+        integrations = await apiJson("/api/admin/integrations");
         $("#configured").innerHTML = integrations.length
             ? integrations
                   .map(
                       (x) =>
-                          `<div><span><b>${esc(x.public_config.name || x.provider.toUpperCase())}</b><br><small>${x.kind === "payment" ? "Оплата" : "Доставка"} · ${esc(x.provider)}</small></span><span><b class="${x.enabled ? "" : "danger-text"}">${x.enabled ? "Активна" : "Выключена"}</b> <button type="button" class="icon-btn danger" data-delete-integration="${esc(x.provider)}">Удалить</button></span></div>`,
+                          `<div><span><b>${esc(x.public_config.name || x.provider.toUpperCase())}</b><br><small>${x.kind === "payment" ? "Оплата" : "Доставка"} · ${esc(x.provider)}</small></span><span><b class="${x.enabled ? "" : "danger-text"}">${x.enabled ? "Активна" : "Выключена"}</b> <button type="button" class="icon-btn" data-edit-integration="${esc(x.provider)}">Изменить</button> <button type="button" class="icon-btn danger" data-delete-integration="${esc(x.provider)}">Удалить</button></span></div>`,
                   )
                   .join("")
             : "<small>Интеграции пока не настроены</small>";
@@ -505,6 +506,10 @@ $("#categoryList").onclick = async (event) => {
 };
 $("#integration").onsubmit = async (e) => {
     e.preventDefault();
+    const submit = $("#integration-save");
+    submit.disabled = true;
+    e.target.classList.add("is-saving");
+    $("#integration-save .button-label").textContent = "Сохраняем и проверяем…";
     const f = new FormData(e.target),
         provider = f.get("provider"),
         keys = {
@@ -538,16 +543,37 @@ $("#integration").onsubmit = async (e) => {
     ])
         d[key] = f.get(key);
     d.insurance = f.has("insurance");
-    const r = await fetch("/api/admin/integrations", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(d),
-    });
-    if (r.ok) {
-        toast("Настройки сохранены");
+    try {
+        const editing = f.get("editing");
+        const r = await fetch(
+            editing
+                ? `/api/admin/integrations/${editing}`
+                : "/api/admin/integrations",
+            {
+                method: editing ? "PUT" : "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(d),
+            },
+        );
+        if (!r.ok)
+            throw new Error(await errorMessage(r, "Настройки не сохранены"));
+        const result = await r.json();
+        toast(
+            result.test
+                ? "Настройки сохранены, тест СДЭК пройден"
+                : "Настройки сохранены",
+        );
         e.target.reset();
-        load();
-    } else toast((await r.json()).error);
+        e.target.elements.editing.value = "";
+        await load();
+    } catch (error) {
+        toast(error.message, true);
+    } finally {
+        submit.disabled = false;
+        e.target.classList.remove("is-saving");
+        $("#integration-save .button-label").textContent =
+            "Сохранить настройки";
+    }
 };
 const integrationKind = $("#integration-kind"),
     integrationProvider = $("#integration-provider");
@@ -570,6 +596,34 @@ integrationKind.onchange = updateIntegrationForm;
 integrationProvider.onchange = updateIntegrationForm;
 updateIntegrationForm();
 $("#configured").onclick = async (event) => {
+    const edit = event.target.closest("[data-edit-integration]");
+    if (edit) {
+        const item = integrations.find(
+            (x) => x.provider === edit.dataset.editIntegration,
+        );
+        const form = $("#integration");
+        form.reset();
+        form.elements.editing.value = item.provider;
+        form.elements.kind.value = item.kind;
+        form.elements.provider.value = item.provider;
+        form.elements.name.value = item.public_config.name || "";
+        form.elements.environment.value =
+            item.public_config.environment || "test";
+        form.elements.enabled.checked = item.enabled;
+        Object.entries(item.public_config).forEach(([key, value]) => {
+            if (form.elements[key] && !["name", "environment"].includes(key))
+                form.elements[key].type === "checkbox"
+                    ? (form.elements[key].checked = value === "true")
+                    : (form.elements[key].value = value);
+        });
+        updateIntegrationForm();
+        form.elements.login.placeholder =
+            "Оставьте пустым, чтобы сохранить текущий";
+        form.elements.secret.placeholder =
+            "Оставьте пустым, чтобы сохранить текущий";
+        form.scrollIntoView({ behavior: "smooth", block: "start" });
+        return;
+    }
     const button = event.target.closest("[data-delete-integration]");
     if (
         !button ||

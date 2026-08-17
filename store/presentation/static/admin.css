@@ -425,6 +425,25 @@ td small {
     grid-template-columns: 1fr 1fr;
     gap: 16px;
 }
+.button-spinner {
+    display: none;
+    width: 16px;
+    height: 16px;
+    margin-right: 8px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    vertical-align: -3px;
+    animation: integration-spin 0.7s linear infinite;
+}
+.integration-form.is-saving .button-spinner {
+    display: inline-block;
+}
+@keyframes integration-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
 .cdek-fields[hidden] {
     display: none;
 }

@@ -220,11 +220,11 @@ class PostgreSQLRepository:
                 "DELETE FROM integrations WHERE provider=%s", (provider,)
             ).rowcount > 0
 
-    def get_integration_config(self, provider: str) -> dict[str, object] | None:
+    def get_integration_config(self, provider: str, enabled_only: bool = True) -> dict[str, object] | None:
         """Return an enabled provider configuration, decrypting secrets server-side."""
         with self._db() as db:
             row = db.execute(
-                "SELECT public_config,secret_config FROM integrations WHERE provider=%s AND enabled=true",
+                "SELECT public_config,secret_config FROM integrations WHERE provider=%s" + (" AND enabled=true" if enabled_only else ""),
                 (provider,),
             ).fetchone()
         if not row:

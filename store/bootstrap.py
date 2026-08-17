@@ -19,13 +19,14 @@ def create_app(settings: Settings | None = None):
         config.postgresql_connection(),
         SecretBox(config.STORE_MASTER_KEY.get_secret_value()),
     )
+    delivery = CDEKDelivery(repo)
     return WebApp(
         CatalogService(repo),
-        IntegrationService(repo),
+        IntegrationService(repo, delivery),
         CheckoutService(YandexCaptcha()),
         repo,
         RateLimiter(),
-        CDEKDelivery(repo),
+        delivery,
         config.ADMIN_USERNAME,
         config.ADMIN_PASSWORD.get_secret_value(),
     )

@@ -78,14 +78,17 @@ class MemoryRepository:
         ]
 
     def save_integration(self, integration):
+        old = self.integrations.get(integration.provider)
+        if old and not integration.secret_config:
+            integration.secret_config = old.secret_config
         self.integrations[integration.provider] = integration
         
     def delete_integration(self, provider):
         return self.integrations.pop(provider, None) is not None
     
-    def get_integration_config(self, provider):
+    def get_integration_config(self, provider, enabled_only=True):
         integration = self.integrations.get(provider)
-        if not integration:
+        if not integration or (enabled_only and not integration.enabled):
             return None
         return integration.public_config | integration.secret_config
 
@@ -123,6 +126,32 @@ class CDEKDeliveryTests(unittest.TestCase):
 
         with self.assertRaisesRegex(CDEKError, "отклонил запрос без пояснения"):
             self.delivery._request_json(self.delivery.CALC_URL)
+            
+    @patch("store.infrastructure.cdek.urlopen")
+    def test_configuration_uses_test_environment_and_calculator(self, mocked_urlopen):
+        token_response = unittest.mock.MagicMock()
+        token_response.__enter__.return_value.read.return_value = json.dumps(
+            {"access_token": "token", "expires_in": 3600}
+        ).encode()
+        calculation_response = unittest.mock.MagicMock()
+        calculation_response.__enter__.return_value.read.return_value = json.dumps(
+            {"total_sum": 420}
+        ).encode()
+        mocked_urlopen.side_effect = [token_response, calculation_response]
+
+        result = self.delivery.test_configuration({
+            "environment": "test", "client_id": "id", "client_secret": "secret",
+            "dispatch_days": "1", "contract_type": "1", "tariff_code": "136",
+            "sender_city": "44", "weight": "1000", "length": "300",
+            "width": "200", "height": "80",
+        })
+
+        self.assertEqual(result, {"authorization": True, "calculation": True})
+        urls = [call.args[0].full_url for call in mocked_urlopen.call_args_list]
+        self.assertEqual(urls, [
+            "https://api.edu.cdek.ru/v2/oauth/token",
+            "https://api.edu.cdek.ru/v2/calculator/tariff",
+        ])
 
 
 class Captcha:
@@ -278,6 +307,36 @@ class StoreTests(unittest.TestCase):
             service.configure({"provider": "cdek", "name": "СДЭК", "enabled": True,
                                "client_id": "id", "client_secret": "secret"})
 
+    def test_integration_can_be_edited_without_replacing_secret(self):
+        service = IntegrationService(self.repo)
+        service.configure({
+            "provider": "tbank", "name": "Оплата", "enabled": True,
+            "terminal_key": "terminal", "password": "secret",
+        })
+        service.configure({
+            "provider": "tbank", "name": "Новая оплата", "enabled": True,
+        }, update=True)
+        saved = self.repo.integrations["tbank"]
+        self.assertEqual(saved.public_config["name"], "Новая оплата")
+        self.assertEqual(saved.secret_config, {"terminal_key": "terminal", "password": "secret"})
+
+    def test_failed_cdek_check_does_not_save_configuration(self):
+        class FailingCDEK:
+            def test_configuration(self, _config):
+                raise CDEKError("Тестовый расчёт не выполнен")
+
+        service = IntegrationService(self.repo, FailingCDEK())
+        with self.assertRaisesRegex(CDEKError, "Тестовый расчёт"):
+            service.configure({
+                "provider": "cdek", "name": "СДЭК", "enabled": True,
+                "client_id": "id", "client_secret": "secret",
+                "contract_type": "1", "tariff_code": "136", "sender_city": "44",
+                "sender_office": "MSK1", "dimension_type": "shipment",
+                "weight": "1000", "length": "300", "width": "200", "height": "80",
+                "cost_type": "calculator", "dispatch_days": "1",
+            })
+        self.assertNotIn("cdek", self.repo.integrations)
+    
     def test_captcha(self):
         service = CheckoutService(Captcha())
         self.assertEqual(service.confirm_captcha("ok", "127.0.0.1"), "captcha-approved")

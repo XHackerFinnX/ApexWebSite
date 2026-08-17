@@ -214,8 +214,7 @@ class WebApp:
                         data.pop("id", None)
                         return self._send(201, asdict(app.catalog.save(data)))
                     if self.command == "POST" and path == "/api/admin/integrations":
-                        app.integrations.configure(self._body())
-                        return self._send(data={"ok": True})
+                        return self._send(data=app.integrations.configure(self._body()))
                     if self.command == "POST" and path == "/api/delivery/calculate":
                         if not app.delivery:
                             raise ValueError("Доставка не настроена")
@@ -260,6 +259,14 @@ class WebApp:
                             "views" if parts[3] == "view" else "cart_adds",
                         )
                         return self._send(data={"ok": True})
+                    if (
+                        self.command == "PUT"
+                        and len(parts) == 4
+                        and parts[:3] == ["api", "admin", "integrations"]
+                    ):
+                        data = self._body()
+                        data["provider"] = parts[3]
+                        return self._send(data=app.integrations.configure(data, update=True))
                     if (
                         self.command == "DELETE"
                         and len(parts) == 4

@@ -95,26 +95,30 @@ class IntegrationService:
         "international": ("delivery", ()),
     }
 
-    def __init__(self, repo: StoreRepository):
+    def __init__(self, repo: StoreRepository, cdek=None):
         self.repo = repo
+        self.cdek = cdek
 
     def list(self):
         return self.repo.list_integrations()
 
-    def configure(self, data: dict) -> None:
+    def configure(self, data: dict, *, update: bool = False) -> dict[str, object]:
         provider = str(data.get("provider", ""))
         if provider not in self.PROVIDERS:
             raise ValueError("Провайдер не поддерживается")
         kind, secret_fields = self.PROVIDERS[provider]
-        if any(x.provider == provider for x in self.list()):
+        exists = any(x.provider == provider for x in self.list())
+        if exists and not update:
             raise ValueError("Этот сервис уже добавлен")
+        if update and not exists:
+            raise LookupError("Интеграция не найдена")
         secrets = {
             key: str(data.get(key, "")) for key in secret_fields if data.get(key)
         }
         if (
             data.get("enabled")
             and not secrets
-            and not any(x.provider == provider for x in self.list())
+            and not exists
         ):
             raise ValueError("Для включения интеграции заполните реквизиты")
         # API clients predating the display-name field keep a sensible fallback;
@@ -136,9 +140,16 @@ class IntegrationService:
                 "insurance": "true" if data.get("insurance") else "false",
                 "free_delivery_from": str(data.get("free_delivery_from", "0") or "0"),
             })
+        test_result = None
+        if provider == "cdek" and data.get("enabled") and self.cdek:
+            existing = self.repo.get_integration_config("cdek", enabled_only=False) if exists else {}
+            test_result = self.cdek.test_configuration({**(existing or {}), **public, **secrets})
         self.repo.save_integration(
             Integration(provider, kind, bool(data.get("enabled")), public, secrets)
         )
+        if provider == "cdek" and self.cdek:
+            self.cdek.invalidate_token()
+        return {"ok": True, "test": test_result}
         
     def delete(self, provider: str) -> bool:
         if provider not in self.PROVIDERS:

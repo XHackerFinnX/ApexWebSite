@@ -198,6 +198,7 @@
                                 </div>
                             </div>
                             <form id="integration" class="integration-form">
+                                <input name="editing" type="hidden" />
                                 <label
                                     >Раздел<select
                                         name="kind"
@@ -371,8 +372,17 @@
                                         name="enabled"
                                         type="checkbox"
                                     /><span></span>Включить интеграцию</label
-                                ><button class="button primary">
-                                    Сохранить настройки
+                                ><button
+                                    class="button primary"
+                                    id="integration-save"
+                                >
+                                    <span
+                                        class="button-spinner"
+                                        aria-hidden="true"
+                                    ></span
+                                    ><span class="button-label"
+                                        >Сохранить настройки</span
+                                    >
                                 </button>
                             </form>
                         </section>
