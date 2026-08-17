@@ -195,7 +195,7 @@ async function load() {
             ? integrations
                   .map(
                       (x) =>
-                          `<div><span><b>${esc(x.provider.toUpperCase())}</b><br><small>${esc(x.public_config.environment)}</small></span><b class="${x.enabled ? "" : "danger-text"}">${x.enabled ? "Активна" : "Выключена"}</b></div>`,
+                          `<div><span><b>${esc(x.public_config.name || x.provider.toUpperCase())}</b><br><small>${x.kind === "payment" ? "Оплата" : "Доставка"} · ${esc(x.provider)}</small></span><span><b class="${x.enabled ? "" : "danger-text"}">${x.enabled ? "Активна" : "Выключена"}</b> <button type="button" class="icon-btn danger" data-delete-integration="${esc(x.provider)}">Удалить</button></span></div>`,
                   )
                   .join("")
             : "<small>Интеграции пока не настроены</small>";
@@ -511,14 +511,33 @@ $("#integration").onsubmit = async (e) => {
             tbank: ["terminal_key", "password"],
             alfabank: ["username", "password"],
             cdek: ["client_id", "client_secret"],
-        }[provider],
+        }[provider] || ["unused_login", "unused_secret"],
         d = {
             provider,
+            name: f.get("name"),
             environment: f.get("environment"),
             enabled: f.has("enabled"),
             [keys[0]]: f.get("login"),
             [keys[1]]: f.get("secret"),
         };
+    for (const key of [
+        "contract_type",
+        "tariff_code",
+        "sender_city",
+        "sender_office",
+        "dimension_type",
+        "weight",
+        "length",
+        "width",
+        "height",
+        "cost_type",
+        "markup",
+        "markup_type",
+        "dispatch_days",
+        "free_delivery_from",
+    ])
+        d[key] = f.get(key);
+    d.insurance = f.has("insurance");
     const r = await fetch("/api/admin/integrations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -529,6 +548,48 @@ $("#integration").onsubmit = async (e) => {
         e.target.reset();
         load();
     } else toast((await r.json()).error);
+};
+const integrationKind = $("#integration-kind"),
+    integrationProvider = $("#integration-provider");
+function updateIntegrationForm() {
+    const delivery = integrationKind.value === "delivery";
+    [...integrationProvider.options].forEach(
+        (option) =>
+            (option.hidden =
+                delivery !==
+                ["cdek", "pickup", "international"].includes(option.value)),
+    );
+    const visible = [...integrationProvider.options].find(
+        (option) => !option.hidden,
+    );
+    if (integrationProvider.selectedOptions[0]?.hidden && visible)
+        integrationProvider.value = visible.value;
+    $("#cdek-fields").hidden = integrationProvider.value !== "cdek";
+}
+integrationKind.onchange = updateIntegrationForm;
+integrationProvider.onchange = updateIntegrationForm;
+updateIntegrationForm();
+$("#configured").onclick = async (event) => {
+    const button = event.target.closest("[data-delete-integration]");
+    if (
+        !button ||
+        !confirm(
+            "Вы точно хотите удалить эту интеграцию? Она исчезнет из корзины.",
+        )
+    )
+        return;
+    const response = await fetch(
+        `/api/admin/integrations/${button.dataset.deleteIntegration}`,
+        { method: "DELETE" },
+    );
+    if (response.ok) {
+        toast("Интеграция удалена");
+        load();
+    } else
+        toast(
+            await errorMessage(response, "Не удалось удалить интеграцию"),
+            true,
+        );
 };
 $("#search").oninput = renderProducts;
 $("#categoryFilter").onchange = renderProducts;

@@ -190,7 +190,7 @@
                             <div class="panel-head">
                                 <div>
                                     <span class="eyebrow">ПОДКЛЮЧЕНИЕ</span>
-                                    <h2>Оплата и доставка</h2>
+                                    <h2>Новая интеграция</h2>
                                     <p>
                                         Секретные ключи шифруются и не
                                         отображаются после сохранения.
@@ -199,13 +199,37 @@
                             </div>
                             <form id="integration" class="integration-form">
                                 <label
-                                    >Провайдер<select name="provider">
+                                    >Раздел<select
+                                        name="kind"
+                                        id="integration-kind"
+                                    >
+                                        <option value="payment">Оплата</option>
+                                        <option value="delivery">
+                                            Доставка
+                                        </option>
+                                    </select></label
+                                ><label
+                                    >Сервис<select
+                                        name="provider"
+                                        id="integration-provider"
+                                    >
                                         <option value="tbank">Т-Банк</option>
                                         <option value="alfabank">
                                             Альфа-Банк
                                         </option>
                                         <option value="cdek">СДЭК</option>
+                                        <option value="pickup">
+                                            Самовывоз
+                                        </option>
+                                        <option value="international">
+                                            Международные заказы
+                                        </option>
                                     </select></label
+                                ><label
+                                    >Название сервиса<input
+                                        name="name"
+                                        required
+                                        placeholder="Как покупатель увидит сервис" /></label
                                 ><label
                                     >Среда<select name="environment">
                                         <option value="test">Тестовая</option>
@@ -221,8 +245,128 @@
                                     >Пароль / Secret<input
                                         name="secret"
                                         type="password"
-                                        placeholder="••••••••" /></label
-                                ><label class="switch"
+                                        placeholder="••••••••"
+                                /></label>
+                                <div
+                                    id="cdek-fields"
+                                    class="cdek-fields"
+                                    hidden
+                                >
+                                    <label
+                                        >Тип договора<select
+                                            name="contract_type"
+                                        >
+                                            <option value="1">
+                                                Интернет-магазин
+                                            </option>
+                                            <option value="2">Доставка</option>
+                                        </select></label
+                                    >
+                                    <label
+                                        >Тариф<input
+                                            name="tariff_code"
+                                            type="number"
+                                            value="136"
+                                    /></label>
+                                    <label
+                                        >Город отправителя<input
+                                            name="sender_city"
+                                            type="number"
+                                            placeholder="Код города СДЭК"
+                                    /></label>
+                                    <label
+                                        >Офис СДЭК<input
+                                            name="sender_office"
+                                            placeholder="Код офиса"
+                                    /></label>
+                                    <label
+                                        >Тип измерений<select
+                                            name="dimension_type"
+                                        >
+                                            <option value="shipment">
+                                                Габариты отправления
+                                            </option>
+                                            <option value="product">
+                                                Средние габариты товара
+                                            </option>
+                                        </select></label
+                                    >
+                                    <label
+                                        >Вес, г<input
+                                            name="weight"
+                                            type="number"
+                                            min="1"
+                                            value="1000"
+                                    /></label>
+                                    <label
+                                        >Длина, мм<input
+                                            name="length"
+                                            type="number"
+                                            min="1"
+                                            value="300"
+                                    /></label>
+                                    <label
+                                        >Ширина, мм<input
+                                            name="width"
+                                            type="number"
+                                            min="1"
+                                            value="200"
+                                    /></label>
+                                    <label
+                                        >Высота, мм<input
+                                            name="height"
+                                            type="number"
+                                            min="1"
+                                            value="80"
+                                    /></label>
+                                    <label
+                                        >Стоимость<select name="cost_type">
+                                            <option value="calculator">
+                                                Калькулятор
+                                            </option>
+                                            <option value="free">
+                                                Бесплатно
+                                            </option>
+                                        </select></label
+                                    >
+                                    <label
+                                        >Наценка<input
+                                            name="markup"
+                                            type="number"
+                                            value="0"
+                                    /></label>
+                                    <label
+                                        >Тип наценки<select name="markup_type">
+                                            <option value="fixed">
+                                                Фиксированная
+                                            </option>
+                                            <option value="percent">
+                                                Процентная
+                                            </option>
+                                        </select></label
+                                    >
+                                    <label class="check"
+                                        ><input
+                                            name="insurance"
+                                            type="checkbox"
+                                        />Учитывать страховку</label
+                                    >
+                                    <label
+                                        >Дней до отправки<input
+                                            name="dispatch_days"
+                                            type="number"
+                                            min="0"
+                                            value="1"
+                                    /></label>
+                                    <label
+                                        >Бесплатно от, ₽<input
+                                            name="free_delivery_from"
+                                            type="number"
+                                            min="0"
+                                            value="0"
+                                    /></label>
+                                </div>
+                                <label class="switch"
                                     ><input
                                         name="enabled"
                                         type="checkbox"

@@ -4,25 +4,29 @@ from datetime import date, datetime, timedelta
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from store.config import Settings
-
-
 class CDEKDelivery:
     TOKEN_URL = "https://api.cdek.ru/v2/oauth/token"
     CALC_URL = "https://api.cdek.ru/v2/calculator/tariff"
     PVZ_URL = "https://api.cdek.ru/v2/deliverypoints"
 
-    def __init__(self, settings: Settings):
-        self.settings = settings
+    def __init__(self, repository):
+        self.repository = repository
         self._token = ""
         self._token_expire = 0.0
 
     def _credentials(self) -> tuple[str, str]:
-        client_id = self.settings.CDEK_CLIENT_ID.get_secret_value()
-        client_secret = self.settings.CDEK_CLIENT_SECRET.get_secret_value()
+        config = self._config()
+        client_id = config.get("client_id", "")
+        client_secret = config.get("client_secret", "")
         if not client_id or not client_secret:
-            raise ValueError("Не настроены реквизиты CDEK_CLIENT_ID/CDEK_CLIENT_SECRET")
-        return client_id, client_secret
+            raise ValueError("Интеграция СДЭК не настроена")
+        return str(client_id), str(client_secret)
+
+    def _config(self) -> dict[str, object]:
+        config = self.repository.get_integration_config("cdek")
+        if not config:
+            raise ValueError("Интеграция СДЭК не подключена")
+        return config
 
     def _request_json(self, url: str, *, method: str = "GET", data: dict | None = None, headers: dict | None = None):
         body = None if data is None else json.dumps(data).encode("utf-8")
@@ -42,19 +46,20 @@ class CDEKDelivery:
         self._token_expire = time.time() + int(data.get("expires_in", 3600)) - 60
         return self._token
 
-    def calculate(self, postal_code: str) -> dict[str, int]:
+    def calculate(self, postal_code: str, order_total: float = 0) -> dict[str, int | float]:
         if not postal_code:
             raise ValueError("postal_code обязателен")
-        dispatch_at = (datetime.now() + timedelta(days=self.settings.CDEK_DISPATCH_DELAY_DAYS)).strftime("%Y-%m-%dT%H:%M:%S+0300")
+        config = self._config()
+        dispatch_at = (datetime.now() + timedelta(days=int(config["dispatch_days"]))).strftime("%Y-%m-%dT%H:%M:%S+0300")
         payload = {
             "date": dispatch_at,
-            "type": 1,
+            "type": int(config["contract_type"]),
             "currency": 1,
             "lang": "rus",
-            "tariff_code": self.settings.CDEK_TARIFF_CODE,
-            "from_location": {"postal_code": self.settings.CDEK_FROM_POSTAL_CODE},
+            "tariff_code": int(config["tariff_code"]),
+            "from_location": {"code": int(config["sender_city"])},
             "to_location": {"postal_code": str(postal_code)},
-            "packages": [{"weight": 1000, "length": 30, "width": 20, "height": 8}],
+            "packages": [{"weight": int(config["weight"]), "length": max(1, int(config["length"]) // 10), "width": max(1, int(config["width"]) // 10), "height": max(1, int(config["height"]) // 10)}],
         }
         result = self._request_json(self.CALC_URL, method="POST", data=payload, headers={"Authorization": f"Bearer {self.token()}", "Content-Type": "application/json"})
         base_price = result.get("total_sum") or result.get("delivery_sum")
@@ -64,7 +69,13 @@ class CDEKDelivery:
         days = int(result.get("calendar_min") or 0)
         if delivery_min:
             days = max(0, (datetime.strptime(delivery_min, "%Y-%m-%d").date() - date.today()).days)
-        return {"price": round(float(base_price) + self.settings.CDEK_FINAL_MARKUP), "days": days}
+        price = float(base_price)
+        markup = float(config.get("markup", 0))
+        price += price * markup / 100 if config.get("markup_type") == "percent" else markup
+        free_from = float(config.get("free_delivery_from", 0))
+        if config.get("cost_type") == "free" or (free_from > 0 and order_total >= free_from):
+            price = 0
+        return {"price": round(price), "days": days, "free_from": free_from}
 
     def pvz(self, postal_code: str) -> list[dict[str, str]]:
         if not postal_code:

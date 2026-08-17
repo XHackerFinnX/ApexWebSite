@@ -197,6 +197,11 @@ class WebApp:
                         return self._send(
                             data=[asdict(x) for x in app.integrations.list()]
                         )
+                    if self.command == "GET" and path == "/api/checkout/integrations":
+                        return self._send(data=[
+                            {"provider": x.provider, "kind": x.kind, "name": x.public_config.get("name", x.provider)}
+                            for x in app.integrations.list() if x.enabled
+                        ])
                     if self.command == "GET" and path == "/api/admin/categories":
                         return self._send(data=app.repo.list_categories())
                     if self.command == "POST" and path == "/api/admin/categories":
@@ -214,7 +219,11 @@ class WebApp:
                     if self.command == "POST" and path == "/api/delivery/calculate":
                         if not app.delivery:
                             raise ValueError("Доставка не настроена")
-                        return self._send(data=app.delivery.calculate(str(self._body().get("postal_code", ""))))
+                        delivery_request = self._body()
+                        return self._send(data=app.delivery.calculate(
+                            str(delivery_request.get("postal_code", "")),
+                            float(delivery_request.get("order_total", 0)),
+                        ))
                     if self.command == "GET" and path == "/api/delivery/pvz":
                         if not app.delivery:
                             raise ValueError("Доставка не настроена")
@@ -259,6 +268,13 @@ class WebApp:
                         return self._send(
                             data={"ok": app.repo.delete_product(int(parts[3]))}
                         )
+                    if (
+                        self.command == "DELETE" and len(parts) == 4
+                        and parts[:3] == ["api", "admin", "integrations"]
+                    ):
+                        if not app.integrations.delete(parts[3]):
+                            return self._send(404, {"error": "Интеграция не найдена"})
+                        return self._send(data={"ok": True})
                     if (
                         self.command == "DELETE"
                         and len(parts) == 4

@@ -91,6 +91,8 @@ class IntegrationService:
         "tbank": ("payment", ("terminal_key", "password")),
         "alfabank": ("payment", ("username", "password")),
         "cdek": ("delivery", ("client_id", "client_secret")),
+        "pickup": ("delivery", ()),
+        "international": ("delivery", ()),
     }
 
     def __init__(self, repo: StoreRepository):
@@ -104,6 +106,8 @@ class IntegrationService:
         if provider not in self.PROVIDERS:
             raise ValueError("Провайдер не поддерживается")
         kind, secret_fields = self.PROVIDERS[provider]
+        if any(x.provider == provider for x in self.list()):
+            raise ValueError("Этот сервис уже добавлен")
         secrets = {
             key: str(data.get(key, "")) for key in secret_fields if data.get(key)
         }
@@ -113,10 +117,33 @@ class IntegrationService:
             and not any(x.provider == provider for x in self.list())
         ):
             raise ValueError("Для включения интеграции заполните реквизиты")
-        public = {"environment": str(data.get("environment", "test"))}
+        # API clients predating the display-name field keep a sensible fallback;
+        # the administration form requires an explicit customer-facing name.
+        name = str(data.get("name", provider)).strip() or provider
+        public = {
+            "name": name,
+            "environment": str(data.get("environment", "test")),
+        }
+        if provider == "cdek" and "name" in data:
+            required = ("contract_type", "tariff_code", "sender_city", "sender_office", "dimension_type", "weight", "length", "width", "height", "cost_type", "dispatch_days")
+            missing = [key for key in required if str(data.get(key, "")).strip() == ""]
+            if missing:
+                raise ValueError("Заполните все обязательные параметры СДЭК")
+            public.update({key: str(data.get(key, "")).strip() for key in required})
+            public.update({
+                "markup": str(data.get("markup", "0") or "0"),
+                "markup_type": str(data.get("markup_type", "fixed")),
+                "insurance": "true" if data.get("insurance") else "false",
+                "free_delivery_from": str(data.get("free_delivery_from", "0") or "0"),
+            })
         self.repo.save_integration(
             Integration(provider, kind, bool(data.get("enabled")), public, secrets)
         )
+        
+    def delete(self, provider: str) -> bool:
+        if provider not in self.PROVIDERS:
+            raise ValueError("Провайдер не поддерживается")
+        return self.repo.delete_integration(provider)
 
 
 class CheckoutService:

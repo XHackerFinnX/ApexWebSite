@@ -75,6 +75,9 @@ class MemoryRepository:
 
     def save_integration(self, integration):
         self.integrations[integration.provider] = integration
+        
+    def delete_integration(self, provider):
+        return self.integrations.pop(provider, None) is not None
 
 
 class Captcha:
@@ -213,6 +216,22 @@ class StoreTests(unittest.TestCase):
             }
         )
         self.assertEqual(service.list()[0].secret_config["client_secret"], "••••••••")
+        
+    def test_integration_cannot_be_added_twice_and_can_be_deleted(self):
+        service = IntegrationService(self.repo)
+        payload = {"provider": "tbank", "name": "Оплата картой", "enabled": True,
+                   "terminal_key": "terminal", "password": "secret"}
+        service.configure(payload)
+        with self.assertRaisesRegex(ValueError, "уже добавлен"):
+            service.configure(payload)
+        self.assertTrue(service.delete("tbank"))
+        self.assertEqual(service.list(), [])
+
+    def test_cdek_requires_calculation_settings(self):
+        service = IntegrationService(self.repo)
+        with self.assertRaisesRegex(ValueError, "параметры СДЭК"):
+            service.configure({"provider": "cdek", "name": "СДЭК", "enabled": True,
+                               "client_id": "id", "client_secret": "secret"})
 
     def test_captcha(self):
         service = CheckoutService(Captcha())

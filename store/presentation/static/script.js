@@ -561,7 +561,7 @@ function renderCart() {
 }
 
 function renderCheckoutForm() {
-    return `<form class="checkout" id="checkout-form" novalidate><h3 class="checkout__title display">Оформление заказа</h3><div class="checkout__grid"><label>Имя<input id="customer-name" required placeholder="Иван" /></label><label>Почта<input id="customer-email" type="email" required placeholder="name@example.com" /></label><label class="checkout__wide">Телефон<input id="customer-phone" type="tel" required value="+7 " placeholder="+7 (999) 999-99-99" /></label></div><h4>Доставка</h4><label>Город<div class="suggest-wrap"><input id="delivery-city" autocomplete="off" placeholder="Начните вводить город" /><div class="suggestions" id="city-suggestions"></div></div></label><div class="checkout__hint" id="delivery-status">Выберите город — мы рассчитаем доставку СДЭК и загрузим пункты выдачи.</div><div class="checkout__radio" id="delivery-options"></div><label id="pvz-label">Пункт получения<div class="suggest-wrap"><input id="delivery-point" autocomplete="off" disabled placeholder="Сначала выберите город" /><div class="suggestions" id="pvz-suggestions"></div></div></label><div class="pvz-info" id="pvz-info"></div><label>ФИО получателя полностью<input id="recipient-name" required placeholder="Иванов Иван Иванович" /></label><label>Комментарий<textarea id="order-comment" placeholder="Комментарий к заказу"></textarea></label><h4>Промокод</h4><div class="promo-row"><input id="promo-code" placeholder="APEX10" /><button type="button" id="apply-promo">Применить</button></div><div class="checkout__hint" id="promo-status">Промокод может действовать на весь заказ или только на выбранные товары.</div><h4>Согласия</h4><label class="check"><input type="checkbox" id="privacy-consent" required />Я даю согласие на обработку персональных данных в соответствии с политикой конфиденциальности</label><label class="check"><input type="checkbox" id="delivery-consent" required />Срок отправки заказов зависит от загруженности магазина, отправка заказов осуществляется в течение 2 недель</label><h4>Способ оплаты</h4><div class="checkout__radio"><label><input type="radio" name="payment" value="card" required />Оплата картой, СБП или Долями</label><label><input type="radio" name="payment" value="yandex" />Яндекс Пэй и Сплит</label></div><div class="checkout__totals" id="checkout-totals"></div><button type="submit" class="cart__checkout">Оформить заказ</button></form>`;
+    return `<form class="checkout" id="checkout-form" novalidate><h3 class="checkout__title display">Оформление заказа</h3><div class="checkout__grid"><label>Имя<input id="customer-name" required placeholder="Иван" /></label><label>Почта<input id="customer-email" type="email" required placeholder="name@example.com" /></label><label class="checkout__wide">Телефон<input id="customer-phone" type="tel" required value="+7 " placeholder="+7 (999) 999-99-99" /></label></div><h4>Доставка</h4><label>Город<div class="suggest-wrap"><input id="delivery-city" autocomplete="off" placeholder="Начните вводить город" /><div class="suggestions" id="city-suggestions"></div></div></label><div class="checkout__hint" id="delivery-status">Выберите город — мы рассчитаем доставку СДЭК и загрузим пункты выдачи.</div><div class="checkout__radio" id="delivery-options"><span>Загрузка способов доставки…</span></div><label id="pvz-label">Пункт получения<div class="suggest-wrap"><input id="delivery-point" autocomplete="off" disabled placeholder="Сначала выберите город" /><div class="suggestions" id="pvz-suggestions"></div></div></label><div class="pvz-info" id="pvz-info"></div><label>ФИО получателя полностью<input id="recipient-name" required placeholder="Иванов Иван Иванович" /></label><label>Комментарий<textarea id="order-comment" placeholder="Комментарий к заказу"></textarea></label><h4>Промокод</h4><div class="promo-row"><input id="promo-code" placeholder="APEX10" /><button type="button" id="apply-promo">Применить</button></div><div class="checkout__hint" id="promo-status">Промокод может действовать на весь заказ или только на выбранные товары.</div><h4>Согласия</h4><label class="check"><input type="checkbox" id="privacy-consent" required />Я даю согласие на обработку персональных данных в соответствии с политикой конфиденциальности</label><label class="check"><input type="checkbox" id="delivery-consent" required />Срок отправки заказов зависит от загруженности магазина, отправка заказов осуществляется в течение 2 недель</label><h4>Способ оплаты</h4><div class="checkout__radio" id="payment-options"><span>Загрузка способов оплаты…</span></div><div class="checkout__totals" id="checkout-totals"></div><button type="submit" class="cart__checkout">Оформить заказ</button></form>`;
 }
 
 /* ---------- Delivery / checkout ---------- */
@@ -587,7 +587,10 @@ async function calculateDelivery(postalCode) {
     return jsonFetch("/api/delivery/calculate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ postal_code: postalCode }),
+        body: JSON.stringify({
+            postal_code: postalCode,
+            order_total: cartTotal(),
+        }),
     });
 }
 async function loadPvz(postalCode) {
@@ -621,9 +624,42 @@ function validateFio(v) {
 function markInvalid(el, invalid) {
     if (el) el.classList.toggle("input-error", invalid);
 }
+async function loadCheckoutIntegrations() {
+    const paymentBox = document.getElementById("payment-options");
+    const deliveryBox = document.getElementById("delivery-options");
+    try {
+        const items = await jsonFetch("/api/checkout/integrations");
+        const payments = items.filter((item) => item.kind === "payment");
+        const deliveries = items.filter((item) => item.kind === "delivery");
+        paymentBox.innerHTML = payments.length
+            ? payments
+                  .map(
+                      (item, index) =>
+                          `<label><input type="radio" name="payment" value="${esc(item.provider)}" ${index === 0 ? "required" : ""} />${esc(item.name)}</label>`,
+                  )
+                  .join("")
+            : '<span class="checkout__hint">Нет доступных способов оплаты</span>';
+        deliveryBox.innerHTML = deliveries
+            .filter((item) => item.provider !== "cdek")
+            .map(
+                (item) =>
+                    `<label><input type="radio" name="delivery-type" value="${esc(item.provider)}" />${esc(item.name)}</label>`,
+            )
+            .join("");
+        document
+            .querySelectorAll('input[name="payment"]')
+            .forEach((radio) => (radio.onchange = renderTotals));
+    } catch (_) {
+        paymentBox.innerHTML =
+            '<span class="checkout__hint">Не удалось загрузить способы оплаты</span>';
+        deliveryBox.innerHTML =
+            '<span class="checkout__hint">Не удалось загрузить способы доставки</span>';
+    }
+}
 
 function bindCheckoutControls() {
     renderTotals();
+    loadCheckoutIntegrations();
     const phone = document.getElementById("customer-phone");
     phone.addEventListener("focus", () => {
         if (!phone.value.trim()) phone.value = "+7 ";

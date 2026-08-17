@@ -25,7 +25,7 @@ def create_app(settings: Settings | None = None):
         CheckoutService(YandexCaptcha()),
         repo,
         RateLimiter(),
-        CDEKDelivery(config),
+        CDEKDelivery(repo),
         config.ADMIN_USERNAME,
         config.ADMIN_PASSWORD.get_secret_value(),
     )

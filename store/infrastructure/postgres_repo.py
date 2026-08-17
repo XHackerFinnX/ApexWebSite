@@ -213,6 +213,26 @@ class PostgreSQLRepository:
                     json.dumps(secrets),
                 ),
             )
+    
+    def delete_integration(self, provider: str) -> bool:
+        with self._db() as db:
+            return db.execute(
+                "DELETE FROM integrations WHERE provider=%s", (provider,)
+            ).rowcount > 0
+
+    def get_integration_config(self, provider: str) -> dict[str, object] | None:
+        """Return an enabled provider configuration, decrypting secrets server-side."""
+        with self._db() as db:
+            row = db.execute(
+                "SELECT public_config,secret_config FROM integrations WHERE provider=%s AND enabled=true",
+                (provider,),
+            ).fetchone()
+        if not row:
+            return None
+        return {
+            **row["public_config"],
+            **{key: self.box.decrypt(value) for key, value in row["secret_config"].items()},
+        }
 
     @staticmethod
     def _slug(value: str) -> str:
