@@ -2,11 +2,14 @@ import json
 import tempfile
 import threading
 import unittest
+from io import BytesIO
 from http.client import HTTPConnection
 from decimal import Decimal
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
+from unittest.mock import patch
 
 from store.application.services import (
     CatalogService,
@@ -17,6 +20,7 @@ from store.config import Settings
 from store.domain import Integration, Product
 from store.infrastructure.security import RateLimiter, SecretBox
 from store.infrastructure.postgres_repo import PostgreSQLRepository
+from store.infrastructure.cdek import CDEKDelivery, CDEKError
 from store.presentation.web import WebApp
 
 
@@ -78,6 +82,47 @@ class MemoryRepository:
         
     def delete_integration(self, provider):
         return self.integrations.pop(provider, None) is not None
+    
+    def get_integration_config(self, provider):
+        integration = self.integrations.get(provider)
+        if not integration:
+            return None
+        return integration.public_config | integration.secret_config
+
+
+class CDEKDeliveryTests(unittest.TestCase):
+    def setUp(self):
+        self.delivery = CDEKDelivery(MemoryRepository())
+
+    @patch("store.infrastructure.cdek.urlopen")
+    def test_request_exposes_cdek_validation_message(self, mocked_urlopen):
+        mocked_urlopen.side_effect = HTTPError(
+            "https://api.cdek.ru/v2/calculator/tariff",
+            400,
+            "Bad Request",
+            {},
+            BytesIO(
+                json.dumps(
+                    {"errors": [{"code": "v2_invalid", "message": "Не найден город получателя"}]}
+                ).encode()
+            ),
+        )
+
+        with self.assertRaisesRegex(CDEKError, "400.*Не найден город получателя"):
+            self.delivery._request_json(self.delivery.CALC_URL)
+
+    @patch("store.infrastructure.cdek.urlopen")
+    def test_request_handles_non_json_cdek_error(self, mocked_urlopen):
+        mocked_urlopen.side_effect = HTTPError(
+            self.delivery.CALC_URL,
+            502,
+            "Bad Gateway",
+            {},
+            BytesIO(b"bad gateway"),
+        )
+
+        with self.assertRaisesRegex(CDEKError, "отклонил запрос без пояснения"):
+            self.delivery._request_json(self.delivery.CALC_URL)
 
 
 class Captcha:

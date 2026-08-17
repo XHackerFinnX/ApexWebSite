@@ -567,8 +567,9 @@ function renderCheckoutForm() {
 /* ---------- Delivery / checkout ---------- */
 async function jsonFetch(url, options) {
     const r = await fetch(url, options);
-    if (!r.ok) throw new Error("Ошибка запроса");
-    return r.json();
+    const data = await r.json().catch(() => null);
+    if (!r.ok) throw new Error(data?.error || `Ошибка запроса (${r.status})`);
+    return data;
 }
 async function fetchCities(query) {
     const data = await jsonFetch("https://geoserv.tildacdn.com/api/city/", {
@@ -744,8 +745,9 @@ async function refreshDelivery() {
         point.disabled = false;
         status.textContent = "Выберите пункт получения (снизу).";
     } catch (err) {
-        status.textContent =
-            "К сожалению, доставку в выбранный город сейчас не удалось рассчитать.";
+        status.textContent = err.message
+            ? `Не удалось рассчитать доставку: ${err.message}`
+            : "К сожалению, доставку в выбранный город сейчас не удалось рассчитать.";
         opts.innerHTML = "";
     }
     renderTotals();
