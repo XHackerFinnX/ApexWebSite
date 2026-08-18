@@ -233,6 +233,36 @@ class PostgreSQLRepository:
             **row["public_config"],
             **{key: self.box.decrypt(value) for key, value in row["secret_config"].items()},
         }
+        
+    def create_order(self, order: dict[str, object], items: list[dict[str, object]]) -> dict[str, object]:
+        with self._db() as db:
+            row = db.execute(
+                """INSERT INTO orders(id,status,customer_email,total,payment_provider,idempotency_key)
+                   VALUES(%s,%s,%s,%s,%s,%s)
+                   ON CONFLICT(idempotency_key) DO UPDATE SET idempotency_key=excluded.idempotency_key
+                   RETURNING *""",
+                (order["id"], order["status"], order["customer_email"], order["total"], order["payment_provider"], order["idempotency_key"]),
+            ).fetchone()
+            if str(row["id"]) == str(order["id"]):
+                with db.cursor() as cursor:
+                    cursor.executemany(
+                        "INSERT INTO order_items(order_id,product_id,size,quantity,unit_price) VALUES(%s,%s,%s,%s,%s)",
+                        [(order["id"], item["product_id"], item["size"] or None, item["quantity"], item["unit_price"]) for item in items],
+                    )
+            return dict(row)
+
+    def set_order_payment(self, order_id: str, payment_id: str, status: str) -> None:
+        with self._db() as db:
+            db.execute("UPDATE orders SET external_payment_id=%s,status=%s,updated_at=now() WHERE id=%s", (payment_id, status, order_id))
+
+    def update_order_by_payment(self, payment_id: str, status: str) -> bool:
+        with self._db() as db:
+            return db.execute("UPDATE orders SET status=%s,updated_at=now() WHERE external_payment_id=%s", (status, payment_id)).rowcount > 0
+
+    def get_order(self, order_id: str) -> dict[str, object] | None:
+        with self._db() as db:
+            row = db.execute("SELECT id,status,total,created_at FROM orders WHERE id=%s", (order_id,)).fetchone()
+            return dict(row) if row else None
 
     @staticmethod
     def _slug(value: str) -> str:

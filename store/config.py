@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     YANDEX_CAPTCHA_SERVER_KEY: SecretStr = SecretStr("")
     YANDEX_CAPTCHA_CLIENT_KEY: str = ""
     CAPTCHA_MODE: str = "mock"
+    WEBAPP_URL: str = "http://localhost:8000"
     
     CDEK_CLIENT_ID: SecretStr = SecretStr("")
     CDEK_CLIENT_SECRET: SecretStr = SecretStr("")

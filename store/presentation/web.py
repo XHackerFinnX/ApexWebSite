@@ -237,6 +237,15 @@ class WebApp:
                                 )
                             }
                         )
+                    if self.command == "POST" and path == "/api/checkout/payment":
+                        return self._send(201, app.checkout.create_payment(self._body()))
+                    if self.command == "POST" and path == "/api/payments/tbank/notification":
+                        app.checkout.accept_tbank_notification(self._body())
+                        return self._send(200, b"OK", "text/plain; charset=utf-8")
+                    if self.command == "GET" and path == "/api/checkout/order":
+                        order_id = parse_qs(parsed.query).get("order_id", [""])[0]
+                        order = app.repo.get_order(order_id)
+                        return self._send(200, order) if order else self._send(404, {"error": "Заказ не найден"})
                     parts = path.strip("/").split("/")
                     if (
                         self.command == "PUT"

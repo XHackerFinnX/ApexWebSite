@@ -797,7 +797,7 @@ function bindPvzAutocomplete() {
         renderTotals();
     };
 }
-function submitOrder(e) {
+async function submitOrder(e) {
     e.preventDefault();
     const required = [
         ["customer-name", (v) => v.trim().length >= 2],
@@ -820,7 +820,10 @@ function submitOrder(e) {
     const payment = document.querySelector('input[name="payment"]:checked');
     if (!payment) ok = false;
     if (!ok) return showToast("Проверьте обязательные поля");
-    console.log("Заказ", {
+    const button = e.currentTarget.querySelector('[type="submit"]');
+    button.disabled = true;
+    button.textContent = "Переходим к оплате…";
+    const payload = {
         customer: {
             name: document.getElementById("customer-name").value,
             email: document.getElementById("customer-email").value,
@@ -831,10 +834,29 @@ function submitOrder(e) {
         comment: document.getElementById("order-comment").value,
         promo: activePromo,
         payment: payment.value,
-        total: grandTotal(),
-        cart: [...cart],
-    });
-    showToast("Заказ оформлен — данные готовы к отправке");
+        idempotency_key: crypto.randomUUID(),
+        items: [...cart].map(([key, quantity]) => {
+            const item = cartSelection(key);
+            return {
+                product_id: Number(item.id),
+                color: item.color,
+                size: item.size,
+                quantity,
+            };
+        }),
+    };
+    try {
+        const result = await jsonFetch("/api/checkout/payment", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+        });
+        window.location.assign(result.payment_url);
+    } catch (error) {
+        showToast(error.message || "Не удалось перейти к оплате");
+        button.disabled = false;
+        button.textContent = "Оформить заказ";
+    }
 }
 
 /* ---------- Drawer / toast / init ---------- */

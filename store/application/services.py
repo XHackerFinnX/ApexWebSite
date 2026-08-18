@@ -2,6 +2,8 @@ from decimal import Decimal, InvalidOperation
 
 from store.application.ports import CaptchaVerifier, StoreRepository
 from store.domain import Integration, Product
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+from uuid import uuid4
 
 
 class CatalogService:
@@ -128,6 +130,16 @@ class IntegrationService:
             "name": name,
             "environment": str(data.get("environment", "test")),
         }
+        if provider == "tbank":
+            public.update(
+                {
+                    "taxation": "usn_income",
+                    "item_tax": "none",
+                    "delivery_tax": "none",
+                    "language": "ru",
+                    "ffd_receipt_enabled": "false",
+                }
+            )
         if provider == "cdek" and "name" in data:
             required = ("contract_type", "tariff_code", "sender_city", "sender_office", "dimension_type", "weight", "length", "width", "height", "cost_type", "dispatch_days")
             missing = [key for key in required if str(data.get(key, "")).strip() == ""]
@@ -158,10 +170,87 @@ class IntegrationService:
 
 
 class CheckoutService:
-    def __init__(self, captcha: CaptchaVerifier):
+    def __init__(self, captcha: CaptchaVerifier, repo=None, tbank=None, public_url=""):
         self.captcha = captcha
+        self.repo = repo
+        self.tbank = tbank
+        self.public_url = public_url.rstrip("/")
 
     def confirm_captcha(self, token: str, ip: str) -> str:
         if not self.captcha.verify(token, ip):
             raise ValueError("Проверка CAPTCHA не пройдена")
         return "captcha-approved"
+    
+    def create_payment(self, data: dict) -> dict[str, object]:
+        if not self.repo or not self.tbank:
+            raise ValueError("Платёжный сервис не настроен")
+        if data.get("payment") != "tbank":
+            raise ValueError("Выбранный способ оплаты не поддерживается")
+        config = self.repo.get_integration_config("tbank")
+        if not config:
+            raise ValueError("Оплата через Т-Банк сейчас недоступна")
+        email = str(data.get("customer", {}).get("email", "")).strip()
+        if "@" not in email:
+            raise ValueError("Укажите корректную почту для электронного чека")
+        items, total = [], Decimal("0")
+        for raw in data.get("items", []):
+            product = self.repo.get_product(int(raw.get("product_id", 0)))
+            quantity = int(raw.get("quantity", 0))
+            if not product or not product.is_active or quantity < 1:
+                raise ValueError("В корзине есть недоступный товар")
+            size, color = str(raw.get("size", "")), str(raw.get("color", ""))
+            variant = next(
+                (
+                    v
+                    for v in product.variants
+                    if str(v.get("size", "")) == size
+                    and str(v.get("color", "")) == color
+                ),
+                None,
+            )
+            if product.variants and not variant:
+                raise ValueError(f"Вариация товара «{product.name}» не найдена")
+            price = Decimal(
+                str(variant.get("price") if variant else product.price)
+            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+            if quantity > int(variant.get("stock", 0) if variant else product.stock):
+                raise ValueError(f"Недостаточно товара «{product.name}»")
+            items.append(
+                {
+                    "product_id": product.id,
+                    "name": product.name,
+                    "size": size,
+                    "color": color,
+                    "quantity": quantity,
+                    "unit_price": price,
+                }
+            )
+            total += price * quantity
+        if not items or total <= 0:
+            raise ValueError("Корзина пуста")
+        order_id = str(uuid4())
+        order = self.repo.create_order(
+            {
+                "id": order_id,
+                "status": "NEW",
+                "customer_email": email,
+                "total": total,
+                "payment_provider": "tbank",
+                "idempotency_key": str(data.get("idempotency_key") or uuid4()),
+            },
+            items,
+        )
+        result = self.tbank.init_payment(config, order, items, self.public_url)
+        actual_order_id = str(order["id"])
+        self.repo.set_order_payment(
+            actual_order_id, str(result["PaymentId"]), str(result["Status"])
+        )
+        return {"order_id": actual_order_id, "payment_url": result["PaymentURL"]}
+
+    def accept_tbank_notification(self, data: dict) -> bool:
+        config = self.repo.get_integration_config("tbank") if self.repo else None
+        if not config or not self.tbank.verify_token(data, str(config["password"])):
+            raise ValueError("Некорректная подпись уведомления Т-Банка")
+        return self.repo.update_order_by_payment(
+            str(data.get("PaymentId", "")), str(data.get("Status", ""))
+        )

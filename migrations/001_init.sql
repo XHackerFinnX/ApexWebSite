@@ -52,6 +52,8 @@ CREATE TABLE IF NOT EXISTS orders (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE orders ADD COLUMN IF NOT EXISTS external_payment_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS orders_external_payment_idx ON orders(external_payment_id) WHERE external_payment_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS order_items (
     order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,

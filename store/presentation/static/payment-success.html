@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <title>Оплата прошла — Apex</title>
+        <link rel="stylesheet" href="/payment.css" />
+    </head>
+    <body>
+        <main class="payment-result">
+            <p class="payment-result__mark">✓</p>
+            <h1>Спасибо за заказ!</h1>
+            <p>
+                Платёж принят. Мы начали обработку заказа и отправим информацию
+                на указанную почту.
+            </p>
+            <p id="order-status">Проверяем статус платежа…</p>
+            <a href="/">Вернуться в магазин</a><small id="order-number"></small>
+        </main>
+        <script src="/payment-result.js"></script>
+    </body>
+</html>
