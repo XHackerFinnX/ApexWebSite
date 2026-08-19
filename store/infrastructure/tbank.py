@@ -69,12 +69,19 @@ class TBankPayment:
                 urlopen_options["context"] = self.ssl_context
             with urlopen(request, **urlopen_options) as response:
                 result = json.loads(response.read())
-        except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
-            if isinstance(exc, URLError) and isinstance(exc.reason, ssl.SSLCertVerificationError):
+        except HTTPError as exc:
+            raise TBankError(f"Т-Банк вернул HTTP {exc.code} при создании платежа") from exc
+        except URLError as exc:
+            if isinstance(exc.reason, ssl.SSLCertVerificationError):
                 raise TBankError(
                     "Не удалось проверить TLS-сертификат Т-Банка; "
                     "установите TBANK_CA_CERT с путём к Russian Trusted Root CA"
                 ) from exc
+            raise TBankError(f"Не удалось подключиться к Т-Банку: {exc.reason}") from exc
+        except TimeoutError as exc:
+            raise TBankError("Т-Банк не ответил за 15 секунд") from exc
+        except json.JSONDecodeError as exc:
+            raise TBankError("Т-Банк вернул некорректный JSON-ответ") from exc
         if not result.get("Success") or not result.get("PaymentURL"):
             raise TBankError(str(result.get("Message") or result.get("Details") or "Т-Банк отклонил создание платежа"))
         return result

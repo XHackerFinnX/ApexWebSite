@@ -4,6 +4,7 @@ import ssl
 import tempfile
 import unittest
 from decimal import Decimal
+from urllib.error import URLError
 from unittest.mock import MagicMock, patch
 from uuid import UUID
 
@@ -109,6 +110,31 @@ class TBankPaymentTests(unittest.TestCase):
         )
 
         self.assertIs(mocked_urlopen.call_args.kwargs["context"], payment.ssl_context)
+        
+    @patch("store.infrastructure.tbank.urlopen", side_effect=URLError("connection refused"))
+    def test_connection_error_is_reported_as_tbank_error(self, mocked_urlopen):
+        with self.assertRaisesRegex(TBankError, "подключиться.*connection refused"):
+            self._init_payment()
+
+        mocked_urlopen.assert_called_once()
+
+    @patch("store.infrastructure.tbank.urlopen")
+    def test_invalid_json_is_reported_as_tbank_error(self, mocked_urlopen):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = b"not JSON"
+        mocked_urlopen.return_value = response
+
+        with self.assertRaisesRegex(TBankError, "некорректный JSON"):
+            self._init_payment()
+
+    @staticmethod
+    def _init_payment():
+        return TBankPayment().init_payment(
+            {"terminal_key": "T", "password": "secret", "environment": "test"},
+            {"id": "1", "total": Decimal("1"), "customer_email": "a@b.ru"},
+            [{"name": "x", "unit_price": Decimal("1"), "quantity": 1}],
+            "https://shop.example.ru",
+        )
 
 
 if __name__ == "__main__":
