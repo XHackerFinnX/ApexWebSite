@@ -167,6 +167,22 @@ class AllowAllLimiter:
 class StoreTests(unittest.TestCase):
     def setUp(self):
         self.repo = MemoryRepository()
+        
+    def test_health_endpoint_does_not_require_database_query(self):
+        app = WebApp(None, None, None, None, AllowAllLimiter())
+        server = ThreadingHTTPServer(("127.0.0.1", 0), app.handler())
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        try:
+            with urlopen(
+                f"http://127.0.0.1:{server.server_port}/health"
+            ) as response:
+                self.assertEqual(response.status, 200)
+                self.assertEqual(json.load(response), {"status": "ok"})
+        finally:
+            server.shutdown()
+            server.server_close()
+            thread.join()
 
     def test_catalog_metrics_and_product_creation(self):
         service = CatalogService(self.repo)

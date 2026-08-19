@@ -4,3 +4,4 @@ var/
 .env
 .vscode/
 venv
+docs/

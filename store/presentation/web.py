@@ -148,6 +148,8 @@ class WebApp:
                 parsed = urlparse(self.path)
                 path = parsed.path
                 try:
+                    if self.command == "GET" and path == "/health":
+                        return self._send(data={"status": "ok"})
                     # Keep the entry point explicit: it must never fall through to
                     # generic path-to-file handling (or depend on a trailing slash).
                     if self.command == "GET" and path in {"/admin", "/admin/"}:
