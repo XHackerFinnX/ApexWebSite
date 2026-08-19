@@ -76,6 +76,25 @@ WEBAPP_URL=https://shop.example.ru
 язык. Позиции имеют признаки `full_payment` / `commodity`, необходимые API
 `Init`. Для электронного чека покупатель должен указать корректный email.
 
+Если Python сообщает `CERTIFICATE_VERIFY_FAILED: self signed certificate in
+certificate chain`, скачайте с официальной страницы Т-Банка сертификат
+`russian_trusted_root_ca.cer` и укажите путь к нему:
+
+```bash
+# Windows (.env):
+TBANK_CA_CERT=C:\certs\russian_trusted_root_ca.cer
+
+# Ubuntu/Docker:
+TBANK_CA_CERT=/etc/apex/certs/russian_trusted_root_ca.cer
+```
+
+Один и тот же X.509-файл подходит Windows и Linux: приложение умеет читать как
+DER (`.cer`), так и PEM. Файл должен находиться на каждой машине или внутри
+контейнера по заданному там пути. `russian_trusted_root_ca_gost_2025.cer` нужен
+только клиентам с поддержкой российских криптоалгоритмов и не заменяет обычный
+RSA-корневой сертификат для стандартной сборки Python/OpenSSL. Не отключайте
+проверку TLS и не добавляйте банковский сертификат в файлы, доступные браузеру.
+
 ## Production-схема и DDoS
 
 Приложение **не может самостоятельно гарантировать защиту от DDoS**. В

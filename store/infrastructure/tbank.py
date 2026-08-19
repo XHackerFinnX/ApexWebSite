@@ -1,5 +1,7 @@
 import hashlib
 import json
+import ssl
+from pathlib import Path
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -11,6 +13,24 @@ class TBankError(RuntimeError):
 class TBankPayment:
     TEST_URL = "https://rest-api-test.tinkoff.ru/v2/Init"
     PRODUCTION_URL = "https://securepay.tinkoff.ru/v2/Init"
+    
+    def __init__(self, ca_certificate: str | None = None):
+        self.ssl_context = self._ssl_context(ca_certificate)
+
+    @staticmethod
+    def _ssl_context(ca_certificate: str | None) -> ssl.SSLContext | None:
+        if not ca_certificate:
+            return None
+        certificate = Path(ca_certificate).expanduser()
+        context = ssl.create_default_context()
+        data = certificate.read_bytes()
+        # load_verify_locations accepts PEM as text and DER as bytes. This lets
+        # the same Russian Trusted Root CA .cer file work on Windows and Linux.
+        if data.lstrip().startswith(b"-----BEGIN CERTIFICATE-----"):
+            context.load_verify_locations(cadata=data.decode("ascii"))
+        else:
+            context.load_verify_locations(cadata=data)
+        return context
 
     @staticmethod
     def token(payload: dict, password: str) -> str:
@@ -44,10 +64,17 @@ class TBankPayment:
         payload["Token"] = self.token(payload, str(config["password"]))
         request = Request(self.TEST_URL if config.get("environment") == "test" else self.PRODUCTION_URL, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}, method="POST")
         try:
-            with urlopen(request, timeout=15) as response:
+            urlopen_options = {"timeout": 15}
+            if self.ssl_context is not None:
+                urlopen_options["context"] = self.ssl_context
+            with urlopen(request, **urlopen_options) as response:
                 result = json.loads(response.read())
         except (HTTPError, URLError, TimeoutError, json.JSONDecodeError) as exc:
-            raise TBankError("Т-Банк временно недоступен") from exc
+            if isinstance(exc, URLError) and isinstance(exc.reason, ssl.SSLCertVerificationError):
+                raise TBankError(
+                    "Не удалось проверить TLS-сертификат Т-Банка; "
+                    "установите TBANK_CA_CERT с путём к Russian Trusted Root CA"
+                ) from exc
         if not result.get("Success") or not result.get("PaymentURL"):
             raise TBankError(str(result.get("Message") or result.get("Details") or "Т-Банк отклонил создание платежа"))
         return result

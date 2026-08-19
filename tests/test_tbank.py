@@ -1,5 +1,7 @@
 import hashlib
 import json
+import ssl
+import tempfile
 import unittest
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
@@ -76,6 +78,37 @@ class TBankPaymentTests(unittest.TestCase):
                 [{"name": "x", "unit_price": Decimal("1"), "quantity": 1}],
                 "http://localhost:8000",
             )
+            
+    @patch("store.infrastructure.tbank.ssl.create_default_context")
+    def test_der_ca_certificate_is_added_to_ssl_context(self, create_context):
+        context = MagicMock()
+        create_context.return_value = context
+        with tempfile.NamedTemporaryFile(suffix=".cer") as certificate:
+            certificate.write(b"DER certificate")
+            certificate.flush()
+            payment = TBankPayment(certificate.name)
+
+        context.load_verify_locations.assert_called_once_with(cadata=b"DER certificate")
+        self.assertIs(payment.ssl_context, context)
+
+    @patch("store.infrastructure.tbank.urlopen")
+    def test_configured_ssl_context_is_used_for_request(self, mocked_urlopen):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps(
+            {"Success": True, "PaymentURL": "https://pay.example/42"}
+        ).encode()
+        mocked_urlopen.return_value = response
+        payment = TBankPayment()
+        payment.ssl_context = ssl.create_default_context()
+
+        payment.init_payment(
+            {"terminal_key": "T", "password": "secret", "environment": "test"},
+            {"id": "1", "total": Decimal("1"), "customer_email": "a@b.ru"},
+            [{"name": "x", "unit_price": Decimal("1"), "quantity": 1}],
+            "https://shop.example.ru",
+        )
+
+        self.assertIs(mocked_urlopen.call_args.kwargs["context"], payment.ssl_context)
 
 
 if __name__ == "__main__":

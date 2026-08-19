@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     YANDEX_CAPTCHA_SERVER_KEY: SecretStr = SecretStr("")
     YANDEX_CAPTCHA_CLIENT_KEY: str = ""
     CAPTCHA_MODE: str = "mock"
-    WEBAPP_URL: str = "https://h1d993-178-236-140-171.ru.tuna.am/"
+    WEBAPP_URL: str = "https://qkexkt-178-236-140-171.ru.tuna.am/"
     
     CDEK_CLIENT_ID: SecretStr = SecretStr("")
     CDEK_CLIENT_SECRET: SecretStr = SecretStr("")
@@ -33,6 +33,7 @@ class Settings(BaseSettings):
     CDEK_TARIFF_CODE: int = 136
     CDEK_DISPATCH_DELAY_DAYS: int = 10
     CDEK_FINAL_MARKUP: int = 150
+    TBANK_CA_CERT: str | None = None
 
     model_config: SettingsConfigDict = SettingsConfigDict(
         env_file=".env",
@@ -62,6 +63,10 @@ class Settings(BaseSettings):
             certificate = Path(self.POSTGRESQL_SSLROOTCERT).expanduser()
             if not certificate.is_file():
                 raise ValueError("Файл POSTGRESQL_SSLROOTCERT не найден")
+        if self.TBANK_CA_CERT:
+            certificate = Path(self.TBANK_CA_CERT).expanduser()
+            if not certificate.is_file():
+                raise ValueError("Файл TBANK_CA_CERT не найден")
         return self
 
     def postgresql_connection(self) -> dict[str, object]:

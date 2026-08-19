@@ -24,7 +24,12 @@ def create_app(settings: Settings | None = None):
     return WebApp(
         CatalogService(repo),
         IntegrationService(repo, delivery),
-        CheckoutService(YandexCaptcha(), repo, TBankPayment(), config.WEBAPP_URL),
+        CheckoutService(
+            YandexCaptcha(),
+            repo,
+            TBankPayment(config.TBANK_CA_CERT),
+            config.WEBAPP_URL,
+        ),
         repo,
         RateLimiter(),
         delivery,
