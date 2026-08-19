@@ -3,6 +3,7 @@ import json
 import unittest
 from decimal import Decimal
 from unittest.mock import MagicMock, patch
+from uuid import UUID
 
 from store.infrastructure.tbank import TBankError, TBankPayment
 
@@ -37,6 +38,35 @@ class TBankPaymentTests(unittest.TestCase):
         self.assertEqual(body["Receipt"]["Items"][0]["Tax"], "none")
         self.assertIn("/payment/success?order_id=order-1", body["SuccessURL"])
         self.assertEqual(result["PaymentURL"], "https://pay.example/42")
+        
+    @patch("store.infrastructure.tbank.urlopen")
+    def test_init_serializes_uuid_order_id(self, mocked_urlopen):
+        response = MagicMock()
+        response.__enter__.return_value.read.return_value = json.dumps(
+            {
+                "Success": True,
+                "PaymentId": "42",
+                "Status": "NEW",
+                "PaymentURL": "https://pay.example/42",
+            }
+        ).encode()
+        mocked_urlopen.return_value = response
+        order_id = UUID("12345678-1234-5678-1234-567812345678")
+
+        TBankPayment().init_payment(
+            {"terminal_key": "T", "password": "secret", "environment": "test"},
+            {
+                "id": order_id,
+                "total": Decimal("12.50"),
+                "customer_email": "buyer@example.ru",
+            },
+            [{"name": "Футболка", "unit_price": Decimal("12.50"), "quantity": 1}],
+            "https://shop.example.ru",
+        )
+
+        body = json.loads(mocked_urlopen.call_args.args[0].data)
+        self.assertEqual(body["OrderId"], str(order_id))
+        self.assertIn(f"order_id={order_id}", body["SuccessURL"])
 
     def test_public_https_is_required(self):
         with self.assertRaisesRegex(TBankError, "HTTPS"):

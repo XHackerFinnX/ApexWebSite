@@ -28,15 +28,16 @@ class TBankPayment:
     def init_payment(self, config: dict, order: dict, items: list[dict], public_url: str) -> dict:
         if not public_url.startswith("https://"):
             raise TBankError("Для оплаты задайте публичный HTTPS-адрес WEBAPP_URL")
+        order_id = str(order["id"])
         receipt_items = []
         for item in items:
             price = int(item["unit_price"] * 100)
             receipt_items.append({"Name": item["name"][:128], "Price": price, "Quantity": item["quantity"], "Amount": price * item["quantity"], "Tax": "none", "PaymentMethod": "full_payment", "PaymentObject": "commodity"})
         payload = {
             "TerminalKey": config["terminal_key"], "Amount": int(order["total"] * 100),
-            "OrderId": order["id"], "Description": f"Заказ {order['id']}", "Language": "ru",
-            "SuccessURL": f"{public_url}/payment/success?order_id={order['id']}",
-            "FailURL": f"{public_url}/payment/fail?order_id={order['id']}",
+            "OrderId": order_id, "Description": f"Заказ {order_id}", "Language": "ru",
+            "SuccessURL": f"{public_url}/payment/success?order_id={order_id}",
+            "FailURL": f"{public_url}/payment/fail?order_id={order_id}",
             "NotificationURL": f"{public_url}/api/payments/tbank/notification",
             "Receipt": {"Email": order["customer_email"], "Taxation": "usn_income", "Items": receipt_items},
         }
