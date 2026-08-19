@@ -10,6 +10,7 @@ from dataclasses import asdict
 from decimal import Decimal
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
+from store.infrastructure.tbank import TBankError
 
 
 logger = logging.getLogger(__name__)
@@ -312,6 +313,9 @@ class WebApp:
                     )
                 except (ValueError, LookupError, KeyError) as e:
                     return self._send(400, {"error": str(e)})
+                except TBankError as e:
+                    logger.warning("T-Bank payment request failed: %s", e)
+                    return self._send(502, {"error": str(e)})
                 except Exception:
                     logger.exception(
                         "Unhandled error while processing %s %s", self.command, path

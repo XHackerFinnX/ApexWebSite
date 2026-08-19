@@ -4,7 +4,8 @@ import ssl
 import tempfile
 import unittest
 from decimal import Decimal
-from urllib.error import URLError
+from io import BytesIO
+from urllib.error import HTTPError, URLError
 from unittest.mock import MagicMock, patch
 from uuid import UUID
 
@@ -117,6 +118,39 @@ class TBankPaymentTests(unittest.TestCase):
             self._init_payment()
 
         mocked_urlopen.assert_called_once()
+        
+    @patch("store.infrastructure.tbank.urlopen")
+    def test_http_error_exposes_tbank_error_code_and_details(self, mocked_urlopen):
+        mocked_urlopen.side_effect = HTTPError(
+            TBankPayment.TEST_URL,
+            403,
+            "Forbidden",
+            {},
+            BytesIO(
+                json.dumps(
+                    {"ErrorCode": "9999", "Details": "Доступ запрещён"}
+                ).encode()
+            ),
+        )
+
+        with self.assertRaisesRegex(
+            TBankError, "HTTP 403.*код 9999: Доступ запрещён"
+        ):
+            self._init_payment()
+
+    @patch("store.infrastructure.tbank.urlopen")
+    def test_html_http_error_does_not_leak_response_page(self, mocked_urlopen):
+        mocked_urlopen.side_effect = HTTPError(
+            TBankPayment.TEST_URL,
+            403,
+            "Forbidden",
+            {},
+            BytesIO(b"<html>proxy block page</html>"),
+        )
+
+        with self.assertRaisesRegex(TBankError, "HTTP 403.*Forbidden") as raised:
+            self._init_payment()
+        self.assertNotIn("<html>", str(raised.exception))
 
     @patch("store.infrastructure.tbank.urlopen")
     def test_invalid_json_is_reported_as_tbank_error(self, mocked_urlopen):

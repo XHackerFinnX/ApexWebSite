@@ -44,6 +44,34 @@ class TBankPayment:
     def verify_token(self, payload: dict, password: str) -> bool:
         import hmac
         return hmac.compare_digest(str(payload.get("Token", "")), self.token(payload, password))
+    
+    @staticmethod
+    def _http_error_message(exc: HTTPError) -> str:
+        """Return the useful part of an acquiring API error response."""
+        raw_body = exc.read()
+        try:
+            body = json.loads(raw_body.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            body = None
+
+        if isinstance(body, dict):
+            error_code = body.get("ErrorCode")
+            explanation = body.get("Details") or body.get("Message")
+            parts = []
+            if error_code not in (None, "", "0"):
+                parts.append(f"код {error_code}")
+            if explanation:
+                parts.append(str(explanation))
+            if parts:
+                return ": ".join(parts)
+
+        # A proxy/WAF often returns a short plain-text or HTML response instead
+        # of the acquiring API JSON. Preserve plain text for diagnostics, but
+        # avoid putting an arbitrary HTML page into logs or an API response.
+        text = raw_body.decode("utf-8", errors="replace").strip()
+        if text and "<" not in text:
+            return text[:500]
+        return str(exc.reason or "без пояснения")
 
     def init_payment(self, config: dict, order: dict, items: list[dict], public_url: str) -> dict:
         if not public_url.startswith("https://"):
@@ -70,7 +98,10 @@ class TBankPayment:
             with urlopen(request, **urlopen_options) as response:
                 result = json.loads(response.read())
         except HTTPError as exc:
-            raise TBankError(f"Т-Банк вернул HTTP {exc.code} при создании платежа") from exc
+            details = self._http_error_message(exc)
+            raise TBankError(
+                f"Т-Банк вернул HTTP {exc.code} при создании платежа: {details}"
+            ) from exc
         except URLError as exc:
             if isinstance(exc.reason, ssl.SSLCertVerificationError):
                 raise TBankError(
