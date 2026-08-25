@@ -45,6 +45,32 @@ const announcements = [
     "ОТПРАВКА ЗАКАЗОВ ДО 2 НЕДЕЛЬ",
     "СОЗДАНО ДЛЯ ОДЕРЖИМЫХ СКОРОСТЬЮ",
 ];
+const communityPhotos = [
+    {
+        src: "https://www.finishlinefever.com/cdn/shop/files/ANASTASIA.NIELSEN.png?v=1771909974&width=1000",
+        alt: "Участница сообщества FLF",
+    },
+    {
+        src: "https://www.finishlinefever.com/cdn/shop/files/6_555c7b70-860d-45e6-aa1d-1d10de65c70d.png?v=1771912135&width=1000",
+        alt: "Образ участника сообщества FLF",
+    },
+    {
+        src: "https://www.finishlinefever.com/cdn/shop/files/JAYCEE_EXPLORE.png?v=1771909364&width=1000",
+        alt: "Участница сообщества FLF в гоночном мерче",
+    },
+    {
+        src: "https://www.finishlinefever.com/cdn/shop/files/5_f6325d6b-4cd8-4701-819d-ca8ce42c174b.png?v=1771912134&width=1000",
+        alt: "Образ из подборки FLF",
+    },
+    {
+        src: "https://www.finishlinefever.com/cdn/shop/files/ITSRYANMCALLEF7.png?v=1771910793&width=1000",
+        alt: "Участник сообщества FLF",
+    },
+    {
+        src: "https://www.finishlinefever.com/cdn/shop/files/ALESSIASPOTO.png?v=1771910805&width=1000",
+        alt: "Участница подборки FLF",
+    },
+];
 const promoCodes = {
     APEX10: { type: "percent", value: 10, products: "all" },
     GRID500: {
@@ -163,6 +189,14 @@ function renderAnnouncement() {
         ...announcements,
     ]
         .map((item) => `<span>${item}<i aria-hidden="true">/////</i></span>`)
+        .join("");
+}
+function renderCommunityGallery() {
+    document.getElementById("flf-gallery-grid").innerHTML = communityPhotos
+        .map(
+            ({ src, alt }) =>
+                `<figure class="flf-gallery__item"><img src="${src}" alt="${alt}" width="1000" height="1000" loading="lazy"></figure>`,
+        )
         .join("");
 }
 function renderCatalogNavigation() {
@@ -1137,6 +1171,7 @@ if (localStorage.getItem("apex-theme") === "dark")
 loadCatalog();
 renderReviews();
 renderFaq();
+renderCommunityGallery();
 renderCommunity();
 initMobileMenu();
 initEvents();

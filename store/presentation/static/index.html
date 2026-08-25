@@ -86,6 +86,7 @@
                                 type="button"
                                 class="bag-btn"
                                 id="open-cart"
+                                aria-label="Открыть корзину"
                             >
                                 <svg class="icon" viewBox="0 0 24 24">
                                     <path
@@ -94,7 +95,7 @@
                                     <path d="M3 6h18" />
                                     <path d="M16 10a4 4 0 0 1-8 0" />
                                 </svg>
-                                Корзина
+                                <span class="bag-btn__label">Корзина</span>
                                 <span class="bag-btn__count"
                                     >[<span id="bag-count">0</span>]</span
                                 >
@@ -158,8 +159,7 @@
                     class="hero__img"
                 />
                 <div class="hero__overlay"></div>
-                <div class="hero__content">
-                </div>
+                <div class="hero__content"></div>
             </section>
 
             <!-- Catalog filters and product sections -->
@@ -215,30 +215,24 @@
 
             <!-- История -->
             <section id="story" class="story">
-                <div class="story__media">
-                    <img
-                        src="images/story.png"
-                        alt="Formula 1 race car and mechanic in a dark garage"
-                    />
-                </div>
-                <div class="story__body">
-                    <p class="eyebrow">Создано иначе</p>
-                    <h2 class="display story__title">
-                        Больше чем<br />просто мерч.
-                    </h2>
-                    <p class="story__text">
-                        APEX GRID родился из любви к автоспорту и уличной
-                        культуре. Каждая вещь посвящена машинам, пилотам и
-                        мгновениям, которые делают гонки незабываемыми — плотные
-                        ткани и отделка уровня паддока.
-                    </p>
-                    <a href="#hoodies" class="btn btn--outline">
-                        Открыть коллекцию
-                        <svg class="icon" viewBox="0 0 24 24">
-                            <path d="M5 12h14M12 5l7 7-7 7" />
-                        </svg>
-                    </a>
-                </div>
+                <img
+                    class="story__image"
+                    src="images/story.png"
+                    alt="Гоночный автомобиль и механик в тёмном гараже"
+                />
+                <h2 class="display story__title">Больше чем просто мерч.</h2>
+            </section>
+
+            <!-- Community gallery -->
+            <section class="flf-gallery" aria-labelledby="flf-gallery-title">
+                <h2
+                    class="display flf-gallery__title"
+                    id="flf-gallery-title"
+                    style="display: flex; justify-content: center"
+                >
+                    Попадите в подборку с хэштегом #FLF
+                </h2>
+                <div class="flf-gallery__grid" id="flf-gallery-grid"></div>
             </section>
 
             <!-- Reviews -->
