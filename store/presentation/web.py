@@ -192,6 +192,11 @@ class WebApp:
                         return self._redirect("/admin")
                     if self.command == "GET" and path == "/api/products":
                         return self._send(data=[asdict(x) for x in app.catalog.list()])
+                    if self.command == "GET" and path == "/api/reviews":
+                        query = parse_qs(parsed.query)
+                        return self._send(data=app.repo.list_reviews(
+                            query.get("limit", [10])[0], query.get("offset", [0])[0]
+                        ))
                     if self.command == "GET" and path == "/api/admin/products":
                         return self._send(
                             data=[asdict(x) for x in app.repo.list_products(True)]
@@ -251,6 +256,11 @@ class WebApp:
                         return self._send(200, order) if order else self._send(404, {"error": "Заказ не найден"})
                     parts = path.strip("/").split("/")
                     if (
+                        self.command == "GET" and len(parts) == 4
+                        and parts[:2] == ["api", "reviews"] and parts[3] == "images"
+                    ):
+                        return self._send(data=app.repo.review_images(int(parts[2])))
+                    if (
                         self.command == "PUT"
                         and len(parts) == 4
                         and parts[:3] == ["api", "admin", "products"]
@@ -304,7 +314,7 @@ class WebApp:
                             return self._send(404, {"error": "Категория не найдена"})
                         return self._send(data={"ok": True})
                     if self.command == "GET":
-                        file = "index.html" if path == "/" else path.lstrip("/")
+                        file = "index.html" if path in {"/", "/reviews", "/reviews/"} else path.lstrip("/")
                         return self._serve_static(file)
                     return self._send(404, {"error": "Не найдено"})
                 except RequestTooLarge as e:

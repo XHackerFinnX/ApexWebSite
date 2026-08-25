@@ -1,9 +1,9 @@
 <!doctype html>
-<html lang="ru" class="dark">
+<html lang="ru">
     <head>
         <meta charset="UTF-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <meta name="theme-color" content="#1c1c1f" />
+        <meta name="theme-color" content="#ffffff" />
         <title>APEX GRID — гоночный стритвир Formula 1</title>
         <meta
             name="description"
@@ -23,198 +23,142 @@
             <div class="announcement__track" id="announcement-track"></div>
         </div>
 
-        <!-- Header -->
-        <header class="header">
-            <div class="header__inner">
-                <button
-                    type="button"
-                    class="header__menu-btn"
-                    id="menu-toggle"
-                    aria-label="Открыть меню"
-                    aria-expanded="false"
-                >
-                    <svg class="icon" viewBox="0 0 24 24" id="menu-icon-open">
-                        <path d="M3 12h18M3 6h18M3 18h18" />
-                    </svg>
-                    <svg
-                        class="icon hidden"
-                        viewBox="0 0 24 24"
-                        id="menu-icon-close"
-                    >
-                        <path d="M18 6 6 18M6 6l12 12" />
-                    </svg>
-                </button>
-
-                <nav class="header__nav" id="desktop-nav">
-                    <a href="#story">История</a>
-                </nav>
-
-                <a href="#top" class="header__logo display"
-                    >APEX<span class="text-primary">GRID</span></a
-                >
-
-                <div class="header__actions">
-                    <button
-                        type="button"
-                        class="header__icon-btn"
-                        id="search-toggle"
-                        aria-label="Поиск"
-                        aria-expanded="false"
-                    >
-                        <svg class="icon" viewBox="0 0 24 24">
-                            <circle cx="11" cy="11" r="8" />
-                            <path d="m21 21-4.3-4.3" />
-                        </svg>
-                    </button>
-                    <button type="button" class="bag-btn" id="open-cart">
-                        <svg class="icon" viewBox="0 0 24 24">
-                            <path
-                                d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"
-                            />
-                            <path d="M3 6h18" />
-                            <path d="M16 10a4 4 0 0 1-8 0" />
-                        </svg>
-                        Корзина
-                        <span class="bag-btn__count"
-                            >[<span id="bag-count">0</span>]</span
-                        >
-                    </button>
-                </div>
-            </div>
-
-            <nav class="header__mobile-nav hidden" id="mobile-nav">
-                <a href="#story">История</a>
-            </nav>
-
-            <div class="search-panel" id="search-panel" aria-hidden="true">
-                <div class="search-panel__inner">
-                    <label class="search-panel__field">
-                        <svg
-                            class="icon"
-                            viewBox="0 0 24 24"
-                            aria-hidden="true"
-                        >
-                            <circle cx="11" cy="11" r="8" />
-                            <path d="m21 21-4.3-4.3" />
-                        </svg>
-                        <input
-                            id="search-input"
-                            type="search"
-                            autocomplete="off"
-                            placeholder="Найти худи, куртку или футболку"
-                            aria-label="Поиск товаров"
-                        />
+        <main>
+            <!-- Hero -->
+            <section id="top" class="hero">
+                <!-- Header -->
+                <header class="header">
+                    <div class="header__inner">
                         <button
                             type="button"
-                            class="search-panel__close"
-                            id="search-close"
-                            aria-label="Закрыть поиск"
+                            class="header__menu-btn"
+                            id="menu-toggle"
+                            aria-label="Открыть меню"
+                            aria-expanded="false"
                         >
                             <svg
                                 class="icon"
                                 viewBox="0 0 24 24"
-                                aria-hidden="true"
+                                id="menu-icon-open"
+                            >
+                                <path d="M3 12h18M3 6h18M3 18h18" />
+                            </svg>
+                            <svg
+                                class="icon hidden"
+                                viewBox="0 0 24 24"
+                                id="menu-icon-close"
                             >
                                 <path d="M18 6 6 18M6 6l12 12" />
                             </svg>
                         </button>
-                    </label>
-                    <div
-                        class="search-results"
-                        id="search-results"
-                        role="listbox"
-                    ></div>
-                </div>
-            </div>
-        </header>
 
-        <main>
-            <!-- Hero -->
-            <section id="top" class="hero">
+                        <a href="#top" class="header__logo display"
+                            >APEX<span class="text-primary">GRID</span></a
+                        >
+
+                        <nav class="header__nav" id="desktop-nav">
+                            <a href="#story">История</a>
+                        </nav>
+
+                        <div class="header__actions">
+                            <button
+                                type="button"
+                                class="header__icon-btn theme-toggle"
+                                id="theme-toggle"
+                                aria-label="Включить тёмную тему"
+                                title="Сменить тему"
+                            >
+                                <span aria-hidden="true">◐</span>
+                            </button>
+                            <button
+                                type="button"
+                                class="header__icon-btn"
+                                id="search-toggle"
+                                aria-label="Поиск"
+                                aria-expanded="false"
+                            >
+                                <svg class="icon" viewBox="0 0 24 24">
+                                    <circle cx="11" cy="11" r="8" />
+                                    <path d="m21 21-4.3-4.3" />
+                                </svg>
+                            </button>
+                            <button
+                                type="button"
+                                class="bag-btn"
+                                id="open-cart"
+                            >
+                                <svg class="icon" viewBox="0 0 24 24">
+                                    <path
+                                        d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"
+                                    />
+                                    <path d="M3 6h18" />
+                                    <path d="M16 10a4 4 0 0 1-8 0" />
+                                </svg>
+                                Корзина
+                                <span class="bag-btn__count"
+                                    >[<span id="bag-count">0</span>]</span
+                                >
+                            </button>
+                        </div>
+                    </div>
+
+                    <nav class="header__mobile-nav hidden" id="mobile-nav">
+                        <a href="#story">История</a>
+                    </nav>
+
+                    <div
+                        class="search-panel"
+                        id="search-panel"
+                        aria-hidden="true"
+                    >
+                        <div class="search-panel__inner">
+                            <label class="search-panel__field">
+                                <svg
+                                    class="icon"
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                >
+                                    <circle cx="11" cy="11" r="8" />
+                                    <path d="m21 21-4.3-4.3" />
+                                </svg>
+                                <input
+                                    id="search-input"
+                                    type="search"
+                                    autocomplete="off"
+                                    placeholder="Найти худи, куртку или футболку"
+                                    aria-label="Поиск товаров"
+                                />
+                                <button
+                                    type="button"
+                                    class="search-panel__close"
+                                    id="search-close"
+                                    aria-label="Закрыть поиск"
+                                >
+                                    <svg
+                                        class="icon"
+                                        viewBox="0 0 24 24"
+                                        aria-hidden="true"
+                                    >
+                                        <path d="M18 6 6 18M6 6l12 12" />
+                                    </svg>
+                                </button>
+                            </label>
+                            <div
+                                class="search-results"
+                                id="search-results"
+                                role="listbox"
+                            ></div>
+                        </div>
+                    </div>
+                </header>
+
                 <img
-                    src="images/hero.png"
+                    src="https://www.finishlinefever.com/cdn/shop/files/hf_20260223_233520_4bd0bf89-d84b-4c84-8752-9379bbebdfe1.jpg?v=1771889862&width=2400"
                     alt="Model wearing an APEX GRID Formula 1 racing hoodie in a pit garage"
                     class="hero__img"
                 />
                 <div class="hero__overlay"></div>
                 <div class="hero__content">
-                    <div class="hero__inner">
-                        <p class="eyebrow hero__eyebrow">
-                            <span class="eyebrow__line"></span>Коллекция сезона
-                            26
-                        </p>
-                        <h1 class="display hero__title">
-                            Создано<br />для
-                            <span class="text-primary"
-                                >одержимых скоростью.</span
-                            >
-                        </h1>
-                        <p class="hero__lead">
-                            Худи, куртки и футболки, вдохновлённые гонками:
-                            плотные ткани, детали из паддока и ноль
-                            компромиссов.
-                        </p>
-                        <div class="hero__cta">
-                            <a href="#hoodies" class="btn btn--primary">
-                                Смотреть дроп
-                                <svg class="icon" viewBox="0 0 24 24">
-                                    <path d="M5 12h14M12 5l7 7-7 7" />
-                                </svg>
-                            </a>
-                            <a href="#jackets" class="btn btn--ghost"
-                                >Архивная распродажа</a
-                            >
-                            >
-                        </div>
-                    </div>
-                </div>
-            </section>
-
-            <!-- Trust bar -->
-            <section class="trust">
-                <div class="trust__item">
-                    <svg class="icon text-primary" viewBox="0 0 24 24">
-                        <path
-                            d="m12 2 3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01Z"
-                        />
-                    </svg>
-                    <div>
-                        <p class="trust__title">ОЦЕНКА 4.8 / 5</p>
-                        <p class="trust__sub">
-                            Более 2 000 райдеров по всему миру
-                        </p>
-                    </div>
-                </div>
-                <div class="trust__item">
-                    <svg class="icon text-primary" viewBox="0 0 24 24">
-                        <path
-                            d="M14 18V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v11a1 1 0 0 0 1 1h2"
-                        />
-                        <path d="M15 18H9" />
-                        <path
-                            d="M19 18h2a1 1 0 0 0 1-1v-3.65a1 1 0 0 0-.22-.62l-3.48-4.35A1 1 0 0 0 17.52 8H14"
-                        />
-                        <circle cx="17" cy="18" r="2" />
-                        <circle cx="7" cy="18" r="2" />
-                    </svg>
-                    <div>
-                        <p class="trust__title">ДОСТАВКА СДЭК</p>
-                        <p class="trust__sub">
-                            Расчёт стоимости при оформлении
-                        </p>
-                    </div>
-                </div>
-                <div class="trust__item">
-                    <svg class="icon text-primary" viewBox="0 0 24 24">
-                        <path
-                            d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
-                        />
-                        <path d="M3 3v5h5" />
-                    </svg>
-                    <div>
-                        <p class="trust__title">УДОБНЫЙ ВОЗВРАТ</p>
-                        <p class="trust__sub">Простые условия возврата</p>
-                    </div>
                 </div>
             </section>
 
@@ -297,6 +241,32 @@
                 </div>
             </section>
 
+            <!-- Reviews -->
+            <section class="reviews">
+                <div class="reviews__inner">
+                    <p class="eyebrow">Сообщество APEX</p>
+                    <h2 class="display reviews__title">
+                        Наши клиенты расскажут лучше нас
+                    </h2>
+                    <div class="reviews__top">
+                        <p id="reviews-total">Загрузка отзывов…</p>
+                        <a class="section__link" href="/reviews"
+                            >Все отзывы →</a
+                        >
+                    </div>
+                    <div class="reviews__viewport">
+                        <div class="reviews__grid" id="reviews-grid"></div>
+                    </div>
+                    <button
+                        class="reviews__more hidden"
+                        id="reviews-more"
+                        type="button"
+                    >
+                        Показать ещё
+                    </button>
+                </div>
+            </section>
+
             <!-- Promo -->
             <section class="promo">
                 <div class="promo__body">
@@ -324,17 +294,6 @@
                         src="images/promo.png"
                         alt="Models wearing APEX GRID racing streetwear"
                     />
-                </div>
-            </section>
-
-            <!-- Reviews -->
-            <section class="reviews">
-                <div class="reviews__inner">
-                    <p class="eyebrow">Сообщество APEX</p>
-                    <h2 class="display reviews__title">
-                        Наши клиенты расскажут лучше нас
-                    </h2>
-                    <div class="reviews__grid" id="reviews-grid"></div>
                 </div>
             </section>
 
@@ -438,6 +397,49 @@
             </header>
             <div class="cart__body" id="cart-body"></div>
         </aside>
+
+        <div class="checkout-modal" id="checkout-modal" aria-hidden="true">
+            <div
+                class="checkout-modal__shell"
+                role="dialog"
+                aria-modal="true"
+                aria-label="Оформление заказа"
+            >
+                <button
+                    type="button"
+                    class="checkout-modal__close"
+                    id="close-checkout"
+                    aria-label="Закрыть"
+                >
+                    ×
+                </button>
+                <div id="checkout-modal-body"></div>
+            </div>
+        </div>
+
+        <div class="review-modal" id="review-modal" aria-hidden="true">
+            <button
+                class="review-modal__backdrop"
+                type="button"
+                data-close-review
+                aria-label="Закрыть отзыв"
+            ></button>
+            <article
+                class="review-modal__dialog"
+                role="dialog"
+                aria-modal="true"
+            >
+                <button
+                    class="review-modal__close"
+                    type="button"
+                    data-close-review
+                    aria-label="Закрыть"
+                >
+                    ×
+                </button>
+                <div id="review-modal-content"></div>
+            </article>
+        </div>
 
         <!-- Product quick view -->
         <div class="product-modal" id="product-modal" aria-hidden="true">

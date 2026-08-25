@@ -132,6 +132,35 @@ class PostgreSQLRepository:
                        GROUP BY c.id ORDER BY c.name"""
                 ).fetchall()
             )
+            
+    def list_reviews(self, limit: int = 10, offset: int = 0) -> dict[str, object]:
+        """Return a lightweight review page; media is intentionally loaded separately."""
+        limit = min(max(int(limit), 1), 50)
+        offset = max(int(offset), 0)
+        with self._db() as db:
+            total = db.execute(
+                "SELECT count(*)::int AS count FROM reviews WHERE is_published=true"
+            ).fetchone()["count"]
+            rows = db.execute(
+                """SELECT id,author,title,body,rating,created_at,
+                          EXISTS(SELECT 1 FROM review_images i WHERE i.review_id=reviews.id) AS has_images
+                   FROM reviews WHERE is_published=true
+                   ORDER BY created_at DESC,id DESC LIMIT %s OFFSET %s""",
+                (limit, offset),
+            ).fetchall()
+        return {"items": list(rows), "total": total, "limit": limit, "offset": offset}
+
+    def review_images(self, review_id: int) -> list[dict[str, object]]:
+        with self._db() as db:
+            published = db.execute(
+                "SELECT 1 FROM reviews WHERE id=%s AND is_published=true", (review_id,)
+            ).fetchone()
+            if not published:
+                raise LookupError("Отзыв не найден")
+            return list(db.execute(
+                """SELECT id,image_url,alt_text FROM review_images
+                   WHERE review_id=%s ORDER BY position,id""", (review_id,)
+            ).fetchall())
 
     def save_category(self, name: str) -> dict[str, object]:
         name = name.strip()

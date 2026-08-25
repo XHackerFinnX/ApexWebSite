@@ -5,7 +5,7 @@
 /* ---------- Данные ---------- */
 let collections = [];
 
-const reviews = [
+let reviews = [
     {
         quote: "Качество отличное: плотная ткань, удобная посадка и детали выглядят ещё лучше вживую.",
         author: "Анастасия Н.",
@@ -224,13 +224,70 @@ function productCard(p) {
         : `<span class="card__no-image">Фото скоро появится</span>`;
     return `<article class="card" id="product-${p.id}" data-product-card="${p.id}" tabindex="0"><div class="card__media">${pictures}<div class="card__actions"><button type="button" class="card__view" data-view="${p.id}">Посмотреть товар</button><button type="button" class="card__add" data-quick-add="${p.id}" aria-label="Быстро добавить ${esc(p.name)} в корзину">Быстро добавить ${ICONS.plus}</button></div></div><div class="card__info"><div><p class="card__category">${esc(p.category)}</p><h3 class="card__name">${esc(p.name)}</h3></div><p class="card__prices"><span class="card__price">${money(p.price)}</span></p></div></article>`;
 }
-function renderReviews() {
+let reviewsOffset = 0;
+let reviewsTotal = 0;
+function drawReviews() {
     document.getElementById("reviews-grid").innerHTML = reviews
         .map(
             (r) =>
-                `<figure class="review"><div class="review__stars">${ICONS.star.repeat(5)}</div><blockquote class="review__quote">&ldquo;${r.quote}&rdquo;</blockquote><figcaption class="review__author">— ${r.author}</figcaption></figure>`,
+                `<button type="button" class="review" data-review-id="${r.id || ""}"><span class="review__stars">${ICONS.star.repeat(Number(r.rating || 5))}</span><strong>${esc(r.title || "Отзыв о покупке")}</strong><span class="review__quote">&ldquo;${esc(r.body || r.quote)}&rdquo;</span><span class="review__author">— ${esc(r.author)}</span>${r.has_images ? '<span class="review__media-mark">Есть фотографии</span>' : ""}</button>`,
         )
         .join("");
+}
+async function renderReviews(append = false) {
+    const limit = 10;
+    try {
+        const page = await jsonFetch(
+            `/api/reviews?limit=${limit}&offset=${append ? reviewsOffset : 0}`,
+        );
+        reviews = append ? reviews.concat(page.items) : page.items;
+        reviewsOffset = reviews.length;
+        reviewsTotal = page.total;
+    } catch (_) {
+        if (append) return;
+        reviewsTotal = reviews.length;
+    }
+    drawReviews();
+    document.getElementById("reviews-total").textContent =
+        `${reviewsTotal} отзывов покупателей`;
+    const more = document.getElementById("reviews-more");
+    more.classList.toggle(
+        "hidden",
+        reviewsOffset >= reviewsTotal || location.pathname !== "/reviews",
+    );
+    if (location.pathname === "/reviews")
+        document.querySelector(".reviews").classList.add("reviews--page");
+}
+
+async function openReview(id) {
+    const review = reviews.find((item) => String(item.id) === String(id));
+    if (!review) return;
+    const modal = document.getElementById("review-modal");
+    const content = document.getElementById("review-modal-content");
+    modal.classList.add("is-open");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    content.innerHTML = `<div class="review__stars">${ICONS.star.repeat(Number(review.rating || 5))}</div><h2>${esc(review.title || "Отзыв о покупке")}</h2><p class="review-modal__author">${esc(review.author)}</p><p class="review-modal__body">${esc(review.body || review.quote)}</p><div class="review-modal__photos">${review.has_images ? "Загружаем фотографии…" : ""}</div>`;
+    if (review.has_images) {
+        try {
+            const images = await jsonFetch(`/api/reviews/${id}/images`);
+            content.querySelector(".review-modal__photos").innerHTML = images
+                .map(
+                    (image) =>
+                        `<img src="${esc(image.image_url)}" alt="${esc(image.alt_text || `Фото от ${review.author}`)}" loading="lazy" />`,
+                )
+                .join("");
+        } catch (_) {
+            content.querySelector(".review-modal__photos").textContent =
+                "Не удалось загрузить фотографии.";
+        }
+    }
+}
+function closeReview() {
+    const modal = document.getElementById("review-modal");
+    modal.classList.remove("is-open");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
 }
 function renderFaq() {
     document.getElementById("faq-list").innerHTML = faqs
@@ -556,8 +613,28 @@ function renderCart() {
             `<div class="cart__line"><img src="${esc(image)}" alt="${esc(p.name)}" /><div class="cart__line-body"><div class="cart__line-top"><h3 class="cart__line-name">${esc(p.name)}</h3><button type="button" class="cart__line-remove" data-remove="${esc(key)}" aria-label="Удалить ${esc(p.name)}">${ICONS.close}</button></div><p class="cart__line-category">${esc(p.category)}</p>${details ? `<p class="cart__line-options">${details}</p>` : ""}<div class="cart__line-bottom"><div class="qty"><button type="button" data-dec="${esc(key)}" aria-label="Уменьшить количество">${ICONS.minus}</button><span>${qty}</span><button type="button" data-inc="${esc(key)}" aria-label="Увеличить количество">${ICONS.plus}</button></div><span class="cart__line-total">${money(price * qty)}</span></div></div></div>`,
         );
     });
-    body.innerHTML = lines.join("") + renderCheckoutForm();
+    body.innerHTML =
+        lines.join("") +
+        `<div class="cart__summary"><div><span>Итого</span><b>${money(cartTotal())}</b></div><button type="button" class="cart__checkout" id="open-checkout">Продолжить оформление</button></div>`;
+    document.getElementById("open-checkout").onclick = openCheckout;
+}
+
+function openCheckout() {
+    closeCart();
+    document.getElementById("checkout-modal-body").innerHTML =
+        renderCheckoutForm();
+    const modal = document.getElementById("checkout-modal");
+    modal.classList.add("is-open");
+    modal.setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
     bindCheckoutControls();
+}
+
+function closeCheckout() {
+    const modal = document.getElementById("checkout-modal");
+    modal.classList.remove("is-open");
+    modal.setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
 }
 
 function renderCheckoutForm() {
@@ -912,15 +989,42 @@ function initEvents() {
     document.getElementById("open-cart").addEventListener("click", openCart);
     document.getElementById("close-cart").addEventListener("click", closeCart);
     overlayEl.addEventListener("click", closeCart);
+    document
+        .getElementById("close-checkout")
+        .addEventListener("click", closeCheckout);
+    document.getElementById("checkout-modal").addEventListener("click", (e) => {
+        if (e.target.id === "checkout-modal") closeCheckout();
+    });
+    document
+        .getElementById("reviews-more")
+        .addEventListener("click", () => renderReviews(true));
+    document.getElementById("theme-toggle").addEventListener("click", () => {
+        const dark = document.documentElement.classList.toggle("dark");
+        localStorage.setItem("apex-theme", dark ? "dark" : "light");
+        document.querySelector('meta[name="theme-color"]').content = dark
+            ? "#161719"
+            : "#ffffff";
+    });
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
             closeCart();
             closeLightbox();
             closeProduct();
             toggleSearch(false);
+            closeCheckout();
+            closeReview();
         }
     });
     document.addEventListener("click", (e) => {
+        const review = e.target.closest("[data-review-id]");
+        if (review) {
+            openReview(review.dataset.reviewId);
+            return;
+        }
+        if (e.target.closest("[data-close-review]")) {
+            closeReview();
+            return;
+        }
         const t = e.target.closest(
             "[data-quick-add],[data-remove],[data-inc],[data-dec],[data-view],[data-modal-add],[data-close-product],[data-gallery-index],[data-open-lightbox],[data-lightbox-close],[data-lightbox-prev],[data-lightbox-next],[data-retry-catalog]",
         );
@@ -1028,9 +1132,15 @@ function initEvents() {
     });
 }
 renderAnnouncement();
+if (localStorage.getItem("apex-theme") === "dark")
+    document.documentElement.classList.add("dark");
 loadCatalog();
 renderReviews();
 renderFaq();
 renderCommunity();
 initMobileMenu();
 initEvents();
+if (location.pathname === "/reviews")
+    requestAnimationFrame(() =>
+        document.querySelector(".reviews")?.scrollIntoView(),
+    );
