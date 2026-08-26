@@ -7,6 +7,7 @@ import hmac
 import mimetypes
 import time
 from dataclasses import asdict
+from datetime import date, datetime
 from decimal import Decimal
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -19,6 +20,8 @@ class Encoder(json.JSONEncoder):
     def default(self, o):
         if isinstance(o, Decimal):
             return float(o)
+        if isinstance(o, (date, datetime)):
+            return o.isoformat()
         if isinstance(o, tuple):
             return list(o)
         return super().default(o)

@@ -2143,10 +2143,6 @@ html.dark {
     border: 0;
     cursor: pointer;
 }
-.reviews--page {
-    padding-top: 8rem;
-    min-height: 70vh;
-}
 .reviews--page .reviews__viewport {
     overflow: visible;
 }

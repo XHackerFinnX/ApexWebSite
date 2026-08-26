@@ -2,6 +2,7 @@ import json
 import tempfile
 import threading
 import unittest
+from datetime import date, datetime
 from io import BytesIO
 from http.client import HTTPConnection
 from decimal import Decimal
@@ -21,7 +22,7 @@ from store.domain import Integration, Product
 from store.infrastructure.security import RateLimiter, SecretBox
 from store.infrastructure.postgres_repo import PostgreSQLRepository
 from store.infrastructure.cdek import CDEKDelivery, CDEKError
-from store.presentation.web import WebApp
+from store.presentation.web import Encoder, WebApp
 
 
 class MemoryRepository:
@@ -167,6 +168,20 @@ class AllowAllLimiter:
 class StoreTests(unittest.TestCase):
     def setUp(self):
         self.repo = MemoryRepository()
+        
+    def test_json_encoder_serializes_database_dates(self):
+        payload = {
+            "created_at": datetime(2026, 8, 26, 12, 30, 45),
+            "published_on": date(2026, 8, 26),
+        }
+
+        self.assertEqual(
+            json.loads(json.dumps(payload, cls=Encoder)),
+            {
+                "created_at": "2026-08-26T12:30:45",
+                "published_on": "2026-08-26",
+            },
+        )
         
     def test_health_endpoint_does_not_require_database_query(self):
         app = WebApp(None, None, None, None, AllowAllLimiter())
