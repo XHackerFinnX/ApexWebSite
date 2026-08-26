@@ -18,6 +18,7 @@ class Product:
     images: tuple[str, ...] = field(default_factory=tuple)
     variants: tuple[dict[str, object], ...] = field(default_factory=tuple)
     is_active: bool = False
+    is_new: bool = False
 
     def validate(self) -> None:
         if not self.name.strip():

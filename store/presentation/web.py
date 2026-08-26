@@ -201,6 +201,8 @@ class WebApp:
                         return self._send(
                             data=[asdict(x) for x in app.repo.list_products(True)]
                         )
+                    if self.command == "GET" and path == "/api/admin/reviews":
+                        return self._send(data=app.repo.list_admin_reviews())
                     if self.command == "GET" and path == "/api/admin/integrations":
                         return self._send(
                             data=[asdict(x) for x in app.integrations.list()]
@@ -221,6 +223,8 @@ class WebApp:
                         data = self._body()
                         data.pop("id", None)
                         return self._send(201, asdict(app.catalog.save(data)))
+                    if self.command == "POST" and path == "/api/admin/reviews":
+                        return self._send(201, app.repo.save_review(self._body()))
                     if self.command == "POST" and path == "/api/admin/integrations":
                         return self._send(data=app.integrations.configure(self._body()))
                     if self.command == "POST" and path == "/api/delivery/calculate":

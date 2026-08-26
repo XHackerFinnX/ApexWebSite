@@ -1,6 +1,7 @@
 let products = [];
 let categories = [];
 let integrations = [];
+let reviews = [];
 const $ = (selector) => document.querySelector(selector);
 const esc = (value) =>
     String(value ?? "").replace(
@@ -102,6 +103,7 @@ function switchTab(id) {
         overview: "Обзор",
         catalog: "Каталог товаров",
         orders: "Заказы",
+        reviews: "Отзывы",
         settings: "Интеграции",
     }[id];
 }
@@ -142,6 +144,24 @@ function renderProducts() {
             (b) => (b.onclick = () => removeProduct(Number(b.dataset.delete))),
         );
 }
+function renderReviews() {
+    $("#reviewRows").innerHTML = reviews.length
+        ? reviews
+              .map(
+                  (review) =>
+                      `<div><span><b>${esc(review.author)}</b> · ${"★".repeat(Number(review.rating))}<br><small>${esc(review.title || "Без заголовка")} — ${esc(review.body)}</small></span><span class="pill">${review.is_published ? "Опубликован" : "Черновик"}</span></div>`,
+              )
+              .join("")
+        : "<small>Отзывов пока нет</small>";
+}
+async function loadReviews() {
+    reviews = await apiJson(
+        "/api/admin/reviews",
+        {},
+        "Не удалось загрузить отзывы",
+    );
+    renderReviews();
+}
 async function load() {
     const refresh = $("#refresh");
     refresh.disabled = true;
@@ -152,6 +172,12 @@ async function load() {
         await loadCategories();
     } catch (error) {
         toast(error.message, true);
+    }
+    try {
+        await loadReviews();
+    } catch (error) {
+        $("#reviewRows").innerHTML =
+            `<small class="danger-text">${esc(error.message)}</small>`;
     }
     try {
         products = await apiJson(
@@ -222,6 +248,7 @@ function openProduct(p = null) {
             f.elements[key].value = p[key] ?? "";
         });
         f.elements.is_active.checked = Boolean(p.is_active);
+        f.elements.is_new.checked = Boolean(p.is_new);
     }
     const variants = p?.variants?.length
         ? p.variants
@@ -403,6 +430,7 @@ $("#productForm").onsubmit = async (e) => {
     e.preventDefault();
     const d = Object.fromEntries(new FormData(e.target));
     d.is_active = e.target.elements.is_active.checked;
+    d.is_new = e.target.elements.is_new.checked;
     d.variants = [...document.querySelectorAll(".color-group")].flatMap(
         (group) => {
             const color = group.querySelector(".color-name").value.trim();
@@ -648,6 +676,43 @@ $("#configured").onclick = async (event) => {
 $("#search").oninput = renderProducts;
 $("#categoryFilter").onchange = renderProducts;
 $("#refresh").onclick = load;
+document.querySelectorAll("[data-open-review]").forEach((button) => {
+    button.onclick = () => {
+        $("#reviewForm").reset();
+        $("#reviewForm").elements.is_published.checked = true;
+        $("#reviewDialog").showModal();
+    };
+});
+document.querySelectorAll("[data-close-review]").forEach((button) => {
+    button.onclick = () => $("#reviewDialog").close();
+});
+$("#reviewForm").onsubmit = async (event) => {
+    event.preventDefault();
+    const form = event.target;
+    const data = Object.fromEntries(new FormData(form));
+    data.rating = Number(data.rating);
+    data.is_published = form.elements.is_published.checked;
+    data.images = data.images
+        .split("\n")
+        .map((value) => value.trim())
+        .filter(Boolean);
+    try {
+        await apiJson(
+            "/api/admin/reviews",
+            {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data),
+            },
+            "Не удалось добавить отзыв",
+        );
+        $("#reviewDialog").close();
+        toast("Отзыв добавлен");
+        await loadReviews();
+    } catch (error) {
+        toast(error.message, true);
+    }
+};
 $("#logout").onclick = async () => {
     await fetch("/api/admin/logout", { method: "POST" });
     location.replace("/admin");

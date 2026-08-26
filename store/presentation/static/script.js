@@ -143,6 +143,14 @@ async function loadCatalog() {
                 grouped.set(product.category, []);
             grouped.get(product.category).push(product);
         });
+        const newProducts = items
+            .filter((item) => item.is_new)
+            .map((item) => productById[String(item.id)]);
+        const newArrivals = document.getElementById("new-arrivals");
+        document.getElementById("new-arrivals-grid").innerHTML = newProducts
+            .map(productCard)
+            .join("");
+        newArrivals.hidden = newProducts.length === 0;
         collections = [...grouped].map(([category, products], index) => ({
             id: `catalog-${index}`,
             eyebrow: "Каталог",

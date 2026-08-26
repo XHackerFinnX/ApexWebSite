@@ -79,6 +79,7 @@ class CatalogService:
             tuple(str(x) for x in data.get("images", []) if str(x)),
             tuple(variants),
             bool(data.get("is_active", False)),
+            bool(data.get("is_new", False)),
         )
         if not product.images and product.image_url:
             product.images = (product.image_url,)

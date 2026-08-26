@@ -51,6 +51,7 @@ class PostgreSQLRepository:
             tuple(row["images"] or ([row["image_url"]] if row["image_url"] else [])),
             tuple(row["variants"] or []),
             row["is_active"],
+            row["is_new"],
         )
 
     def list_products(self, include_inactive: bool = False) -> list[Product]:
@@ -93,11 +94,12 @@ class PostgreSQLRepository:
                 list(product.images),
                 Jsonb(list(product.variants)),
                 product.is_active,
+                product.is_new,
             )
             if product.id:
                 db.execute(
                     """UPDATE products SET name=%s,description=%s,price=%s,category_id=%s,
-                           image_url=%s,stock=%s,color=%s,images=%s,variants=%s,is_active=%s,updated_at=now() WHERE id=%s""",
+                           image_url=%s,stock=%s,color=%s,images=%s,variants=%s,is_active=%s,is_new=%s,updated_at=now() WHERE id=%s""",
                     values + (product.id,),
                 )
                 db.execute(
@@ -105,8 +107,8 @@ class PostgreSQLRepository:
                 )
             else:
                 product.id = db.execute(
-                    """INSERT INTO products(name,description,price,category_id,image_url,stock,color,images,variants,is_active)
-                        VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
+                    """INSERT INTO products(name,description,price,category_id,image_url,stock,color,images,variants,is_active,is_new)
+                        VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) RETURNING id""",
                     values,
                 ).fetchone()["id"]
             with db.cursor() as cursor:
@@ -161,6 +163,39 @@ class PostgreSQLRepository:
                 """SELECT id,image_url,alt_text FROM review_images
                    WHERE review_id=%s ORDER BY position,id""", (review_id,)
             ).fetchall())
+            
+    def list_admin_reviews(self) -> list[dict[str, object]]:
+        with self._db() as db:
+            return list(db.execute(
+                """SELECT id,author,title,body,rating,is_published,created_at
+                   FROM reviews ORDER BY created_at DESC,id DESC"""
+            ).fetchall())
+
+    def save_review(self, data: dict[str, object]) -> dict[str, object]:
+        author = str(data.get("author", "")).strip()
+        body = str(data.get("body", "")).strip()
+        rating = int(data.get("rating", 5))
+        if not author or not body:
+            raise ValueError("Укажите автора и текст отзыва")
+        if rating not in range(1, 6):
+            raise ValueError("Оценка должна быть от 1 до 5")
+        with self._db() as db:
+            row = db.execute(
+                """INSERT INTO reviews(author,title,body,rating,is_published)
+                   VALUES(%s,%s,%s,%s,%s)
+                   RETURNING id,author,title,body,rating,is_published,created_at""",
+                (author, str(data.get("title", "")).strip(), body, rating,
+                 bool(data.get("is_published", True))),
+            ).fetchone()
+            for position, image_url in enumerate(data.get("images", []) or []):
+                image_url = str(image_url).strip()
+                if image_url:
+                    db.execute(
+                        """INSERT INTO review_images(review_id,image_url,alt_text,position)
+                           VALUES(%s,%s,%s,%s)""",
+                        (row["id"], image_url, f"Фото от {author}", position),
+                    )
+            return row
 
     def save_category(self, name: str) -> dict[str, object]:
         name = name.strip()

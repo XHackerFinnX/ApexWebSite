@@ -17,6 +17,8 @@
                         ▦ <span>Каталог</span></button
                     ><button class="nav-item" data-tab="orders">
                         ▤ <span>Заказы</span></button
+                    ><button class="nav-item" data-tab="reviews">
+                        ★ <span>Отзывы</span></button
                     ><button class="nav-item" data-tab="settings">
                         ⚙ <span>Интеграции</span>
                     </button>
@@ -183,6 +185,24 @@
                             </button>
                         </div>
                     </div>
+                </section>
+                <section class="tab" id="reviews">
+                    <div class="toolbar">
+                        <button class="button primary" data-open-review>
+                            + Добавить отзыв
+                        </button>
+                    </div>
+                    <section class="panel catalog-panel">
+                        <div class="panel-head">
+                            <div>
+                                <span class="eyebrow">СООБЩЕСТВО</span>
+                                <h2>Отзывы покупателей</h2>
+                            </div>
+                        </div>
+                        <div id="reviewRows" class="configured">
+                            <small>Загрузка…</small>
+                        </div>
+                    </section>
                 </section>
                 <section class="tab" id="settings">
                     <div class="settings-grid">
@@ -414,6 +434,13 @@
                         ><input name="is_active" type="checkbox" />
                         <span>Показывать товар в магазине</span></label
                     >
+                    <label class="full switch-field"
+                        ><input name="is_new" type="checkbox" />
+                        <span
+                            >Новый товар — показывать в «Новых
+                            поступлениях»</span
+                        ></label
+                    >
                     <label
                         >Название<input
                             name="name"
@@ -481,6 +508,71 @@
                     /><button class="button primary">Добавить</button>
                 </div>
                 <div id="categoryList" class="category-list"></div>
+            </form>
+        </dialog>
+        <dialog id="reviewDialog">
+            <form id="reviewForm">
+                <div class="dialog-head">
+                    <div>
+                        <span class="eyebrow">ОТЗЫВЫ</span>
+                        <h2>Новый отзыв</h2>
+                    </div>
+                    <button type="button" class="close" data-close-review>
+                        ×
+                    </button>
+                </div>
+                <div class="form-grid">
+                    <label
+                        >Автор<input
+                            name="author"
+                            required
+                            placeholder="Имя покупателя"
+                    /></label>
+                    <label
+                        >Оценка<select name="rating">
+                            <option value="5">5 звёзд</option>
+                            <option value="4">4 звезды</option>
+                            <option value="3">3 звезды</option>
+                            <option value="2">2 звезды</option>
+                            <option value="1">1 звезда</option>
+                        </select></label
+                    >
+                    <label class="full"
+                        >Заголовок<input
+                            name="title"
+                            placeholder="Отзыв о покупке"
+                    /></label>
+                    <label class="full"
+                        >Текст<textarea
+                            name="body"
+                            rows="5"
+                            required
+                        ></textarea>
+                    </label>
+                    <label class="full"
+                        >Ссылки на фотографии<textarea
+                            name="images"
+                            rows="3"
+                            placeholder="По одной ссылке в строке"
+                        ></textarea>
+                    </label>
+                    <label class="full switch-field"
+                        ><input
+                            name="is_published"
+                            type="checkbox"
+                            checked
+                        /><span>Сразу опубликовать на сайте</span></label
+                    >
+                </div>
+                <div class="dialog-actions">
+                    <button
+                        type="button"
+                        class="button secondary"
+                        data-close-review
+                    >
+                        Отмена</button
+                    ><button class="button primary">Добавить отзыв</button>
+                </div>
             </form>
         </dialog>
         <div id="toast" class="toast"></div>
