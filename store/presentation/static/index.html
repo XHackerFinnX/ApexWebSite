@@ -9,15 +9,18 @@
             name="description"
             content="Премиальный гоночный стритвир: худи, куртки и футболки из плотных материалов с деталями в духе автоспорта."
         />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link rel="stylesheet" href="/style.css?v=3" />
+        <link rel="stylesheet" href="/shop.css?v=3" />
+        <link rel="stylesheet" href="/reference.css?v=3" />
         <link
-            href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800;900&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600;700&display=swap"
-            rel="stylesheet"
+            rel="preload"
+            href="/fonts/barlow-700.woff2"
+            as="font"
+            type="font/woff2"
+            crossorigin
         />
-        <link rel="stylesheet" href="style.css" />
     </head>
-    <body>
+    <body class="reference-store">
         <!-- Announcement marquee -->
         <div class="announcement">
             <div class="announcement__track" id="announcement-track"></div>
@@ -61,6 +64,19 @@
                         </nav>
 
                         <div class="header__actions">
+                            <a
+                                href="/account"
+                                class="member-link"
+                                aria-label="Личный кабинет"
+                                ><svg
+                                    class="icon"
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                >
+                                    <circle cx="12" cy="8" r="4" />
+                                    <path d="M4 21v-2a8 8 0 0 1 16 0v2" /></svg
+                                ><span data-account-label>Кабинет</span></a
+                            >
                             <button
                                 type="button"
                                 class="header__icon-btn theme-toggle"
@@ -153,15 +169,180 @@
                     </div>
                 </header>
 
-                <img
-                    src="https://www.finishlinefever.com/cdn/shop/files/hf_20260223_233520_4bd0bf89-d84b-4c84-8752-9379bbebdfe1.jpg?v=1771889862&width=2400"
-                    alt="Model wearing an APEX GRID Formula 1 racing hoodie in a pit garage"
-                    class="hero__img"
-                />
+                <picture class="hero__picture"
+                    ><source
+                        media="(max-width: 699px)"
+                        srcset="/images/reference/editorial-mobile.webp" />
+                    <img
+                        src="/images/reference/editorial.webp"
+                        alt="Винтажные гоночные куртки на каменных ступенях"
+                        class="hero__img"
+                        width="1400"
+                        height="1400"
+                        fetchpriority="high"
+                        decoding="async"
+                /></picture>
                 <div class="hero__overlay"></div>
-                <div class="hero__content"></div>
+                <div class="hero__content">
+                    <p class="hero__eyebrow">APEX GRID / RACING CULTURE</p>
+                    <h1>За пределами трассы</h1>
+                    <a class="action-button" href="#catalog-filter-title"
+                        >Смотреть коллекцию
+                        <svg
+                            class="icon"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                        >
+                            <path d="M5 12h14m-5-5 5 5-5 5" /></svg
+                    ></a>
+                </div>
             </section>
 
+            <section
+                class="section featured-collection"
+                id="featured-collection"
+                aria-labelledby="featured-title"
+            >
+                <div class="section__head">
+                    <div>
+                        <p class="eyebrow">Коллекция APEX GRID</p>
+                        <h2 class="display section__title" id="featured-title">
+                            Гоночный характер.<br />На каждый день.
+                        </h2>
+                    </div>
+                    <a class="section__link" href="#catalog-filter-title"
+                        >Смотреть всё
+                        <span class="round-arrow" aria-hidden="true">→</span></a
+                    >
+                </div>
+                <div
+                    class="grid"
+                    id="featured-products"
+                    aria-live="polite"
+                ></div>
+            </section>
+            <section
+                class="category-collection"
+                id="shop-categories"
+                aria-label="Выберите коллекцию"
+            >
+                <div id="category-tiles" class="category-tiles"></div>
+            </section>
+
+            <section class="reviews">
+                <div class="reviews__inner">
+                    <h2 class="display reviews__title">
+                        Впечатления говорят сами за себя
+                    </h2>
+                    <div class="reviews__top">
+                        <p id="reviews-total">Загрузка отзывов…</p>
+                        <a class="section__link" href="/reviews"
+                            >Все отзывы →</a
+                        >
+                    </div>
+                    <div class="reviews__controls">
+                        <button
+                            type="button"
+                            id="reviews-prev"
+                            aria-label="Предыдущие отзывы"
+                        >
+                            ←</button
+                        ><button
+                            type="button"
+                            id="reviews-next"
+                            aria-label="Следующие отзывы"
+                        >
+                            →
+                        </button>
+                    </div>
+                    <div class="reviews__viewport">
+                        <div class="reviews__grid" id="reviews-grid"></div>
+                    </div>
+                    <button
+                        class="reviews__more hidden"
+                        id="reviews-more"
+                        type="button"
+                    >
+                        Показать ещё
+                    </button>
+                </div>
+            </section>
+
+            <!-- История -->
+            <section id="story" class="story">
+                <img
+                    class="story__image"
+                    loading="lazy"
+                    decoding="async"
+                    width="1536"
+                    height="1024"
+                    src="/images/reference/category-bundles.webp"
+                    alt="Коллекция гоночных худи на каменных ступенях"
+                />
+                <div class="story-copy">
+                    <p class="eyebrow">
+                        BUILT FOR THE PADDOCK. WORN EVERYWHERE.
+                    </p>
+                    <h2 class="display story__title">
+                        Твоя страсть.<br />Твой стиль.
+                    </h2>
+                    <p>
+                        Вещи для тех, у кого гоночный уикенд — состояние души.
+                    </p>
+                    <a class="action-button" href="#catalog-filter-title"
+                        >Открыть коллекции →</a
+                    >
+                </div>
+            </section>
+
+            <section
+                class="section new-arrivals"
+                id="new-arrivals"
+                aria-labelledby="new-arrivals-title"
+                hidden
+            >
+                <div class="section__head">
+                    <div>
+                        <p class="eyebrow">Только что добавили</p>
+                        <h2
+                            class="display section__title"
+                            id="new-arrivals-title"
+                        >
+                            Новые поступления
+                        </h2>
+                    </div>
+                </div>
+                <div class="grid" id="new-arrivals-grid"></div>
+            </section>
+
+            <section class="club-feature" aria-labelledby="club-feature-title">
+                <div class="club-feature__media">
+                    <img
+                        src="/images/reference/category-hoodies.webp"
+                        alt="Гоночный стритвир вне трассы"
+                        width="800"
+                        height="800"
+                        loading="lazy"
+                        decoding="async"
+                    />
+                </div>
+                <div class="club-feature__copy">
+                    <p class="eyebrow">Твой пропуск в APEX Club</p>
+                    <h2 id="club-feature-title">
+                        Больше стиля.<br />Больше привилегий.
+                    </h2>
+                    <p>
+                        Создай личный кабинет, сохраняй заказы и получай баллы
+                        за оплаченные покупки.
+                    </p>
+                    <p class="club-feature__rules" id="club-feature-rules">
+                        Баллы можно использовать при следующей покупке.
+                    </p>
+                    <a href="/account" class="action-button"
+                        >Открыть личный кабинет</a
+                    >
+                </div>
+            </section>
             <!-- Catalog filters and product sections -->
             <section
                 class="catalog-toolbar"
@@ -173,7 +354,7 @@
                         class="display catalog-toolbar__title"
                         id="catalog-filter-title"
                     >
-                        Выбери свой стиль
+                        Все коллекции
                     </h2>
                 </div>
                 <div class="catalog-toolbar__controls">
@@ -213,36 +394,16 @@
                 </div>
             </div>
 
-            <!-- История -->
-            <section id="story" class="story">
-                <img
-                    class="story__image"
-                    src="https://www.finishlinefever.com/cdn/shop/files/hf_20260224_041350_8edf0c92-e292-46b3-9d81-28e83a7211df.png?v=1771906874&amp;width=2048"
-                    alt="Гоночный автомобиль на трассе"
-                />
-                <h2 class="display story__title">Больше чем просто мерч.</h2>
-            </section>
-
-            <section
-                class="section new-arrivals"
-                id="new-arrivals"
-                aria-labelledby="new-arrivals-title"
-                hidden
-            >
-                <div class="section__head">
-                    <div>
-                        <p class="eyebrow">Только что добавили</p>
-                        <h2
-                            class="display section__title"
-                            id="new-arrivals-title"
-                        >
-                            Новые поступления
-                        </h2>
-                    </div>
-                </div>
-                <div class="grid" id="new-arrivals-grid"></div>
-            </section>
-
+            <div class="catalog-pagination">
+                <button
+                    type="button"
+                    class="action-button"
+                    id="catalog-more"
+                    hidden
+                >
+                    Показать ещё товары ↓
+                </button>
+            </div>
             <!-- Community gallery -->
             <section class="flf-gallery" aria-labelledby="flf-gallery-title">
                 <h2
@@ -250,49 +411,29 @@
                     id="flf-gallery-title"
                     style="display: flex; justify-content: center"
                 >
-                    Попадите в подборку с хэштегом #FLF
+                    Гоночная культура в каждом кадре
                 </h2>
                 <div class="flf-gallery__grid" id="flf-gallery-grid"></div>
-            </section>
-
-            <!-- Reviews -->
-            <section class="reviews">
-                <div class="reviews__inner">
-                    <p class="eyebrow">Сообщество APEX</p>
-                    <h2 class="display reviews__title">
-                        Наши клиенты расскажут лучше нас
-                    </h2>
-                    <div class="reviews__top">
-                        <p id="reviews-total">Загрузка отзывов…</p>
-                        <a class="section__link" href="/reviews"
-                            >Все отзывы →</a
-                        >
-                    </div>
-                    <div class="reviews__viewport">
-                        <div class="reviews__grid" id="reviews-grid"></div>
-                    </div>
-                    <button
-                        class="reviews__more hidden"
-                        id="reviews-more"
-                        type="button"
-                    >
-                        Показать ещё
-                    </button>
-                </div>
             </section>
 
             <!-- FAQ -->
             <section class="faq">
                 <div>
-                    <p class="eyebrow">Важно знать</p>
-                    <h2 class="display faq__title">Вопросы</h2>
+                    <p class="eyebrow">Поможем с выбором</p>
+                    <h2 class="display faq__title">
+                        Есть вопросы?<br />Мы рядом.
+                    </h2>
+                    <p class="faq__intro">
+                        О доставке, размерах и заказах — всё самое важное перед
+                        покупкой.
+                    </p>
+                    <a class="section__link" href="/account">Мои заказы →</a>
                 </div>
                 <div id="faq-list"></div>
             </section>
 
             <!-- Community loop -->
             <section class="community" aria-labelledby="community-title">
-                <p class="eyebrow">На трассе и в городе</p>
                 <h2 class="display community__title" id="community-title">
                     Наше сообщество
                 </h2>
@@ -307,6 +448,13 @@
             <div class="footer__inner">
                 <div class="footer__top">
                     <div class="footer__brand">
+                        <h2 class="footer-club-title">Первыми на старте</h2>
+                        <p class="footer-club-copy">
+                            Твои заказы и бонусы за покупки — в APEX Club.
+                        </p>
+                        <a class="action-button" href="/account"
+                            >Присоединиться к клубу</a
+                        >
                         <p class="display footer__logo">
                             APEX<span class="text-primary">GRID</span>
                         </p>
@@ -330,18 +478,20 @@
                     <div class="footer__col">
                         <p class="footer__heading">Помощь</p>
                         <ul>
-                            <li><a href="#">Доставка</a></li>
-                            <li><a href="#">Возврат</a></li>
-                            <li><a href="#">Размерная сетка</a></li>
-                            <li><a href="#">Контакты</a></li>
+                            <li><a href="#faq-list">Доставка</a></li>
+                            <li><a href="#faq-list">Возврат</a></li>
+                            <li><a href="#faq-list">Выбор размера</a></li>
+                            <li><a href="/account">Мои заказы</a></li>
                         </ul>
                     </div>
                     <div class="footer__col">
-                        <p class="footer__heading">Соцсети</p>
+                        <p class="footer__heading">Коллекции</p>
                         <ul>
-                            <li><a href="#">Instagram</a></li>
-                            <li><a href="#">TikTok</a></li>
-                            <li><a href="#">Telegram</a></li>
+                            <li>
+                                <a href="#catalog-filter-title">Все товары</a>
+                            </li>
+                            <li><a href="#shop-categories">Категории</a></li>
+                            <li><a href="#community-title">Сообщество</a></li>
                         </ul>
                     </div>
                 </div>
@@ -354,11 +504,19 @@
 
         <!-- Cart drawer -->
         <div class="cart-overlay" id="cart-overlay" aria-hidden="true"></div>
+        <button
+            type="button"
+            class="mobile-menu-backdrop"
+            id="mobile-menu-backdrop"
+            aria-label="Закрыть меню"
+            hidden
+        ></button>
         <aside
             class="cart"
             id="cart"
             role="dialog"
             aria-label="Корзина"
+            aria-modal="true"
             aria-hidden="true"
         >
             <header class="cart__header">
@@ -488,6 +646,6 @@
         <!-- Add-to-bag toast -->
         <div class="toast" id="toast" role="status" aria-hidden="true"></div>
 
-        <script src="script.js"></script>
+        <script src="/script.js?v=3" defer></script>
     </body>
 </html>

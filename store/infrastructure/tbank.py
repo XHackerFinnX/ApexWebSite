@@ -13,7 +13,7 @@ class TBankError(RuntimeError):
 class TBankPayment:
     TEST_URL = "https://rest-api-test.tinkoff.ru/v2/Init"
     PRODUCTION_URL = "https://securepay.tinkoff.ru/v2/Init"
-    
+
     def __init__(self, ca_certificate: str | None = None):
         self.ssl_context = self._ssl_context(ca_certificate)
 
@@ -34,17 +34,27 @@ class TBankPayment:
 
     @staticmethod
     def token(payload: dict, password: str) -> str:
-        values = {key: value for key, value in payload.items() if key not in {"Token", "Receipt", "DATA"} and not isinstance(value, (dict, list))}
+        values = {
+            key: value
+            for key, value in payload.items()
+            if key not in {"Token", "Receipt", "DATA"}
+            and not isinstance(value, (dict, list))
+        }
         values["Password"] = password
+
         def token_value(value):
             return str(value).lower() if isinstance(value, bool) else str(value)
+
         source = "".join(token_value(values[key]) for key in sorted(values))
         return hashlib.sha256(source.encode("utf-8")).hexdigest()
 
     def verify_token(self, payload: dict, password: str) -> bool:
         import hmac
-        return hmac.compare_digest(str(payload.get("Token", "")), self.token(payload, password))
-    
+
+        return hmac.compare_digest(
+            str(payload.get("Token", "")), self.token(payload, password)
+        )
+
     @staticmethod
     def _http_error_message(exc: HTTPError) -> str:
         """Return the useful part of an acquiring API error response."""
@@ -73,24 +83,50 @@ class TBankPayment:
             return text[:500]
         return str(exc.reason or "без пояснения")
 
-    def init_payment(self, config: dict, order: dict, items: list[dict], public_url: str) -> dict:
+    def init_payment(
+        self, config: dict, order: dict, items: list[dict], public_url: str
+    ) -> dict:
         if not public_url.startswith("https://"):
             raise TBankError("Для оплаты задайте публичный HTTPS-адрес WEBAPP_URL")
         order_id = str(order["id"])
         receipt_items = []
         for item in items:
             price = int(item["unit_price"] * 100)
-            receipt_items.append({"Name": item["name"][:128], "Price": price, "Quantity": item["quantity"], "Amount": price * item["quantity"], "Tax": "none", "PaymentMethod": "full_payment", "PaymentObject": "commodity"})
+            receipt_items.append(
+                {
+                    "Name": item["name"][:128],
+                    "Price": price,
+                    "Quantity": item["quantity"],
+                    "Amount": price * item["quantity"],
+                    "Tax": "none",
+                    "PaymentMethod": "full_payment",
+                    "PaymentObject": item.get("payment_object", "commodity"),
+                }
+            )
         payload = {
-            "TerminalKey": config["terminal_key"], "Amount": int(order["total"] * 100),
-            "OrderId": order_id, "Description": f"Заказ {order_id}", "Language": "ru",
+            "TerminalKey": config["terminal_key"],
+            "Amount": int(order["total"] * 100),
+            "OrderId": order_id,
+            "Description": f"Заказ {order_id}",
+            "Language": "ru",
             "SuccessURL": f"{public_url}/payment/success?order_id={order_id}",
             "FailURL": f"{public_url}/payment/fail?order_id={order_id}",
             "NotificationURL": f"{public_url}/api/payments/tbank/notification",
-            "Receipt": {"Email": order["customer_email"], "Taxation": "usn_income", "Items": receipt_items},
+            "Receipt": {
+                "Email": order["customer_email"],
+                "Taxation": "usn_income",
+                "Items": receipt_items,
+            },
         }
         payload["Token"] = self.token(payload, str(config["password"]))
-        request = Request(self.TEST_URL if config.get("environment") == "test" else self.PRODUCTION_URL, data=json.dumps(payload).encode(), headers={"Content-Type": "application/json"}, method="POST")
+        request = Request(
+            self.TEST_URL
+            if config.get("environment") == "test"
+            else self.PRODUCTION_URL,
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
         try:
             urlopen_options = {"timeout": 15}
             if self.ssl_context is not None:
@@ -108,11 +144,19 @@ class TBankPayment:
                     "Не удалось проверить TLS-сертификат Т-Банка; "
                     "установите TBANK_CA_CERT с путём к Russian Trusted Root CA"
                 ) from exc
-            raise TBankError(f"Не удалось подключиться к Т-Банку: {exc.reason}") from exc
+            raise TBankError(
+                f"Не удалось подключиться к Т-Банку: {exc.reason}"
+            ) from exc
         except TimeoutError as exc:
             raise TBankError("Т-Банк не ответил за 15 секунд") from exc
         except json.JSONDecodeError as exc:
             raise TBankError("Т-Банк вернул некорректный JSON-ответ") from exc
         if not result.get("Success") or not result.get("PaymentURL"):
-            raise TBankError(str(result.get("Message") or result.get("Details") or "Т-Банк отклонил создание платежа"))
+            raise TBankError(
+                str(
+                    result.get("Message")
+                    or result.get("Details")
+                    or "Т-Банк отклонил создание платежа"
+                )
+            )
         return result

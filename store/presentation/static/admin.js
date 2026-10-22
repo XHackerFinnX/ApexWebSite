@@ -2,6 +2,11 @@ let products = [];
 let categories = [];
 let integrations = [];
 let reviews = [];
+let promotions = [];
+let productOffset = 0;
+let productTotal = 0;
+let productRequest = 0;
+let pendingUploads = 0;
 const $ = (selector) => document.querySelector(selector);
 const esc = (value) =>
     String(value ?? "").replace(
@@ -38,7 +43,8 @@ async function apiJson(
     fallback = "Не удалось загрузить данные",
 ) {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15000);
+    const timeoutMs = options.timeoutMs || 15000;
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
         const response = await fetch(url, {
             ...options,
@@ -56,7 +62,7 @@ async function apiJson(
     } catch (error) {
         if (error.name === "AbortError")
             throw new Error(
-                "Сервер не ответил за 15 секунд. Попробуйте ещё раз",
+                `Сервер не ответил за ${Math.round(timeoutMs / 1000)} секунд. Попробуйте ещё раз`,
             );
         throw error;
     } finally {
@@ -64,6 +70,8 @@ async function apiJson(
     }
 }
 function renderCategories() {
+    const selectedFilter = $("#categoryFilter").value;
+    const selectedProduct = $("#productCategory").value;
     const options = categories
         .map(
             (category) =>
@@ -74,11 +82,15 @@ function renderCategories() {
         '<option value="">Все категории</option>' + options;
     $("#productCategory").innerHTML =
         '<option value="">Выберите категорию</option>' + options;
+    if (categories.some((c) => c.name === selectedFilter))
+        $("#categoryFilter").value = selectedFilter;
+    if (categories.some((c) => c.name === selectedProduct))
+        $("#productCategory").value = selectedProduct;
     $("#categoryList").innerHTML = categories.length
         ? categories
               .map(
                   (category) =>
-                      `<div><span><b>${esc(category.name)}</b><br><small>Товаров: ${category.product_count}</small></span><button type="button" class="icon-btn danger" data-delete-category="${category.id}" ${category.product_count ? 'disabled title="Сначала удалите или перенесите товары"' : ""}>Удалить</button></div>`,
+                      `<div><span><b>${esc(category.name)}</b><br><small>Товаров: ${category.product_count}</small></span><button type="button" class="icon-btn" data-edit-category="${category.id}">Изменить</button><button type="button" class="icon-btn danger" data-delete-category="${category.id}" ${category.product_count ? 'disabled title="Сначала удалите или перенесите товары"' : ""}>Удалить</button></div>`,
               )
               .join("")
         : "<small>Категорий пока нет</small>";
@@ -105,7 +117,17 @@ function switchTab(id) {
         orders: "Заказы",
         reviews: "Отзывы",
         settings: "Интеграции",
+        promotions: "Промокоды",
+        loyalty: "Программа лояльности",
     }[id];
+    const loader = {
+        reviews: loadReviews,
+        settings: loadIntegrations,
+        orders: loadOrders,
+        promotions: loadPromotions,
+        loyalty: loadLoyalty,
+    }[id];
+    if (loader) loader().catch((error) => toast(error.message, true));
 }
 document
     .querySelectorAll("[data-tab],[data-go]")
@@ -120,24 +142,28 @@ function renderProducts() {
             (!q || `${p.name} ${p.category}`.toLowerCase().includes(q)) &&
             (!cat || p.category === cat),
     );
-    $("#catalogCount").textContent = `${shown.length} позиций`;
+    $("#catalogCount").textContent =
+        `${productOffset + 1}–${productOffset + shown.length} из ${productTotal}`;
     $("#rows").innerHTML =
         shown
             .map(
                 (p) =>
-                    `<tr><td><b>${esc(p.name)}</b><br><small>#${p.id} · ${p.is_active ? "Опубликован" : "Черновик"}</small></td><td>${esc(p.category)}</td><td><b>${Number(p.price).toLocaleString("ru")} ₽</b></td><td><span class="stock ${p.stock < 5 ? "low" : ""}">${p.stock} шт.</span></td><td><small>${p.views} просм. · ${p.cart_adds} в корзину</small></td><td><button class="icon-btn" data-edit="${p.id}">Изменить</button> <button class="icon-btn danger" data-delete="${p.id}">Удалить</button></td></tr>`,
+                    `<tr><td><div class="admin-product-cell">${p.image_url ? `<img src="${esc(p.image_url)}${p.image_url.startsWith("/media/") ? "?w=240" : ""}" width="44" height="56" loading="lazy" alt="">` : ""}<div><b>${esc(p.name)}</b><br><small>#${p.id} · ${p.is_active ? "Опубликован" : "Черновик"}</small></div></div></td><td>${esc(p.category)}</td><td><b>${Number(p.price).toLocaleString("ru")} ₽</b></td><td><span class="stock ${p.stock < 5 ? "low" : ""}">${p.stock} шт.</span></td><td><small>${p.views} просм. · ${p.cart_adds} в корзину</small></td><td><button class="icon-btn" data-edit="${p.id}">Изменить</button> <button class="icon-btn danger" data-delete="${p.id}">Удалить</button></td></tr>`,
             )
             .join("") ||
         `<tr><td colspan="6"><small>Товары не найдены</small></td></tr>`;
-    document
-        .querySelectorAll("[data-edit]")
-        .forEach(
-            (b) =>
-                (b.onclick = () =>
+    document.querySelectorAll("[data-edit]").forEach(
+        (b) =>
+            (b.onclick = async () => {
+                try {
                     openProduct(
-                        products.find((p) => p.id === Number(b.dataset.edit)),
-                    )),
-        );
+                        await apiJson(`/api/admin/products/${b.dataset.edit}`),
+                    );
+                } catch (error) {
+                    toast(error.message, true);
+                }
+            }),
+    );
     document
         .querySelectorAll("[data-delete]")
         .forEach(
@@ -149,7 +175,7 @@ function renderReviews() {
         ? reviews
               .map(
                   (review) =>
-                      `<div><span><b>${esc(review.author)}</b> · ${"★".repeat(Number(review.rating))}<br><small>${esc(review.title || "Без заголовка")} — ${esc(review.body)}</small></span><span class="pill">${review.is_published ? "Опубликован" : "Черновик"}</span></div>`,
+                      `<div><span><b>${esc(review.author)}</b> · ${"★".repeat(Number(review.rating))}<br><small>${esc(review.title || "Без заголовка")} — ${esc(review.body)}</small></span><span><span class="pill">${review.is_published ? "Опубликован" : "Черновик"}</span><button type="button" class="icon-btn" data-edit-review="${review.id}">Изменить</button><button type="button" class="icon-btn danger" data-delete-review="${review.id}">Удалить</button></span></div>`,
               )
               .join("")
         : "<small>Отзывов пока нет</small>";
@@ -162,82 +188,90 @@ async function loadReviews() {
     );
     renderReviews();
 }
-async function load() {
-    const refresh = $("#refresh");
-    refresh.disabled = true;
-    refresh.textContent = "↻ Загрузка…";
-    $("#rows").innerHTML =
-        '<tr><td colspan="6"><small>Загружаем товары…</small></td></tr>';
-    try {
-        await loadCategories();
-    } catch (error) {
-        toast(error.message, true);
+async function loadProductsPage(reset = true) {
+    const sequence = ++productRequest;
+    if (reset) productOffset = 0;
+    const params = new URLSearchParams({
+        limit: 40,
+        offset: productOffset,
+        q: $("#search").value,
+        category: $("#categoryFilter").value,
+        sort: "newest",
+    });
+    const page = await apiJson("/api/admin/catalog?" + params);
+    if (sequence !== productRequest) return;
+    products = page.items;
+    productTotal = page.total;
+    renderProducts();
+    let paging = $("#catalogPagination");
+    if (!paging) {
+        paging = document.createElement("div");
+        paging.id = "catalogPagination";
+        paging.className = "catalog-paging";
+        $(".catalog-panel .table-wrap").after(paging);
     }
-    try {
-        await loadReviews();
-    } catch (error) {
-        $("#reviewRows").innerHTML =
-            `<small class="danger-text">${esc(error.message)}</small>`;
-    }
-    try {
-        products = await apiJson(
-            "/api/admin/products",
-            {},
-            "Не удалось загрузить список товаров",
-        );
-        if (!Array.isArray(products))
-            throw new Error("Сервер вернул некорректный список товаров");
-    } catch (error) {
-        products = [];
-        $("#rows").innerHTML =
-            `<tr><td colspan="6"><small class="danger-text">${esc(error.message)}</small><br><button class="icon-btn" id="retryProducts">Повторить</button></td></tr>`;
-        $("#catalogCount").textContent = "Ошибка загрузки";
-        $("#retryProducts").onclick = load;
-        toast(error.message, true);
-        refresh.disabled = false;
-        refresh.textContent = "↻ Обновить";
-        return;
-    }
-    $("#count").textContent = products.length;
-    const views = products.reduce((n, p) => n + p.views, 0),
-        adds = products.reduce((n, p) => n + p.cart_adds, 0);
-    $("#views").textContent = views.toLocaleString("ru");
-    $("#adds").textContent = adds.toLocaleString("ru");
+    paging.innerHTML = `<button class="button secondary" id="prevProducts" ${productOffset === 0 ? "disabled" : ""}>← Назад</button><span>${page.total ? productOffset + 1 : 0}–${productOffset + products.length} из ${page.total}</span><button class="button secondary" id="nextProducts" ${productOffset + products.length >= productTotal ? "disabled" : ""}>Далее →</button>`;
+    $("#prevProducts").onclick = () => {
+        productOffset = Math.max(0, productOffset - 40);
+        loadProductsPage(false).catch((e) => toast(e.message, true));
+    };
+    $("#nextProducts").onclick = () => {
+        productOffset += 40;
+        loadProductsPage(false).catch((e) => toast(e.message, true));
+    };
+}
+async function loadStats() {
+    const stats = await apiJson("/api/admin/stats");
+    $("#count").textContent = stats.count;
+    $("#views").textContent = Number(stats.views).toLocaleString("ru");
+    $("#adds").textContent = Number(stats.adds).toLocaleString("ru");
     $("#rate").textContent =
-        (views ? (adds / views) * 100 : 0).toFixed(1) + "%";
-    const low = products.filter((p) => p.stock < 5);
-    $("#stockAlerts").innerHTML = low.length
-        ? low
-              .slice(0, 4)
+        (stats.views ? (100 * stats.adds) / stats.views : 0).toFixed(1) + "%";
+    $("#stockAlerts").innerHTML =
+        `<div><span>Товаров с остатком меньше 5</span><b>${stats.low_stock}</b></div><button class="text-button" data-stock-catalog>Проверить каталог →</button>`;
+    $("[data-stock-catalog]").onclick = () => switchTab("catalog");
+}
+async function loadIntegrations() {
+    integrations = await apiJson("/api/admin/integrations");
+    $("#configured").innerHTML = integrations.length
+        ? integrations
               .map(
-                  (p) =>
-                      `<div><span>${esc(p.name)}</span><b class="danger-text">${p.stock} шт.</b></div>`,
+                  (x) =>
+                      `<div><span><b>${esc(x.public_config.name || x.provider.toUpperCase())}</b><br><small>${x.kind === "payment" ? "Оплата" : "Доставка"} · ${esc(x.provider)} · ${x.public_config.environment === "production" ? "Рабочая среда" : "Тестовая среда"}</small></span><span><b class="${x.enabled ? "" : "danger-text"}">${x.enabled ? "Активна" : "Выключена"}</b> <button type="button" class="icon-btn" data-edit-integration="${esc(x.provider)}">Изменить</button> <button type="button" class="icon-btn danger" data-delete-integration="${esc(x.provider)}">Удалить</button></span></div>`,
               )
               .join("")
-        : "<div><span>Все товары в наличии</span><b>✓</b></div>";
-    renderProducts();
-    try {
-        integrations = await apiJson("/api/admin/integrations");
-        $("#configured").innerHTML = integrations.length
-            ? integrations
-                  .map(
-                      (x) =>
-                          `<div><span><b>${esc(x.public_config.name || x.provider.toUpperCase())}</b><br><small>${x.kind === "payment" ? "Оплата" : "Доставка"} · ${esc(x.provider)}</small></span><span><b class="${x.enabled ? "" : "danger-text"}">${x.enabled ? "Активна" : "Выключена"}</b> <button type="button" class="icon-btn" data-edit-integration="${esc(x.provider)}">Изменить</button> <button type="button" class="icon-btn danger" data-delete-integration="${esc(x.provider)}">Удалить</button></span></div>`,
-                  )
-                  .join("")
-            : "<small>Интеграции пока не настроены</small>";
-    } catch (error) {
-        $("#configured").innerHTML =
-            `<small class="danger-text">${esc(error.message)}</small>`;
-    } finally {
-        refresh.disabled = false;
-        refresh.textContent = "↻ Обновить";
-    }
+        : '<p class="empty-admin">Пока нет интеграций. Добавьте оплату или доставку в форме слева.</p>';
+}
+async function load() {
+    const button = $("#refresh");
+    button.disabled = true;
+    button.textContent = "↻ Загрузка…";
+    const results = await Promise.allSettled([
+        loadCategories(),
+        loadProductsPage(),
+        loadStats(),
+    ]);
+    results.forEach((result) => {
+        if (result.status === "rejected") toast(result.reason.message, true);
+    });
+    if (results[1].status === "rejected")
+        $("#rows").innerHTML =
+            '<tr><td colspan="6">Не удалось загрузить товары. Нажмите «Обновить», чтобы повторить.</td></tr>';
+    if ($("#settings").classList.contains("active"))
+        await loadIntegrations().catch((e) => toast(e.message, true));
+    button.disabled = false;
+    button.textContent = "↻ Обновить";
 }
 function openProduct(p = null) {
     const f = $("#productForm");
     f.reset();
     f.elements.id.value = "";
+    const simple = Boolean(p && !p.variants?.length);
+    f.dataset.simple = String(simple);
+    $("#simpleProductFields").hidden = !simple;
+    $("#addColor").hidden = simple;
+    f.elements.price.required = simple;
+    f.elements.stock.required = simple;
     $("#formTitle").textContent = p ? "Редактирование товара" : "Новый товар";
     if (p) {
         if (!categories.some((category) => category.name === p.category)) {
@@ -249,6 +283,21 @@ function openProduct(p = null) {
         });
         f.elements.is_active.checked = Boolean(p.is_active);
         f.elements.is_new.checked = Boolean(p.is_new);
+        f.elements.price.value = p.price;
+        f.elements.stock.value = p.stock;
+        f.elements.sizes_text.value = (p.sizes || []).join(", ");
+    }
+    if (simple) {
+        renderColorGroups([
+            { color: p.color || "", images: p.images || [], variants: [] },
+        ]);
+        const group = $(".color-group");
+        group.querySelector(".color-name").required = false;
+        group.querySelector(".variant-table-wrap").hidden = true;
+        group.querySelector(".variant-tools").hidden = true;
+        group.querySelector(".remove-color").hidden = true;
+        $("#productDialog").showModal();
+        return;
     }
     const variants = p?.variants?.length
         ? p.variants
@@ -287,12 +336,11 @@ function groupVariants(variants) {
     });
     return groups;
 }
-const readImage = (file) =>
+const prepareImage = (file) =>
     new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => {
-            // GIF may be animated, so keep it intact. Other photographs are
-            // reduced before being embedded into the JSON request.
+            // The server normalizes the upload to a bounded WebP image.
             if (file.type === "image/gif") return resolve(reader.result);
             const image = new Image();
             image.onerror = () =>
@@ -315,6 +363,21 @@ const readImage = (file) =>
         reader.onerror = reject;
         reader.readAsDataURL(file);
     });
+async function readImage(file) {
+    if (file.size > 10000000) throw new Error("Фотография превышает 10 МБ");
+    pendingUploads++;
+    try {
+        return (
+            await apiJson("/api/admin/media", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ image: await prepareImage(file) }),
+            })
+        ).url;
+    } finally {
+        pendingUploads--;
+    }
+}
 const variantRow = (variant = {}) => `<tr class="variant-row">
     <td><input data-field="sku" required value="${esc(variant.sku || "")}" placeholder="ART-001"></td>
     <td><input data-field="price" required type="number" min="0" step="0.01" value="${esc(variant.price ?? "")}"></td>
@@ -331,7 +394,7 @@ function colorGroup(group = { color: "", images: [], variants: [] }) {
         <div class="color-head"><label>Цвет<input class="color-name" required value="${esc(group.color)}" placeholder="Например, белый"></label><button type="button" class="remove-color" title="Удалить цвет">Удалить цвет</button></div>
         <div class="image-editor"><div class="image-list"></div><label class="image-add" title="Добавить фотографии">+<input class="image-input" type="file" accept="image/jpeg,image/png,image/webp,image/gif" multiple></label></div>
         <div class="variant-table-wrap"><table class="variant-table"><thead><tr><th>Артикул</th><th>Цена</th><th>Старая цена</th><th>Количество</th><th>Цвет</th><th>Размер</th><th>Габариты, мм (Д×Ш×В)</th><th>Вес, г</th><th></th></tr></thead><tbody>${(group.variants || []).map(variantRow).join("")}</tbody></table></div>
-        <button type="button" class="add-variant">+ Добавить размер / вариацию</button>
+        <div class="variant-tools"><button type="button" class="add-variant">+ Одна вариация</button><input class="bulk-sizes" placeholder="XS, S, M, L, XL" aria-label="Размеры через запятую"><button type="button" class="bulk-add">Добавить размеры</button></div>
     </article>`;
 }
 function renderColorGroups(groups) {
@@ -340,7 +403,9 @@ function renderColorGroups(groups) {
 }
 function addColorGroup() {
     $("#colorGroups").insertAdjacentHTML("beforeend", colorGroup());
-    bindColorGroup($("#colorGroups").lastElementChild);
+    const group = $("#colorGroups").lastElementChild;
+    bindColorGroup(group);
+    group.querySelector(".add-variant").click();
 }
 function renderGroupImages(group) {
     const images = JSON.parse(group.dataset.images || "[]");
@@ -364,6 +429,40 @@ function bindColorGroup(group) {
             .querySelector("tbody")
             .insertAdjacentHTML("beforeend", variantRow());
         syncColor();
+    };
+    group.querySelector(".bulk-add").onclick = () => {
+        const sizes = group
+            .querySelector(".bulk-sizes")
+            .value.split(/[,;\s]+/)
+            .filter(Boolean);
+        const first = group.querySelector(".variant-row");
+        const base = first
+            ? Object.fromEntries(
+                  [...first.querySelectorAll("[data-field]")].map((input) => [
+                      input.dataset.field,
+                      input.value,
+                  ]),
+              )
+            : {};
+        const existing = new Set(
+            [...group.querySelectorAll('[data-field="size"]')].map(
+                (input) => input.value,
+            ),
+        );
+        sizes
+            .filter((size) => !existing.has(size))
+            .forEach((size, index) =>
+                group.querySelector("tbody").insertAdjacentHTML(
+                    "beforeend",
+                    variantRow({
+                        ...base,
+                        size,
+                        sku: `APEX-${Date.now().toString(36)}-${index}-${size}`,
+                    }),
+                ),
+            );
+        syncColor();
+        group.querySelector(".bulk-sizes").value = "";
     };
     group.querySelector(".remove-color").onclick = () => {
         if (document.querySelectorAll(".color-group").length > 1)
@@ -428,6 +527,7 @@ document
     .forEach((b) => (b.onclick = () => $("#productDialog").close()));
 $("#productForm").onsubmit = async (e) => {
     e.preventDefault();
+    if (pendingUploads) return toast("Дождитесь загрузки фотографий", true);
     const d = Object.fromEntries(new FormData(e.target));
     d.is_active = e.target.elements.is_active.checked;
     d.is_new = e.target.elements.is_new.checked;
@@ -450,7 +550,19 @@ $("#productForm").onsubmit = async (e) => {
             );
         },
     );
-    if (!d.variants.length) return toast("Добавьте хотя бы одну вариацию");
+    if (e.target.dataset.simple === "true") {
+        d.variants = [];
+        d.sizes = String(d.sizes_text || "")
+            .split(/[,;\s]+/)
+            .filter(Boolean);
+        d.images = JSON.parse($(".color-group").dataset.images || "[]");
+        d.color = $(".color-name").value.trim();
+        d.image_url = d.images[0] || "";
+    } else if (!d.variants.length)
+        return toast("Добавьте хотя бы одну вариацию");
+    const saveButton = e.target.querySelector(".dialog-actions .primary");
+    saveButton.disabled = true;
+    saveButton.textContent = "Сохраняем…";
     try {
         const editingId = e.target.elements.id.value;
         const r = await fetch(
@@ -470,6 +582,9 @@ $("#productForm").onsubmit = async (e) => {
         load();
     } catch (error) {
         toast(`Товар не сохранён: ${error.message}`, true);
+    } finally {
+        saveButton.disabled = false;
+        saveButton.textContent = "Сохранить товар";
     }
 };
 async function removeProduct(id) {
@@ -480,7 +595,7 @@ async function removeProduct(id) {
         if (r.ok) {
             toast("Товар удалён");
             load();
-        }
+        } else toast(await errorMessage(r, "Товар не удалён"), true);
     }
 }
 document.querySelectorAll("[data-open-categories]").forEach((button) => {
@@ -494,13 +609,17 @@ document.querySelector("[data-close-category]").onclick = () =>
 $("#categoryForm").onsubmit = async (event) => {
     event.preventDefault();
     try {
-        const response = await fetch("/api/admin/categories", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                name: new FormData(event.target).get("name"),
-            }),
-        });
+        const id = event.target.elements.id.value;
+        const response = await fetch(
+            "/api/admin/categories" + (id ? "/" + id : ""),
+            {
+                method: id ? "PUT" : "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    name: new FormData(event.target).get("name"),
+                }),
+            },
+        );
         if (!response.ok)
             return toast(
                 await errorMessage(response, "Категория не добавлена"),
@@ -514,6 +633,16 @@ $("#categoryForm").onsubmit = async (event) => {
     }
 };
 $("#categoryList").onclick = async (event) => {
+    const edit = event.target.closest("[data-edit-category]");
+    if (edit) {
+        const category = categories.find(
+            (c) => c.id === Number(edit.dataset.editCategory),
+        );
+        $("#categoryForm").elements.id.value = category.id;
+        $("#categoryForm").elements.name.value = category.name;
+        $("#categoryForm").elements.name.focus();
+        return;
+    }
     const button = event.target.closest("[data-delete-category]");
     if (!button || button.disabled || !confirm("Удалить категорию?")) return;
     try {
@@ -539,7 +668,7 @@ $("#integration").onsubmit = async (e) => {
     e.target.classList.add("is-saving");
     $("#integration-save .button-label").textContent = "Сохраняем и проверяем…";
     const f = new FormData(e.target),
-        provider = f.get("provider"),
+        provider = f.get("provider") || $("#integration-provider").value,
         keys = {
             tbank: ["terminal_key", "password"],
             alfabank: ["username", "password"],
@@ -593,6 +722,9 @@ $("#integration").onsubmit = async (e) => {
         );
         e.target.reset();
         e.target.elements.editing.value = "";
+        integrationKind.disabled = false;
+        integrationProvider.disabled = false;
+        updateIntegrationForm();
         await load();
     } catch (error) {
         toast(error.message, true);
@@ -619,10 +751,44 @@ function updateIntegrationForm() {
     if (integrationProvider.selectedOptions[0]?.hidden && visible)
         integrationProvider.value = visible.value;
     $("#cdek-fields").hidden = integrationProvider.value !== "cdek";
+    const credentials = ["tbank", "alfabank", "cdek"].includes(
+        integrationProvider.value,
+    );
+    $("#integration").elements.login.closest("label").hidden = !credentials;
+    $("#integration").elements.secret.closest("label").hidden = !credentials;
+    $("#checkCdek").hidden =
+        integrationProvider.value !== "cdek" ||
+        !$("#integration").elements.editing.value;
 }
 integrationKind.onchange = updateIntegrationForm;
 integrationProvider.onchange = updateIntegrationForm;
 updateIntegrationForm();
+$("#resetIntegration").onclick = () => {
+    const form = $("#integration");
+    form.reset();
+    form.elements.editing.value = "";
+    integrationKind.disabled = false;
+    integrationProvider.disabled = false;
+    form.elements.login.placeholder = "Ключ / логин";
+    form.elements.secret.placeholder = "Секрет / пароль";
+    updateIntegrationForm();
+};
+$("#checkCdek").onclick = async (event) => {
+    event.target.disabled = true;
+    try {
+        await apiJson("/api/admin/integrations/cdek/check", {
+            method: "POST",
+            timeoutMs: 30000,
+            headers: { "Content-Type": "application/json" },
+            body: "{}",
+        });
+        toast("Авторизация и расчёт СДЭК прошли проверку");
+    } catch (error) {
+        toast(error.message, true);
+    } finally {
+        event.target.disabled = false;
+    }
+};
 $("#configured").onclick = async (event) => {
     const edit = event.target.closest("[data-edit-integration]");
     if (edit) {
@@ -634,6 +800,8 @@ $("#configured").onclick = async (event) => {
         form.elements.editing.value = item.provider;
         form.elements.kind.value = item.kind;
         form.elements.provider.value = item.provider;
+        integrationKind.disabled = true;
+        integrationProvider.disabled = true;
         form.elements.name.value = item.public_config.name || "";
         form.elements.environment.value =
             item.public_config.environment || "test";
@@ -673,8 +841,16 @@ $("#configured").onclick = async (event) => {
             true,
         );
 };
-$("#search").oninput = renderProducts;
-$("#categoryFilter").onchange = renderProducts;
+let searchTimer;
+$("#search").oninput = () => {
+    clearTimeout(searchTimer);
+    searchTimer = setTimeout(
+        () => loadProductsPage().catch((e) => toast(e.message, true)),
+        300,
+    );
+};
+$("#categoryFilter").onchange = () =>
+    loadProductsPage().catch((e) => toast(e.message, true));
 $("#refresh").onclick = load;
 document.querySelectorAll("[data-open-review]").forEach((button) => {
     button.onclick = () => {
@@ -698,9 +874,9 @@ $("#reviewForm").onsubmit = async (event) => {
         .filter(Boolean);
     try {
         await apiJson(
-            "/api/admin/reviews",
+            "/api/admin/reviews" + (data.id ? "/" + data.id : ""),
             {
-                method: "POST",
+                method: data.id ? "PUT" : "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(data),
             },
@@ -717,4 +893,227 @@ $("#logout").onclick = async () => {
     await fetch("/api/admin/logout", { method: "POST" });
     location.replace("/admin");
 };
+$("#reviewRows").onclick = async (event) => {
+    const edit = event.target.closest("[data-edit-review]"),
+        remove = event.target.closest("[data-delete-review]");
+    try {
+        if (edit) {
+            const row = await apiJson(
+                "/api/admin/reviews/" + edit.dataset.editReview,
+            );
+            const form = $("#reviewForm");
+            form.reset();
+            for (const key of ["id", "author", "title", "body", "rating"])
+                form.elements[key].value = row[key];
+            form.elements.images.value = row.images.join("\n");
+            form.elements.is_published.checked = row.is_published;
+            $("#reviewDialog").showModal();
+        }
+        if (remove && confirm("Удалить отзыв и его фотографии?")) {
+            await apiJson("/api/admin/reviews/" + remove.dataset.deleteReview, {
+                method: "DELETE",
+            });
+            await loadReviews();
+            toast("Отзыв удалён");
+        }
+    } catch (error) {
+        toast(error.message, true);
+    }
+};
+async function promoProducts(query = "") {
+    const page = await apiJson(
+        "/api/admin/catalog?limit=100&q=" + encodeURIComponent(query),
+    );
+    const select = $("#promoProduct"),
+        previous = select.value;
+    select.innerHTML =
+        '<option value="">Выберите товар</option>' +
+        page.items
+            .map(
+                (p) =>
+                    `<option value="${p.id}">#${p.id} · ${esc(p.name)}</option>`,
+            )
+            .join("");
+    if ([...select.options].some((o) => o.value === previous))
+        select.value = previous;
+}
+async function loadPromotions() {
+    promotions = await apiJson("/api/admin/promotions");
+    await promoProducts($("#promoProductSearch").value);
+    $("#promoRows").innerHTML = promotions.length
+        ? promotions
+              .map(
+                  (p) =>
+                      `<div><span><b>${esc(p.code)}</b><small>${esc(p.product_name)} · ${p.discount_type === "percent" ? Number(p.value) + "%" : Number(p.value) + " ₽"} · ${p.enabled ? "Активен" : "Выключен"}</small><small>Резервы и применения: ${p.uses}${p.max_uses ? " / " + p.max_uses : ""}</small></span><span><button class="icon-btn" data-edit-promo="${p.id}">Изменить</button><button class="icon-btn danger" data-delete-promo="${p.id}">Удалить</button></span></div>`,
+              )
+              .join("")
+        : '<p class="empty-admin">Создайте первый промокод. Он начнёт действовать сразу после сохранения.</p>';
+}
+let promoTimer;
+$("#promoProductSearch").oninput = (event) => {
+    clearTimeout(promoTimer);
+    promoTimer = setTimeout(
+        () =>
+            promoProducts(event.target.value).catch((e) =>
+                toast(e.message, true),
+            ),
+        300,
+    );
+};
+$("#resetPromo").onclick = () => {
+    $("#promoForm").reset();
+    $("#promoForm").elements.id.value = "";
+    $("#promoTitle").textContent = "Новый промокод";
+};
+$("#promoRows").onclick = async (event) => {
+    const edit = event.target.closest("[data-edit-promo]"),
+        remove = event.target.closest("[data-delete-promo]");
+    try {
+        if (edit) {
+            const row = promotions.find(
+                    (p) => p.id === Number(edit.dataset.editPromo),
+                ),
+                form = $("#promoForm");
+            form.reset();
+            $("#promoTitle").textContent = "Редактирование промокода";
+            if (
+                ![...$("#promoProduct").options].some(
+                    (o) => o.value === String(row.product_id),
+                )
+            )
+                $("#promoProduct").add(
+                    new Option(row.product_name, row.product_id),
+                );
+            for (const key of [
+                "id",
+                "code",
+                "product_id",
+                "discount_type",
+                "value",
+                "max_uses",
+            ])
+                form.elements[key].value = row[key] ?? "";
+            form.elements.enabled.checked = row.enabled;
+            for (const key of ["starts_at", "ends_at"]) {
+                if (row[key]) {
+                    const date = new Date(row[key]);
+                    form.elements[key].value = new Date(
+                        date.getTime() - date.getTimezoneOffset() * 60000,
+                    )
+                        .toISOString()
+                        .slice(0, 16);
+                }
+            }
+            form.scrollIntoView({ behavior: "smooth" });
+        }
+        if (
+            remove &&
+            confirm("Удалить промокод? История заказов сохранится.")
+        ) {
+            await apiJson(
+                "/api/admin/promotions/" + remove.dataset.deletePromo,
+                { method: "DELETE" },
+            );
+            await loadPromotions();
+            toast("Промокод удалён");
+        }
+    } catch (error) {
+        toast(error.message, true);
+    }
+};
+$("#promoForm").onsubmit = async (event) => {
+    event.preventDefault();
+    const form = event.target,
+        data = Object.fromEntries(new FormData(form)),
+        button = form.querySelector(".primary");
+    data.enabled = form.elements.enabled.checked;
+    for (const key of ["starts_at", "ends_at"])
+        data[key] = data[key] ? new Date(data[key]).toISOString() : null;
+    button.disabled = true;
+    try {
+        await apiJson(
+            "/api/admin/promotions" + (data.id ? "/" + data.id : ""),
+            {
+                method: data.id ? "PUT" : "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(data),
+            },
+        );
+        $("#resetPromo").click();
+        await loadPromotions();
+        toast("Промокод сохранён");
+    } catch (error) {
+        toast(error.message, true);
+    } finally {
+        button.disabled = false;
+    }
+};
+async function loadLoyalty() {
+    const data = await apiJson("/api/admin/loyalty");
+    for (const key of ["earn_percent", "redeem_percent"])
+        $("#loyaltyForm").elements[key].value = data[key];
+}
+$("#loyaltyForm").onsubmit = async (event) => {
+    event.preventDefault();
+    const button = event.target.querySelector("button");
+    button.disabled = true;
+    try {
+        await apiJson("/api/admin/loyalty", {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(
+                Object.fromEntries(new FormData(event.target)),
+            ),
+        });
+        toast("Правила лояльности сохранены");
+    } catch (error) {
+        toast(error.message, true);
+    } finally {
+        button.disabled = false;
+    }
+};
+async function loadOrders() {
+    const rows = await apiJson("/api/admin/orders");
+    $("#orderRows").innerHTML = rows.length
+        ? rows
+              .map(
+                  (row) =>
+                      `<form class="order-card" data-order-id="${esc(row.id)}"><div class="order-card-head"><div><b>Заказ ${esc(String(row.id).slice(0, 8))}</b><small>${new Date(row.created_at).toLocaleString("ru")} · ${esc(row.customer_email)}</small></div><strong>${Number(row.total).toLocaleString("ru")} ₽</strong><span class="pill">${esc({ CONFIRMED: "Оплачен", NEW: "Ожидает оплаты", REFUNDED: "Возврат", CANCELED: "Отменён" }[row.status] || row.status)}</span></div><p>${esc(row.customer_details.name || "")} · ${esc(row.customer_details.phone || "")}</p><p>${esc(row.delivery_details.pvz?.address || row.delivery_details.cityFullName || (row.delivery_details.type === "pickup" ? "Самовывоз" : ""))}</p><p>${esc(row.customer_details.comment || "")}</p><div class="order-edit"><label>Сборка<select name="fulfillment">${[
+                          ["new", "Новый"],
+                          ["packing", "Собираем"],
+                          ["shipped", "Отправлен"],
+                          ["delivered", "Доставлен"],
+                      ]
+                          .map(
+                              ([value, title]) =>
+                                  `<option value="${value}" ${row.fulfillment === value ? "selected" : ""}>${title}</option>`,
+                          )
+                          .join(
+                              "",
+                          )}</select></label><label>Трек-номер<input name="tracking_number" maxlength="120" value="${esc(row.tracking_number)}"></label><button class="button secondary">Сохранить</button></div></form>`,
+              )
+              .join("")
+        : '<p class="empty-admin">Заказов пока нет. Здесь появятся покупки после начала оформления.</p>';
+}
+$("#orderRows").onsubmit = async (event) => {
+    const form = event.target.closest("[data-order-id]");
+    if (!form) return;
+    event.preventDefault();
+    const button = form.querySelector("button");
+    button.disabled = true;
+    try {
+        await apiJson("/api/admin/orders/" + form.dataset.orderId, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(Object.fromEntries(new FormData(form))),
+        });
+        toast("Заказ обновлён");
+    } catch (error) {
+        toast(error.message, true);
+    } finally {
+        button.disabled = false;
+    }
+};
+$("#refreshOrders").onclick = () =>
+    loadOrders().catch((e) => toast(e.message, true));
 load();

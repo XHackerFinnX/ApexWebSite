@@ -2,14 +2,17 @@ import json
 from pathlib import Path
 
 import psycopg
-from psycopg.types.json import Jsonb
 from psycopg.rows import dict_row
+from psycopg.types.json import Jsonb
+from psycopg_pool import ConnectionPool
 
 from store.domain import Integration, Product
+from store.infrastructure.commerce_repo import CommerceRepository
+from store.infrastructure.media import normalize_product_media, store_image
 from store.infrastructure.security import SecretBox
 
 
-class PostgreSQLRepository:
+class PostgreSQLRepository(CommerceRepository):
     """PostgreSQL implementation of the application repository port."""
 
     def __init__(
@@ -21,18 +24,39 @@ class PostgreSQLRepository:
             connection,
             box,
         )
+        kwargs = {"row_factory": dict_row, "connect_timeout": 5}
+        if isinstance(connection, dict):
+            kwargs.update(connection)
+        self.pool = ConnectionPool(
+            connection if isinstance(connection, str) else "",
+            kwargs=kwargs,
+            min_size=1,
+            max_size=8,
+            timeout=5,
+            open=True,
+        )
         if migrate:
             self.migrate()
 
     def _db(self):
-        if isinstance(self.connection, str):
-            return self._psycopg.connect(self.connection, row_factory=self._dict_row)
-        return self._psycopg.connect(**self.connection, row_factory=self._dict_row)
+        return self.pool.connection()
 
     def migrate(self) -> None:
-        sql = (Path(__file__).parents[2] / "migrations" / "001_init.sql").read_text()
         with self._db() as db:
-            db.execute(sql)
+            db.execute("SELECT pg_advisory_xact_lock(726415300)")
+            db.execute(
+                "CREATE TABLE IF NOT EXISTS schema_migrations(name TEXT PRIMARY KEY, applied_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+            )
+            for path in sorted(
+                (Path(__file__).parents[2] / "migrations").glob("*.sql")
+            ):
+                if not db.execute(
+                    "SELECT 1 FROM schema_migrations WHERE name=%s", (path.name,)
+                ).fetchone():
+                    db.execute(path.read_text())
+                    db.execute(
+                        "INSERT INTO schema_migrations(name) VALUES(%s)", (path.name,)
+                    )
 
     @staticmethod
     def _product(row) -> Product:
@@ -76,7 +100,88 @@ class PostgreSQLRepository:
             row = db.execute(query, (product_id,)).fetchone()
             return self._product(row) if row else None
 
+    def catalog_page(
+        self,
+        include_inactive=False,
+        limit=24,
+        offset=0,
+        search="",
+        category="",
+        size="",
+        sort="featured",
+    ):
+        limit, offset = min(max(int(limit), 1), 100), max(int(offset), 0)
+        where, args = ([] if include_inactive else ["p.is_active=true"]), []
+        if search:
+            where.append("(p.name ILIKE %s OR c.name ILIKE %s)")
+            args.extend(["%" + str(search)[:100] + "%"] * 2)
+        if category and category != "all":
+            where.append("c.name=%s")
+            args.append(category)
+        if size and size != "all":
+            where.append(
+                "EXISTS(SELECT 1 FROM product_sizes ps WHERE ps.product_id=p.id AND ps.size=%s)"
+            )
+            args.append(size)
+        clause = " WHERE " + " AND ".join(where) if where else ""
+        ordering = {
+            "price-asc": "p.price ASC,p.id DESC",
+            "price-desc": "p.price DESC,p.id DESC",
+            "featured": "(p.cart_adds*3+p.views) DESC,p.id DESC",
+            "discount": "COALESCE((SELECT max((v->>'old_price')::numeric-(v->>'price')::numeric) FROM jsonb_array_elements(p.variants) v WHERE v->>'old_price' ~ '^[0-9]+([.][0-9]+)?$'),0) DESC,p.id DESC",
+        }.get(sort, "p.id DESC")
+        with self._db() as db:
+            total = db.execute(
+                "SELECT count(*) AS n FROM products p JOIN categories c ON c.id=p.category_id"
+                + clause,
+                args,
+            ).fetchone()["n"]
+            rows = list(
+                db.execute(
+                    """SELECT p.id,p.name,left(p.description,240) AS description,p.price,c.name AS category,
+                p.stock,p.views,p.cart_adds,p.color,p.is_active,p.is_new,p.image_url,p.images[1:2] AS images,
+                COALESCE((SELECT jsonb_agg(v-'images') FROM jsonb_array_elements(p.variants) v),'[]') AS variants,
+                ARRAY(SELECT ps.size FROM product_sizes ps WHERE ps.product_id=p.id ORDER BY ps.size) AS sizes
+                FROM products p JOIN categories c ON c.id=p.category_id"""
+                    + clause
+                    + " ORDER BY "
+                    + ordering
+                    + " LIMIT %s OFFSET %s",
+                    args + [limit, offset],
+                ).fetchall()
+            )
+            categories = list(
+                db.execute(
+                    "SELECT c.name FROM categories c WHERE EXISTS(SELECT 1 FROM products p WHERE p.category_id=c.id"
+                    + ("" if include_inactive else " AND p.is_active")
+                    + ") ORDER BY c.name"
+                ).fetchall()
+            )
+            sizes = [
+                r["size"]
+                for r in db.execute(
+                    "SELECT DISTINCT ps.size FROM product_sizes ps JOIN products p ON p.id=ps.product_id"
+                    + ("" if include_inactive else " WHERE p.is_active")
+                    + " ORDER BY ps.size"
+                ).fetchall()
+            ]
+        return {
+            "items": rows,
+            "total": total,
+            "limit": limit,
+            "offset": offset,
+            "categories": [c["name"] for c in categories],
+            "sizes": sizes,
+        }
+
+    def catalog_stats(self):
+        with self._db() as db:
+            return db.execute(
+                "SELECT count(*) AS count,COALESCE(sum(views),0) AS views,COALESCE(sum(cart_adds),0) AS adds,count(*) FILTER(WHERE stock<5) AS low_stock FROM products"
+            ).fetchone()
+
     def save_product(self, product: Product) -> Product:
+        normalize_product_media(product)
         with self._db() as db:
             category_id = db.execute(
                 """INSERT INTO categories(name,slug) VALUES(%s,%s)
@@ -114,17 +219,23 @@ class PostgreSQLRepository:
             with db.cursor() as cursor:
                 cursor.executemany(
                     "INSERT INTO product_sizes(product_id,size) VALUES(%s,%s)",
-                    [(product.id, size) for size in product.sizes],
+                    [(product.id, size) for size in dict.fromkeys(product.sizes)],
                 )
         return product
 
     def delete_product(self, product_id: int) -> bool:
         with self._db() as db:
+            if db.execute(
+                "SELECT 1 FROM order_items WHERE product_id=%s LIMIT 1", (product_id,)
+            ).fetchone():
+                raise ValueError(
+                    "Товар есть в заказах. Снимите его с публикации, чтобы сохранить историю"
+                )
             return (
                 db.execute("DELETE FROM products WHERE id=%s", (product_id,)).rowcount
                 > 0
             )
-    
+
     def list_categories(self) -> list[dict[str, object]]:
         with self._db() as db:
             return list(
@@ -134,7 +245,7 @@ class PostgreSQLRepository:
                        GROUP BY c.id ORDER BY c.name"""
                 ).fetchall()
             )
-            
+
     def list_reviews(self, limit: int = 10, offset: int = 0) -> dict[str, object]:
         """Return a lightweight review page; media is intentionally loaded separately."""
         limit = min(max(int(limit), 1), 50)
@@ -159,17 +270,22 @@ class PostgreSQLRepository:
             ).fetchone()
             if not published:
                 raise LookupError("Отзыв не найден")
-            return list(db.execute(
-                """SELECT id,image_url,alt_text FROM review_images
-                   WHERE review_id=%s ORDER BY position,id""", (review_id,)
-            ).fetchall())
-            
+            return list(
+                db.execute(
+                    """SELECT id,image_url,alt_text FROM review_images
+                   WHERE review_id=%s ORDER BY position,id""",
+                    (review_id,),
+                ).fetchall()
+            )
+
     def list_admin_reviews(self) -> list[dict[str, object]]:
         with self._db() as db:
-            return list(db.execute(
-                """SELECT id,author,title,body,rating,is_published,created_at
+            return list(
+                db.execute(
+                    """SELECT id,author,title,body,rating,is_published,created_at
                    FROM reviews ORDER BY created_at DESC,id DESC"""
-            ).fetchall())
+                ).fetchall()
+            )
 
     def save_review(self, data: dict[str, object]) -> dict[str, object]:
         author = str(data.get("author", "")).strip()
@@ -180,22 +296,87 @@ class PostgreSQLRepository:
         if rating not in range(1, 6):
             raise ValueError("Оценка должна быть от 1 до 5")
         with self._db() as db:
-            row = db.execute(
-                """INSERT INTO reviews(author,title,body,rating,is_published)
+            review_id = int(data.get("id") or 0)
+            if review_id:
+                row = db.execute(
+                    "UPDATE reviews SET author=%s,title=%s,body=%s,rating=%s,is_published=%s WHERE id=%s RETURNING id,author,title,body,rating,is_published,created_at",
+                    (
+                        author,
+                        str(data.get("title", "")).strip(),
+                        body,
+                        rating,
+                        bool(data.get("is_published")),
+                        review_id,
+                    ),
+                ).fetchone()
+                if not row:
+                    raise LookupError("Отзыв не найден")
+                db.execute("DELETE FROM review_images WHERE review_id=%s", (review_id,))
+            else:
+                row = db.execute(
+                    """INSERT INTO reviews(author,title,body,rating,is_published)
                    VALUES(%s,%s,%s,%s,%s)
                    RETURNING id,author,title,body,rating,is_published,created_at""",
-                (author, str(data.get("title", "")).strip(), body, rating,
-                 bool(data.get("is_published", True))),
-            ).fetchone()
+                    (
+                        author,
+                        str(data.get("title", "")).strip(),
+                        body,
+                        rating,
+                        bool(data.get("is_published", True)),
+                    ),
+                ).fetchone()
             for position, image_url in enumerate(data.get("images", []) or []):
                 image_url = str(image_url).strip()
                 if image_url:
                     db.execute(
                         """INSERT INTO review_images(review_id,image_url,alt_text,position)
                            VALUES(%s,%s,%s,%s)""",
-                        (row["id"], image_url, f"Фото от {author}", position),
+                        (
+                            row["id"],
+                            store_image(image_url),
+                            f"Фото от {author}",
+                            position,
+                        ),
                     )
             return row
+
+    def admin_review(self, review_id):
+        with self._db() as db:
+            row = db.execute(
+                "SELECT * FROM reviews WHERE id=%s", (review_id,)
+            ).fetchone()
+            if not row:
+                raise LookupError("Отзыв не найден")
+            row["images"] = [
+                r["image_url"]
+                for r in db.execute(
+                    "SELECT image_url FROM review_images WHERE review_id=%s ORDER BY position,id",
+                    (review_id,),
+                ).fetchall()
+            ]
+            return row
+
+    def delete_review(self, review_id):
+        with self._db() as db:
+            return (
+                db.execute("DELETE FROM reviews WHERE id=%s", (review_id,)).rowcount > 0
+            )
+
+    def update_category(self, category_id, name):
+        name = str(name).strip()
+        if not name or len(name) > 120:
+            raise ValueError("Название категории должно содержать от 1 до 120 символов")
+        try:
+            with self._db() as db:
+                row = db.execute(
+                    "UPDATE categories SET name=%s,slug=%s WHERE id=%s RETURNING id,name,slug",
+                    (name, self._slug(name), category_id),
+                ).fetchone()
+                if not row:
+                    raise LookupError("Категория не найдена")
+                return row
+        except psycopg.errors.UniqueViolation as exc:
+            raise ValueError("Категория с таким названием уже существует") from exc
 
     def save_category(self, name: str) -> dict[str, object]:
         name = name.strip()
@@ -217,11 +398,11 @@ class PostgreSQLRepository:
                 (category_id,),
             ).fetchone()["count"]
             if used:
-                raise ValueError(
-                    f"Нельзя удалить категорию: в ней товаров — {used}"
-                )
+                raise ValueError(f"Нельзя удалить категорию: в ней товаров — {used}")
             return (
-                db.execute("DELETE FROM categories WHERE id=%s", (category_id,)).rowcount
+                db.execute(
+                    "DELETE FROM categories WHERE id=%s", (category_id,)
+                ).rowcount
                 > 0
             )
 
@@ -274,59 +455,38 @@ class PostgreSQLRepository:
                     integration.kind,
                     integration.enabled,
                     json.dumps(integration.public_config),
-                    json.dumps(secrets),
+                    json.dumps({**(old["secret_config"] if old else {}), **secrets}),
                 ),
             )
-    
+
     def delete_integration(self, provider: str) -> bool:
         with self._db() as db:
-            return db.execute(
-                "DELETE FROM integrations WHERE provider=%s", (provider,)
-            ).rowcount > 0
+            return (
+                db.execute(
+                    "DELETE FROM integrations WHERE provider=%s", (provider,)
+                ).rowcount
+                > 0
+            )
 
-    def get_integration_config(self, provider: str, enabled_only: bool = True) -> dict[str, object] | None:
+    def get_integration_config(
+        self, provider: str, enabled_only: bool = True
+    ) -> dict[str, object] | None:
         """Return an enabled provider configuration, decrypting secrets server-side."""
         with self._db() as db:
             row = db.execute(
-                "SELECT public_config,secret_config FROM integrations WHERE provider=%s" + (" AND enabled=true" if enabled_only else ""),
+                "SELECT public_config,secret_config FROM integrations WHERE provider=%s"
+                + (" AND enabled=true" if enabled_only else ""),
                 (provider,),
             ).fetchone()
         if not row:
             return None
         return {
             **row["public_config"],
-            **{key: self.box.decrypt(value) for key, value in row["secret_config"].items()},
+            **{
+                key: self.box.decrypt(value)
+                for key, value in row["secret_config"].items()
+            },
         }
-        
-    def create_order(self, order: dict[str, object], items: list[dict[str, object]]) -> dict[str, object]:
-        with self._db() as db:
-            row = db.execute(
-                """INSERT INTO orders(id,status,customer_email,total,payment_provider,idempotency_key)
-                   VALUES(%s,%s,%s,%s,%s,%s)
-                   ON CONFLICT(idempotency_key) DO UPDATE SET idempotency_key=excluded.idempotency_key
-                   RETURNING *""",
-                (order["id"], order["status"], order["customer_email"], order["total"], order["payment_provider"], order["idempotency_key"]),
-            ).fetchone()
-            if str(row["id"]) == str(order["id"]):
-                with db.cursor() as cursor:
-                    cursor.executemany(
-                        "INSERT INTO order_items(order_id,product_id,size,quantity,unit_price) VALUES(%s,%s,%s,%s,%s)",
-                        [(order["id"], item["product_id"], item["size"] or None, item["quantity"], item["unit_price"]) for item in items],
-                    )
-            return dict(row)
-
-    def set_order_payment(self, order_id: str, payment_id: str, status: str) -> None:
-        with self._db() as db:
-            db.execute("UPDATE orders SET external_payment_id=%s,status=%s,updated_at=now() WHERE id=%s", (payment_id, status, order_id))
-
-    def update_order_by_payment(self, payment_id: str, status: str) -> bool:
-        with self._db() as db:
-            return db.execute("UPDATE orders SET status=%s,updated_at=now() WHERE external_payment_id=%s", (status, payment_id)).rowcount > 0
-
-    def get_order(self, order_id: str) -> dict[str, object] | None:
-        with self._db() as db:
-            row = db.execute("SELECT id,status,total,created_at FROM orders WHERE id=%s", (order_id,)).fetchone()
-            return dict(row) if row else None
 
     @staticmethod
     def _slug(value: str) -> str:

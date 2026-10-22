@@ -4,7 +4,8 @@
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <title>Apex Admin</title>
-        <link rel="stylesheet" href="admin.css" />
+        <link rel="stylesheet" href="/admin.css?v=2" />
+        <link rel="stylesheet" href="/admin-v2.css?v=2" />
     </head>
     <body>
         <div class="admin-shell">
@@ -19,6 +20,10 @@
                         ▤ <span>Заказы</span></button
                     ><button class="nav-item" data-tab="reviews">
                         ★ <span>Отзывы</span></button
+                    ><button class="nav-item" data-tab="promotions">
+                        ％ <span>Промокоды</span></button
+                    ><button class="nav-item" data-tab="loyalty">
+                        ◎ <span>Лояльность</span></button
                     ><button class="nav-item" data-tab="settings">
                         ⚙ <span>Интеграции</span>
                     </button>
@@ -133,7 +138,7 @@
                         <select id="categoryFilter">
                             <option value="">Все категории</option></select
                         ><button class="button secondary" data-open-categories>
-                            + Добавить / удалить категорию</button
+                            + Категории</button
                         ><button class="button secondary" id="refresh">
                             ↻ Обновить
                         </button>
@@ -166,25 +171,160 @@
                     </section>
                 </section>
                 <section class="tab" id="orders">
-                    <div class="empty-state">
-                        <b>▤</b>
-                        <h2>Управление заказами</h2>
-                        <p>
-                            Раздел подготовлен для подключения оформления
-                            заказов. Здесь появятся статусы, покупатели и
-                            отгрузки.
-                        </p>
+                    <div class="section-intro">
                         <div>
-                            <button class="button secondary">
-                                Экспорт заказов</button
-                            ><button
-                                class="button secondary"
-                                data-go="settings"
-                            >
-                                Настроить оплату
-                            </button>
+                            <p class="eyebrow">ОТ ПОКУПКИ ДО ВЫДАЧИ</p>
+                            <h2>Заказы и отправления</h2>
+                            <p>
+                                Оплату подтверждает банк. Здесь можно изменить
+                                этап сборки и добавить трек-номер.
+                            </p>
+                        </div>
+                        <button class="button secondary" id="refreshOrders">
+                            Обновить
+                        </button>
+                    </div>
+                    <div id="orderRows" class="order-list">
+                        <p>Откройте раздел для загрузки заказов.</p>
+                    </div>
+                </section>
+                <section class="tab" id="promotions">
+                    <div class="section-intro">
+                        <div>
+                            <p class="eyebrow">ТОЧНОЕ ПОПАДАНИЕ</p>
+                            <h2>Промокод на конкретный товар</h2>
+                            <p>
+                                Скидка применяется на сервере только к
+                                выбранному товару, во всех его размерах и
+                                цветах.
+                            </p>
                         </div>
                     </div>
+                    <div class="settings-grid">
+                        <section class="panel">
+                            <form id="promoForm" class="integration-form">
+                                <input type="hidden" name="id" />
+                                <h3 id="promoTitle">Новый промокод</h3>
+                                <label
+                                    >Код<input
+                                        name="code"
+                                        required
+                                        minlength="3"
+                                        maxlength="40"
+                                        pattern="[A-Za-z0-9_-]+"
+                                        placeholder="APEX-HOODIE" /></label
+                                ><label
+                                    >Найти товар<input
+                                        id="promoProductSearch"
+                                        placeholder="Начните вводить название"
+                                        type="search" /></label
+                                ><label
+                                    >Товар<select
+                                        name="product_id"
+                                        id="promoProduct"
+                                        required
+                                    >
+                                        <option value="">Выберите товар</option>
+                                    </select></label
+                                >
+                                <div class="form-grid">
+                                    <label
+                                        >Тип скидки<select name="discount_type">
+                                            <option value="percent">
+                                                Проценты
+                                            </option>
+                                            <option value="fixed">Рубли</option>
+                                        </select></label
+                                    ><label
+                                        >Размер скидки<input
+                                            name="value"
+                                            type="number"
+                                            min="0.01"
+                                            step="0.01"
+                                            required /></label
+                                    ><label
+                                        >Начало (ваше время)<input
+                                            name="starts_at"
+                                            type="datetime-local" /></label
+                                    ><label
+                                        >Окончание (ваше время)<input
+                                            name="ends_at"
+                                            type="datetime-local" /></label
+                                    ><label
+                                        >Лимит применений<input
+                                            name="max_uses"
+                                            type="number"
+                                            min="1"
+                                            placeholder="Без ограничений" /></label
+                                    ><label class="check"
+                                        ><input
+                                            name="enabled"
+                                            type="checkbox"
+                                            checked
+                                        />Активен</label
+                                    >
+                                </div>
+                                <div class="form-actions">
+                                    <button class="button primary">
+                                        Сохранить промокод</button
+                                    ><button
+                                        type="button"
+                                        class="button secondary"
+                                        id="resetPromo"
+                                    >
+                                        Новый промокод
+                                    </button>
+                                </div>
+                            </form>
+                        </section>
+                        <section class="panel">
+                            <div class="panel-head">
+                                <h3>Действующие и архивные</h3>
+                            </div>
+                            <div id="promoRows" class="configured"></div>
+                        </section>
+                    </div>
+                </section>
+                <section class="tab" id="loyalty">
+                    <div class="section-intro">
+                        <div>
+                            <p class="eyebrow">APEX MEMBERS CLUB</p>
+                            <h2>Лояльность без ручного подсчёта</h2>
+                            <p>
+                                1 балл = 1 ₽. Начисление происходит после
+                                подтверждённой оплаты, доставка не участвует в
+                                расчёте.
+                            </p>
+                        </div>
+                    </div>
+                    <section class="panel loyalty-settings">
+                        <form id="loyaltyForm" class="integration-form">
+                            <label
+                                >Начислять от стоимости товаров, %<input
+                                    type="number"
+                                    name="earn_percent"
+                                    min="0"
+                                    max="100"
+                                    required /></label
+                            ><label
+                                >Оплачивать баллами до, %<input
+                                    type="number"
+                                    name="redeem_percent"
+                                    min="0"
+                                    max="100"
+                                    required
+                            /></label>
+                            <p class="form-help">
+                                Лимит списания считается после промокода.
+                                Изменения применяются к новым заказам. При
+                                отмене или полном возврате баллы компенсируются
+                                автоматически.
+                            </p>
+                            <button class="button primary">
+                                Сохранить правила
+                            </button>
+                        </form>
+                    </section>
                 </section>
                 <section class="tab" id="reviews">
                     <div class="toolbar">
@@ -404,6 +544,21 @@
                                         >Сохранить настройки</span
                                     >
                                 </button>
+                                <button
+                                    type="button"
+                                    class="button secondary"
+                                    id="resetIntegration"
+                                >
+                                    Новая интеграция / отменить изменения
+                                </button>
+                                <button
+                                    type="button"
+                                    class="button secondary"
+                                    id="checkCdek"
+                                    hidden
+                                >
+                                    Проверить сохранённые настройки СДЭК
+                                </button>
                             </form>
                         </section>
                         <section class="panel">
@@ -429,6 +584,10 @@
                     <button type="button" class="close" data-close>×</button>
                 </div>
                 <input name="id" type="hidden" />
+                <p class="editor-guide">
+                    01 Основное → 02 Цвета и фотографии → 03 Размеры и остатки.
+                    Черновик можно сохранить до публикации.
+                </p>
                 <div class="form-grid">
                     <label class="full switch-field"
                         ><input name="is_active" type="checkbox" />
@@ -479,6 +638,31 @@
                         Для каждого цвета добавьте свои фотографии и строки
                         вариантов. Перетаскивайте фото, чтобы изменить порядок.
                     </p>
+                    <div id="simpleProductFields" class="form-grid" hidden>
+                        <p class="form-help full">
+                            Товар с общим остатком: размеры и запас сохраняются
+                            без автоматического преобразования в вариации.
+                        </p>
+                        <label
+                            >Цена, ₽<input
+                                name="price"
+                                type="number"
+                                min="0"
+                                step="0.01"
+                        /></label>
+                        <label
+                            >Общий остаток<input
+                                name="stock"
+                                type="number"
+                                min="0"
+                                step="1"
+                        /></label>
+                        <label class="full"
+                            >Размеры через запятую<input
+                                name="sizes_text"
+                                placeholder="S, M, L"
+                        /></label>
+                    </div>
                     <div id="colorGroups"></div>
                 </section>
                 <div class="dialog-actions">
@@ -490,6 +674,7 @@
         </dialog>
         <dialog id="categoryDialog" class="category-dialog">
             <form id="categoryForm">
+                <input name="id" type="hidden" />
                 <div class="dialog-head">
                     <div>
                         <span class="eyebrow">КАТАЛОГ</span>
@@ -512,6 +697,7 @@
         </dialog>
         <dialog id="reviewDialog">
             <form id="reviewForm">
+                <input name="id" type="hidden" />
                 <div class="dialog-head">
                     <div>
                         <span class="eyebrow">ОТЗЫВЫ</span>
@@ -576,6 +762,6 @@
             </form>
         </dialog>
         <div id="toast" class="toast"></div>
-        <script src="admin.js"></script>
+        <script src="/admin.js?v=2" defer></script>
     </body>
 </html>

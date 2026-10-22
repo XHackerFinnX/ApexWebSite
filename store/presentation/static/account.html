@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <meta name="theme-color" content="#f4f2ee" />
+        <title>Личный кабинет — APEX GRID</title>
+        <link rel="stylesheet" href="/shop.css?v=2" />
+        <script defer src="/account.js?v=2"></script>
+    </head>
+    <body class="account-page">
+        <header class="account-header">
+            <a class="wordmark" href="/">APEX<span>GRID</span></a
+            ><a href="/">← Вернуться в магазин</a>
+        </header>
+        <main class="account-main">
+            <p class="eyebrow">APEX / MEMBERS CLUB</p>
+            <h1>Твой следующий<br />круг начинается здесь.</h1>
+            <p class="account-intro">
+                Заказы, любимые вещи и баллы за каждую оплаченную покупку — в
+                одном месте.
+            </p>
+            <p id="account-message" role="status" aria-live="polite"></p>
+            <section id="auth-panel" class="account-card" hidden>
+                <div class="account-tabs">
+                    <button type="button" data-auth="login" aria-pressed="true">
+                        Войти</button
+                    ><button
+                        type="button"
+                        data-auth="register"
+                        aria-pressed="false"
+                    >
+                        Создать аккаунт
+                    </button>
+                </div>
+                <form id="auth-form">
+                    <label id="register-name" hidden
+                        >Имя<input
+                            name="name"
+                            autocomplete="name"
+                            minlength="2"
+                            maxlength="120" /></label
+                    ><label
+                        >Email<input
+                            name="email"
+                            type="email"
+                            autocomplete="email"
+                            required
+                            maxlength="254" /></label
+                    ><label
+                        >Пароль<input
+                            name="password"
+                            type="password"
+                            autocomplete="current-password"
+                            required
+                            minlength="10"
+                            maxlength="256"
+                    /></label>
+                    <p class="form-note">
+                        Не менее 10 символов. Баллы начисляются после
+                        подтверждения оплаты банком.
+                    </p>
+                    <button class="action-button" id="auth-submit">
+                        Войти
+                    </button>
+                </form>
+            </section>
+            <div id="member-panel" hidden>
+                <section class="loyalty-card">
+                    <div>
+                        <p class="eyebrow">APEX CLUB / ТВОЙ БАЛАНС</p>
+                        <strong id="points-balance">0</strong
+                        ><span>баллов · 1 балл = 1 ₽</span>
+                    </div>
+                    <p id="loyalty-rules"></p>
+                    <a class="action-button" href="/#catalog-filter-title"
+                        >К новым покупкам ↗</a
+                    >
+                </section>
+                <div class="account-columns">
+                    <section class="account-card">
+                        <h2>Мои данные</h2>
+                        <form id="profile-form">
+                            <label
+                                >Имя<input
+                                    name="name"
+                                    required
+                                    minlength="2"
+                                    maxlength="120"
+                                    autocomplete="name" /></label
+                            ><label
+                                >Email<input
+                                    name="email"
+                                    type="email"
+                                    disabled /></label
+                            ><label
+                                >Телефон<input
+                                    name="phone"
+                                    type="tel"
+                                    maxlength="40"
+                                    autocomplete="tel"
+                            /></label>
+                            <details>
+                                <summary>Изменить пароль</summary>
+                                <label
+                                    >Текущий пароль<input
+                                        name="current_password"
+                                        type="password"
+                                        autocomplete="current-password" /></label
+                                ><label
+                                    >Новый пароль<input
+                                        name="new_password"
+                                        type="password"
+                                        minlength="10"
+                                        maxlength="256"
+                                        autocomplete="new-password"
+                                /></label>
+                            </details>
+                            <button class="action-button">
+                                Сохранить данные
+                            </button>
+                        </form>
+                        <button class="text-button" id="account-logout">
+                            Выйти из аккаунта
+                        </button>
+                    </section>
+                    <section class="account-card">
+                        <h2>Движение баллов</h2>
+                        <div id="points-history"></div>
+                        <p class="form-note">
+                            При отмене или полном возврате заказа списанные
+                            баллы возвращаются, начисленные отменяются.
+                        </p>
+                    </section>
+                </div>
+                <section class="account-card">
+                    <div class="account-section-head">
+                        <h2>Мои заказы</h2>
+                        <button
+                            type="button"
+                            class="text-button"
+                            id="account-refresh"
+                        >
+                            Обновить
+                        </button>
+                    </div>
+                    <div id="account-orders"></div>
+                </section>
+            </div>
+            <div id="account-loading" role="status">Загружаем кабинет…</div>
+        </main>
+        <footer class="account-footer">
+            APEX GRID · CREATED FOR THE NEXT LAP
+        </footer>
+    </body>
+</html>
