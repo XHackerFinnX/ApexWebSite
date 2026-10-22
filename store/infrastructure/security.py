@@ -2,6 +2,7 @@ import base64
 import hashlib
 import hmac
 import secrets
+import threading
 
 
 class SecretBox:
@@ -42,8 +43,17 @@ class SecretBox:
 class RateLimiter:
     def __init__(self, limit=120, window=60):
         self.limit, self.window, self.buckets = limit, window, {}
+        self._lock = threading.Lock()
 
     def allow(self, key: str, now: float) -> bool:
+        with self._lock:
+            return self._allow(key, now)
+
+    def _allow(self, key, now):
+        if len(self.buckets) > 4096:
+            self.buckets = {
+                k: v for k, v in self.buckets.items() if v and now - v[-1] < self.window
+            }
         bucket = [t for t in self.buckets.get(key, []) if now - t < self.window]
         if len(bucket) >= self.limit:
             self.buckets[key] = bucket
@@ -51,3 +61,24 @@ class RateLimiter:
         bucket.append(now)
         self.buckets[key] = bucket
         return True
+
+
+def hash_password(password: str) -> str:
+    if len(password) < 10 or len(password) > 256:
+        raise ValueError("Пароль должен содержать от 10 до 256 символов")
+    salt = secrets.token_hex(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode(), salt.encode(), 600_000)
+    return f"pbkdf2_sha256$600000${salt}${digest.hex()}"
+
+
+def verify_password(password: str, encoded: str) -> bool:
+    try:
+        algorithm, rounds, salt, expected = encoded.split("$")
+        if algorithm != "pbkdf2_sha256" or len(password) > 256:
+            return False
+        actual = hashlib.pbkdf2_hmac(
+            "sha256", password.encode(), salt.encode(), int(rounds)
+        ).hex()
+        return hmac.compare_digest(actual, expected)
+    except (ValueError, TypeError):
+        return False

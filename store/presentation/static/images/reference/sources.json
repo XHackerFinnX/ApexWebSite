@@ -1,0 +1,51 @@
+[
+    {
+        "file": "store/presentation/static/images/reference/category-jackets.webp",
+        "source": "https://www.finishlinefever.com/cdn/shop/files/hf_20260224_032559_6378b493-8ce5-48e6-ba53-b0f6fa5b419b.jpg?v=1771903640&width=900"
+    },
+    {
+        "file": "store/presentation/static/images/reference/category-hoodies.webp",
+        "source": "https://www.finishlinefever.com/cdn/shop/files/hf_20260224_033554_f07db371-9f20-4586-af17-70918abc7d26.png?v=1771904379&width=900"
+    },
+    {
+        "file": "store/presentation/static/images/reference/category-bundles.webp",
+        "source": "https://www.finishlinefever.com/cdn/shop/files/hf_20260224_034300_42f51be9-c86e-4ae0-b1c9-e4d97d3327fb.jpg?v=1771904680&width=900"
+    },
+    {
+        "file": "store/presentation/static/images/reference/category-tees.webp",
+        "source": "https://www.finishlinefever.com/cdn/shop/files/hf_20260224_071758_71521b7e-43e0-4891-b02d-a688576e5cfd.jpg?v=1771917611&width=900"
+    },
+    {
+        "file": "store/presentation/static/images/reference/editorial.webp",
+        "source": "https://www.finishlinefever.com/cdn/shop/files/hf_20260224_041350_8edf0c92-e292-46b3-9d81-28e83a7211df.png?v=1771906874&width=1800"
+    },
+    {
+        "file": "store/presentation/static/images/reference/community-1.webp",
+        "source": "https://www.finishlinefever.com/cdn/shop/files/ANASTASIA.NIELSEN.png?v=1771909974&width=900"
+    },
+    {
+        "file": "store/presentation/static/images/reference/community-2.webp",
+        "source": "https://www.finishlinefever.com/cdn/shop/files/6_555c7b70-860d-45e6-aa1d-1d10de65c70d.png?v=1771912135&width=900"
+    },
+    {
+        "file": "store/presentation/static/images/reference/community-3.webp",
+        "source": "https://www.finishlinefever.com/cdn/shop/files/JAYCEE_EXPLORE.png?v=1771909364&width=900"
+    },
+    {
+        "file": "store/presentation/static/images/reference/community-4.webp",
+        "source": "https://www.finishlinefever.com/cdn/shop/files/5_f6325d6b-4cd8-4701-819d-ca8ce42c174b.png?v=1771912134&width=900"
+    },
+    {
+        "file": "store/presentation/static/images/reference/community-5.webp",
+        "source": "https://www.finishlinefever.com/cdn/shop/files/ITSRYANMCALLEF7.png?v=1771910793&width=900"
+    },
+    {
+        "file": "store/presentation/static/images/reference/community-6.webp",
+        "source": "https://www.finishlinefever.com/cdn/shop/files/ALESSIASPOTO.png?v=1771910805&width=900"
+    },
+    {
+        "file": "store/presentation/static/images/reference/editorial-mobile.webp",
+        "source": "https://www.finishlinefever.com/cdn/shop/files/hf_20260224_041350_8edf0c92-e292-46b3-9d81-28e83a7211df.png?v=1771906874&width=1800",
+        "note": "Mobile 900px WebP derivative of editorial.webp"
+    }
+]

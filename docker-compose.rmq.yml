@@ -1,0 +1,17 @@
+# Intentionally separate: normal `docker compose up` never starts RabbitMQ.
+services:
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    profiles: [future-rmq]
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+volumes:
+  rabbitmq_data:

@@ -1,9 +1,8 @@
 from decimal import Decimal, InvalidOperation
 
-from store.application.ports import CaptchaVerifier, StoreRepository
+from store.application.checkout import CheckoutService as CheckoutService
+from store.application.ports import StoreRepository
 from store.domain import Integration, Product
-from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
-from uuid import uuid4
 
 
 class CatalogService:
@@ -21,6 +20,8 @@ class CatalogService:
         self.repo.increment(product_id, metric)
 
     def save(self, data: dict) -> Product:
+        if len(data.get("variants", [])) > 200:
+            raise ValueError("У товара может быть не больше 200 вариаций")
         variants = []
         color_images: dict[str, list[str]] = {}
         for raw in data.get("variants", []):
@@ -31,6 +32,10 @@ class CatalogService:
                 )
             except InvalidOperation as exc:
                 raise ValueError("Некорректная цена вариации") from exc
+            if not variant_price.is_finite() or (
+                old_price is not None and (not old_price.is_finite() or old_price < 0)
+            ):
+                raise ValueError("Некорректная цена вариации")
             variant = {
                 "sku": str(raw.get("sku", "")).strip(),
                 "price": str(variant_price),
@@ -86,6 +91,12 @@ class CatalogService:
         if product.images:
             product.image_url = product.images[0]
         product.validate()
+        keys = [(v["color"], v["size"]) for v in product.variants]
+        skus = [v["sku"] for v in product.variants]
+        if len(keys) != len(set(keys)) or len(skus) != len(set(skus)):
+            raise ValueError(
+                "Размеры внутри цвета и артикулы вариаций должны быть уникальными"
+            )
         return self.repo.save_product(product)
 
 
@@ -118,11 +129,7 @@ class IntegrationService:
         secrets = {
             key: str(data.get(key, "")) for key in secret_fields if data.get(key)
         }
-        if (
-            data.get("enabled")
-            and not secrets
-            and not exists
-        ):
+        if data.get("enabled") and not secrets and not exists and bool(secret_fields):
             raise ValueError("Для включения интеграции заполните реквизиты")
         # API clients predating the display-name field keep a sensible fallback;
         # the administration form requires an explicit customer-facing name.
@@ -131,6 +138,8 @@ class IntegrationService:
             "name": name,
             "environment": str(data.get("environment", "test")),
         }
+        if public["environment"] not in {"test", "production"}:
+            raise ValueError("Выберите тестовую или рабочую среду")
         if provider == "tbank":
             public.update(
                 {
@@ -142,116 +151,88 @@ class IntegrationService:
                 }
             )
         if provider == "cdek" and "name" in data:
-            required = ("contract_type", "tariff_code", "sender_city", "sender_office", "dimension_type", "weight", "length", "width", "height", "cost_type", "dispatch_days")
+            required = (
+                "contract_type",
+                "tariff_code",
+                "sender_city",
+                "sender_office",
+                "dimension_type",
+                "weight",
+                "length",
+                "width",
+                "height",
+                "cost_type",
+                "dispatch_days",
+            )
             missing = [key for key in required if str(data.get(key, "")).strip() == ""]
             if missing:
                 raise ValueError("Заполните все обязательные параметры СДЭК")
             public.update({key: str(data.get(key, "")).strip() for key in required})
-            public.update({
-                "markup": str(data.get("markup", "0") or "0"),
-                "markup_type": str(data.get("markup_type", "fixed")),
-                "insurance": "true" if data.get("insurance") else "false",
-                "free_delivery_from": str(data.get("free_delivery_from", "0") or "0"),
-            })
+            public.update(
+                {
+                    "markup": str(data.get("markup", "0") or "0"),
+                    "markup_type": str(data.get("markup_type", "fixed")),
+                    "insurance": "true" if data.get("insurance") else "false",
+                    "free_delivery_from": str(
+                        data.get("free_delivery_from", "0") or "0"
+                    ),
+                }
+            )
+            for key in (
+                "contract_type",
+                "tariff_code",
+                "sender_city",
+                "weight",
+                "length",
+                "width",
+                "height",
+            ):
+                if not public[key].isdigit() or int(public[key]) < 1:
+                    raise ValueError(
+                        "Коды, вес и размеры СДЭК должны быть положительными числами"
+                    )
+            if (
+                not public["dispatch_days"].isdigit()
+                or int(public["dispatch_days"]) > 90
+            ):
+                raise ValueError("Подготовка отправления: от 0 до 90 дней")
+            if (
+                public["dimension_type"] not in {"shipment", "product"}
+                or public["cost_type"] not in {"free", "calculator"}
+                or public["markup_type"] not in {"fixed", "percent"}
+            ):
+                raise ValueError("Проверьте параметры расчёта СДЭК")
+            try:
+                invalid_amount = any(
+                    not Decimal(public[key]).is_finite() or Decimal(public[key]) < 0
+                    for key in ("markup", "free_delivery_from")
+                )
+            except InvalidOperation as exc:
+                raise ValueError(
+                    "Укажите числовую наценку и порог бесплатной доставки"
+                ) from exc
+            if invalid_amount:
+                raise ValueError(
+                    "Наценка и порог бесплатной доставки не могут быть отрицательными"
+                )
         test_result = None
         if provider == "cdek" and data.get("enabled") and self.cdek:
-            existing = self.repo.get_integration_config("cdek", enabled_only=False) if exists else {}
-            test_result = self.cdek.test_configuration({**(existing or {}), **public, **secrets})
+            existing = (
+                self.repo.get_integration_config("cdek", enabled_only=False)
+                if exists
+                else {}
+            )
+            test_result = self.cdek.test_configuration(
+                {**(existing or {}), **public, **secrets}
+            )
         self.repo.save_integration(
             Integration(provider, kind, bool(data.get("enabled")), public, secrets)
         )
         if provider == "cdek" and self.cdek:
             self.cdek.invalidate_token()
         return {"ok": True, "test": test_result}
-        
+
     def delete(self, provider: str) -> bool:
         if provider not in self.PROVIDERS:
             raise ValueError("Провайдер не поддерживается")
         return self.repo.delete_integration(provider)
-
-
-class CheckoutService:
-    def __init__(self, captcha: CaptchaVerifier, repo=None, tbank=None, public_url=""):
-        self.captcha = captcha
-        self.repo = repo
-        self.tbank = tbank
-        self.public_url = public_url.rstrip("/")
-
-    def confirm_captcha(self, token: str, ip: str) -> str:
-        if not self.captcha.verify(token, ip):
-            raise ValueError("Проверка CAPTCHA не пройдена")
-        return "captcha-approved"
-    
-    def create_payment(self, data: dict) -> dict[str, object]:
-        if not self.repo or not self.tbank:
-            raise ValueError("Платёжный сервис не настроен")
-        if data.get("payment") != "tbank":
-            raise ValueError("Выбранный способ оплаты не поддерживается")
-        config = self.repo.get_integration_config("tbank")
-        if not config:
-            raise ValueError("Оплата через Т-Банк сейчас недоступна")
-        email = str(data.get("customer", {}).get("email", "")).strip()
-        if "@" not in email:
-            raise ValueError("Укажите корректную почту для электронного чека")
-        items, total = [], Decimal("0")
-        for raw in data.get("items", []):
-            product = self.repo.get_product(int(raw.get("product_id", 0)))
-            quantity = int(raw.get("quantity", 0))
-            if not product or not product.is_active or quantity < 1:
-                raise ValueError("В корзине есть недоступный товар")
-            size, color = str(raw.get("size", "")), str(raw.get("color", ""))
-            variant = next(
-                (
-                    v
-                    for v in product.variants
-                    if str(v.get("size", "")) == size
-                    and str(v.get("color", "")) == color
-                ),
-                None,
-            )
-            if product.variants and not variant:
-                raise ValueError(f"Вариация товара «{product.name}» не найдена")
-            price = Decimal(
-                str(variant.get("price") if variant else product.price)
-            ).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
-            if quantity > int(variant.get("stock", 0) if variant else product.stock):
-                raise ValueError(f"Недостаточно товара «{product.name}»")
-            items.append(
-                {
-                    "product_id": product.id,
-                    "name": product.name,
-                    "size": size,
-                    "color": color,
-                    "quantity": quantity,
-                    "unit_price": price,
-                }
-            )
-            total += price * quantity
-        if not items or total <= 0:
-            raise ValueError("Корзина пуста")
-        order_id = str(uuid4())
-        order = self.repo.create_order(
-            {
-                "id": order_id,
-                "status": "NEW",
-                "customer_email": email,
-                "total": total,
-                "payment_provider": "tbank",
-                "idempotency_key": str(data.get("idempotency_key") or uuid4()),
-            },
-            items,
-        )
-        result = self.tbank.init_payment(config, order, items, self.public_url)
-        actual_order_id = str(order["id"])
-        self.repo.set_order_payment(
-            actual_order_id, str(result["PaymentId"]), str(result["Status"])
-        )
-        return {"order_id": actual_order_id, "payment_url": result["PaymentURL"]}
-
-    def accept_tbank_notification(self, data: dict) -> bool:
-        config = self.repo.get_integration_config("tbank") if self.repo else None
-        if not config or not self.tbank.verify_token(data, str(config["password"])):
-            raise ValueError("Некорректная подпись уведомления Т-Банка")
-        return self.repo.update_order_by_payment(
-            str(data.get("PaymentId", "")), str(data.get("Status", ""))
-        )

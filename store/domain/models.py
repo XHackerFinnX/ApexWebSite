@@ -23,16 +23,19 @@ class Product:
     def validate(self) -> None:
         if not self.name.strip():
             raise ValueError("Название товара обязательно")
-        if self.price < 0 or self.stock < 0:
+        if not self.price.is_finite() or self.price < 0 or self.stock < 0:
             raise ValueError("Цена и остаток не могут быть отрицательными")
         for variant in self.variants:
             if not str(variant.get("sku", "")).strip():
                 raise ValueError("Артикул обязателен для каждой вариации")
             if (
-                Decimal(str(variant.get("price", 0))) < 0
+                not Decimal(str(variant.get("price", 0))).is_finite()
+                or Decimal(str(variant.get("price", 0))) < 0
                 or int(variant.get("stock", 0)) < 0
             ):
-                raise ValueError("Цена и количество вариации не могут быть отрицательными")
+                raise ValueError(
+                    "Цена и количество вариации не могут быть отрицательными"
+                )
 
 
 @dataclass(slots=True)

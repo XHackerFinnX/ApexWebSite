@@ -9,8 +9,8 @@ from store.config import Settings, get_settings
 from store.infrastructure.captcha import YandexCaptcha
 from store.infrastructure.cdek import CDEKDelivery
 from store.infrastructure.postgres_repo import PostgreSQLRepository
-from store.infrastructure.tbank import TBankPayment
 from store.infrastructure.security import RateLimiter, SecretBox
+from store.infrastructure.tbank import TBankPayment
 from store.presentation.web import WebApp
 
 
@@ -29,6 +29,7 @@ def create_app(settings: Settings | None = None):
             repo,
             TBankPayment(config.TBANK_CA_CERT),
             config.WEBAPP_URL,
+            delivery,
         ),
         repo,
         RateLimiter(),

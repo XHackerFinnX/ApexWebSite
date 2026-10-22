@@ -388,7 +388,7 @@ class StoreTests(unittest.TestCase):
         self.assertFalse(limiter.allow("ip", 2))
         
     def test_initial_migration_seed_categories_are_idempotent_by_slug(self):
-        migration = Path("migrations/001_init.sql").read_text(encoding="utf-8")
+        migration = Path("migrations/003_default_categories.sql").read_text(encoding="utf-8")
         self.assertIn("ON CONFLICT (slug) DO UPDATE", migration)
         self.assertNotIn("ON CONFLICT (name) DO NOTHING", migration)
 
