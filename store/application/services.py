@@ -116,6 +116,30 @@ class IntegrationService:
     def list(self):
         return self.repo.list_integrations()
 
+    def cdek_lookup_config(self, data):
+        """Use draft credentials without persisting them or returning saved secrets."""
+        saved = (
+            self.repo.get_integration_config("cdek", enabled_only=False)
+            if data.get("use_saved") is True
+            else None
+        ) or {}
+        config = {
+            "environment": str(
+                data.get("environment") or saved.get("environment") or "test"
+            ),
+            **{
+                key: str(data.get(key) or saved.get(key) or "").strip()
+                for key in ("client_id", "client_secret")
+            },
+        }
+        if config["environment"] not in {"test", "production"}:
+            raise ValueError("Выберите тестовую или рабочую среду СДЭК")
+        if not config["client_id"] or not config["client_secret"]:
+            raise ValueError(
+                "Сначала укажите ID и Secret СДЭК, затем выберите город отправителя"
+            )
+        return config
+
     def configure(self, data: dict, *, update: bool = False) -> dict[str, object]:
         provider = str(data.get("provider", ""))
         if provider not in self.PROVIDERS:
@@ -168,6 +192,12 @@ class IntegrationService:
             if missing:
                 raise ValueError("Заполните все обязательные параметры СДЭК")
             public.update({key: str(data.get(key, "")).strip() for key in required})
+            public.update(
+                {
+                    key: str(data.get(key) or "").strip()[:500]
+                    for key in ("sender_city_name", "sender_office_name")
+                }
+            )
             public.update(
                 {
                     "markup": str(data.get("markup", "0") or "0"),

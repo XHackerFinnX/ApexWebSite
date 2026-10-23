@@ -138,7 +138,11 @@ class CDEKDeliveryTests(unittest.TestCase):
         calculation_response.__enter__.return_value.read.return_value = json.dumps(
             {"total_sum": 420}
         ).encode()
-        mocked_urlopen.side_effect = [token_response, calculation_response]
+        city_response = unittest.mock.MagicMock()
+        city_response.__enter__.return_value.read.return_value = json.dumps(
+            [{"code": 44, "city": "Москва", "country": "Россия"}]
+        ).encode()
+        mocked_urlopen.side_effect = [token_response, city_response, calculation_response]
 
         result = self.delivery.test_configuration({
             "environment": "test", "client_id": "id", "client_secret": "secret",
@@ -151,6 +155,7 @@ class CDEKDeliveryTests(unittest.TestCase):
         urls = [call.args[0].full_url for call in mocked_urlopen.call_args_list]
         self.assertEqual(urls, [
             "https://api.edu.cdek.ru/v2/oauth/token",
+            "https://api.edu.cdek.ru/v2/location/cities?country_codes=RU&size=20&page=0&code=44",
             "https://api.edu.cdek.ru/v2/calculator/tariff",
         ])
 

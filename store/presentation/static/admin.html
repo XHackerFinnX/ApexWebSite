@@ -5,7 +5,7 @@
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <meta name="theme-color" content="#f5f6f8" />
         <title>Управление магазином — APEX</title>
-        <link rel="stylesheet" href="/admin.css?v=7" />
+        <link rel="stylesheet" href="/admin.css?v=8" />
         <link rel="stylesheet" href="/loading.css?v=1" />
         <script defer src="/loading.js?v=1"></script>
         <script src="/appearance.js?v=4" defer></script>
@@ -553,17 +553,28 @@
                                             value="136"
                                             title="Для витрины нужен тариф склад–склад, например 136"
                                     /></label>
-                                    <label
-                                        >Город отправителя<input
-                                            name="sender_city"
-                                            type="number"
-                                            placeholder="Код города СДЭК"
-                                    /></label>
-                                    <label
-                                        >Офис СДЭК<input
-                                            name="sender_office"
-                                            placeholder="Код офиса"
-                                    /></label>
+                                    <div class="cdek-picker" id="cdek-city-picker">
+                                        <label for="cdek-sender-city">Город отправителя</label>
+                                        <input id="cdek-sender-city" name="sender_city_name" autocomplete="off" placeholder="Название города или почтовый индекс" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cdek-city-options" aria-describedby="cdek-city-hint" />
+                                        <input name="sender_city" type="hidden" />
+                                        <small id="cdek-city-hint">Выберите город из справочника СДЭК.</small>
+                                        <div class="cdek-picker__panel" hidden>
+                                            <div id="cdek-city-options" role="listbox" aria-label="Города отправления"></div>
+                                            <p class="cdek-picker__status" role="status"></p>
+                                            <button class="cdek-picker__more" type="button" hidden>Показать ещё</button>
+                                        </div>
+                                    </div>
+                                    <div class="cdek-picker" id="cdek-office-picker">
+                                        <label for="cdek-sender-office">Офис СДЭК</label>
+                                        <input id="cdek-sender-office" name="sender_office_name" autocomplete="off" placeholder="Сначала выберите город" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="cdek-office-options" aria-describedby="cdek-office-hint" disabled />
+                                        <input name="sender_office" type="hidden" />
+                                        <small id="cdek-office-hint">Офисы, принимающие отправления в выбранном городе.</small>
+                                        <div class="cdek-picker__panel" hidden>
+                                            <div id="cdek-office-options" role="listbox" aria-label="Офисы отправления"></div>
+                                            <p class="cdek-picker__status" role="status"></p>
+                                            <button class="cdek-picker__more" type="button" hidden>Показать ещё</button>
+                                        </div>
+                                    </div>
                                     <label
                                         >Тип измерений<select
                                             name="dimension_type"
@@ -911,6 +922,7 @@
             </form>
         </dialog>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
-        <script src="/admin.js?v=7" defer></script>
+        <script src="/cdek-settings.js?v=1" defer></script>
+        <script src="/admin.js?v=8" defer></script>
     </body>
 </html>

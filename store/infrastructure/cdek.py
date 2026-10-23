@@ -170,57 +170,147 @@ class CDEKDelivery:
                     raise
                 self.invalidate_token()
 
+    def _directory(self, path, config, token=None):
+        key = ("directory", self._key(config), path)
+        with self._lock:
+            cached = self._cache.get(key)
+        if token is None and cached and time.monotonic() - cached[0] < 300:
+            return cached[1]
+        result = (
+            self._authorized(path, config)
+            if token is None
+            else self._request_json(
+                self._url(path, config), headers={"Authorization": "Bearer " + token}
+            )
+        )
+        with self._lock:
+            if len(self._cache) > 256:
+                self._cache.clear()
+            self._cache[key] = (time.monotonic(), result)
+        return result
+
+    def sender_cities(self, config, query="", *, page=0, city_code=0, token=None):
+        query = str(query or "").strip()[:80]
+        page, city_code = int(page or 0), int(city_code or 0)
+        if not 0 <= page <= 1000 or city_code < 0:
+            raise ValueError("Некорректная страница или код города СДЭК")
+        params = {"country_codes": "RU", "size": 20, "page": page}
+        if city_code:
+            params["code"] = city_code
+        elif re.fullmatch(r"\d{6}", query):
+            params["postal_code"] = query
+        elif query:
+            params = {"name": query, "country_code": "RU"}
+        suggest = "name" in params
+        path = (
+            "location/suggest/cities?" if suggest else "location/cities?"
+        ) + urlencode(params)
+        data = self._directory(path, config, token)
+        if not isinstance(data, list):
+            raise CDEKError("Не удалось получить города СДЭК")
+        items = [
+            {
+                "code": int(city["code"]),
+                "name": str(city.get("city") or city.get("full_name") or ""),
+                "fullName": str(
+                    city.get("full_name")
+                    or ", ".join(
+                        filter(
+                            None,
+                            [city.get("city"), city.get("region"), city.get("country")],
+                        )
+                    )
+                ),
+            }
+            for city in data
+            if city.get("code") and (not city_code or int(city["code"]) == city_code)
+        ]
+        return {
+            "items": items,
+            "page": page,
+            "has_more": not suggest and not city_code and len(data) == 20,
+        }
+
+    def sender_offices(self, config, city_code, *, token=None):
+        city_code = int(city_code or 0)
+        if city_code < 1:
+            raise ValueError("Сначала выберите город отправителя из списка СДЭК")
+        data = self._directory(
+            "deliverypoints?"
+            + urlencode(
+                {
+                    "city_code": city_code,
+                    "country_code": "RU",
+                    "type": "PVZ",
+                    "is_reception": "true",
+                    "lang": "rus",
+                    "size": 1000,
+                }
+            ),
+            config,
+            token,
+        )
+        if not isinstance(data, list):
+            raise CDEKError("Не удалось получить офисы отправления СДЭК")
+        return [
+            {
+                "code": str(point["code"]),
+                "name": str(point.get("name") or point["code"]),
+                "address": str(
+                    (point.get("location") or {}).get("address_full")
+                    or (point.get("location") or {}).get("address")
+                    or ""
+                ),
+                "workTime": str(point.get("work_time") or ""),
+            }
+            for point in data
+            if point.get("code")
+            and point.get("is_reception") in (True, "true", "1")
+            and point.get("status", "ACTIVE") == "ACTIVE"
+            and int((point.get("location") or {}).get("city_code") or city_code)
+            == city_code
+        ]
+
     def test_configuration(self, config):
         token = self._token_for(config, cache=False)
-        result = self._request_json(
-            self._url("calculator/tariff", config),
-            method="POST",
-            data=self._calculation_payload(
-                config, {"code": int(config["sender_city"])}
-            ),
-            headers={
-                "Authorization": "Bearer " + token,
-                "Content-Type": "application/json",
-            },
-        )
-        if result.get("total_sum") is None and result.get("delivery_sum") is None:
-            raise CDEKError("Тест СДЭК не вернул стоимость доставки")
-        checks = {"authorization": True, "calculation": True}
-        if config.get("sender_office"):
-            offices = self._request_json(
-                self._url(
-                    "deliverypoints?"
-                    + urlencode(
-                        {
-                            "code": config["sender_office"],
-                            "city_code": config["sender_city"],
-                            "is_reception": "true",
-                        }
-                    ),
-                    config,
-                ),
-                headers={"Authorization": "Bearer " + token},
+        cities = self.sender_cities(
+            config, city_code=config.get("sender_city", 0), token=token
+        )["items"]
+        if not cities:
+            raise CDEKError(
+                "Город отправителя не найден в справочнике СДЭК. Выберите город из списка; почтовый индекс не является кодом города"
             )
-            if not isinstance(offices, list) or not any(
-                p.get("code") == config["sender_office"]
-                and p.get("is_reception") is not False
-                and p.get("status", "ACTIVE") == "ACTIVE"
-                for p in offices
-            ):
+        checks = {"authorization": True}
+        if config.get("sender_office"):
+            offices = self.sender_offices(config, cities[0]["code"], token=token)
+            if not any(office["code"] == config["sender_office"] for office in offices):
                 raise CDEKError(
                     "Офис отправителя СДЭК не найден в указанном городе или не принимает отправления"
                 )
             checks["sender_office"] = True
+        # Validate on an intercity route: the store tariff may not serve delivery
+        # within the sender's own city. Never interpret a postcode as a city code.
+        destination = {"code": 270 if cities[0]["code"] == 44 else 44}
+        payload = self._calculation_payload(config, destination)
+        headers = {
+            "Authorization": "Bearer " + token,
+            "Content-Type": "application/json",
+        }
+        result = self._request_json(
+            self._url("calculator/tariff", config),
+            method="POST",
+            data=payload,
+            headers=headers,
+        )
+        if result.get("total_sum") is None and result.get("delivery_sum") is None:
+            raise CDEKError("Тест СДЭК не вернул стоимость доставки")
+        checks["calculation"] = True
+        if config.get("sender_office"):
             tariffs = self._request_json(
                 self._url("calculator/tarifflist", config),
                 method="POST",
-                data=self._calculation_payload(
-                    config, {"code": int(config["sender_city"])}
-                ),
-                headers={
-                    "Authorization": "Bearer " + token,
-                    "Content-Type": "application/json",
-                },
+                data=payload,
+                headers=headers,
             )
             selected = next(
                 (

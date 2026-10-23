@@ -178,6 +178,24 @@ class CommerceHandler:
                 return self._send(201, app.repo.save_promotion(self._body()))
         if method == "GET" and path == "/api/admin/orders":
             return self._send(data=app.repo.list_admin_orders())
+        if method == "POST" and path in {
+            "/api/admin/integrations/cdek/cities",
+            "/api/admin/integrations/cdek/offices",
+        }:
+            if not app.delivery:
+                raise ValueError("Интеграция СДЭК недоступна")
+            data = self._body()
+            config = app.integrations.cdek_lookup_config(data)
+            if path.endswith("/cities"):
+                result = app.delivery.sender_cities(
+                    config,
+                    data.get("q", ""),
+                    page=data.get("page", 0),
+                    city_code=data.get("city_code", 0),
+                )
+            else:
+                result = app.delivery.sender_offices(config, data.get("city_code", 0))
+            return self._send(data=result)
         if (
             len(parts) == 5
             and parts[:3] == ["api", "admin", "orders"]

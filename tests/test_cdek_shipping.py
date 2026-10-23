@@ -166,7 +166,7 @@ class CDEKOrderContractTests(unittest.TestCase):
                 self.provider,
                 "_request_json",
                 side_effect=[
-                    {"total_sum": 100},
+                    [{"code": 44, "city": "Москва"}],
                     [{"code": "MSK1", "is_reception": False}],
                 ],
             ),
@@ -193,8 +193,9 @@ class CDEKOrderContractTests(unittest.TestCase):
                 self.provider,
                 "_request_json",
                 side_effect=[
-                    {"total_sum": 100},
+                    [{"code": 44, "city": "Москва"}],
                     [{"code": "MSK1", "is_reception": True}],
+                    {"total_sum": 100},
                     {"tariff_codes": [{"tariff_code": 136, "delivery_mode": 3}]},
                 ],
             ),
@@ -209,8 +210,9 @@ class CDEKOrderContractTests(unittest.TestCase):
                 self.provider,
                 "_request_json",
                 side_effect=[
-                    {"total_sum": 100},
+                    [{"code": 44, "city": "Москва"}],
                     [{"code": "MSK1", "is_reception": True}],
+                    {"total_sum": 100},
                     {"tariff_codes": [{"tariff_code": 136, "delivery_mode": 4}]},
                 ],
             ),

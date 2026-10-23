@@ -723,7 +723,9 @@ $("#integration").onsubmit = async (e) => {
         "contract_type",
         "tariff_code",
         "sender_city",
+        "sender_city_name",
         "sender_office",
+        "sender_office_name",
         "dimension_type",
         "weight",
         "length",
@@ -747,7 +749,7 @@ $("#integration").onsubmit = async (e) => {
                 method: editing ? "PUT" : "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(d),
-                timeoutMs: 45000,
+                timeoutMs: 60000,
             },
         );
         toast(
@@ -756,6 +758,7 @@ $("#integration").onsubmit = async (e) => {
                 : "Настройки сохранены",
         );
         e.target.reset();
+        window.cdekSettings.reset();
         e.target.elements.editing.value = "";
         $("#integrationTitle").textContent = "Новая интеграция";
         integrationKind.disabled = false;
@@ -789,6 +792,7 @@ function updateIntegrationForm() {
     if (integrationProvider.selectedOptions[0]?.hidden && visible)
         integrationProvider.value = visible.value;
     $("#cdek-fields").hidden = integrationProvider.value !== "cdek";
+    window.cdekSettings.setEnabled(integrationProvider.value === "cdek");
     const credentials = ["tbank", "alfabank", "cdek"].includes(
         integrationProvider.value,
     );
@@ -804,6 +808,7 @@ updateIntegrationForm();
 $("#resetIntegration").onclick = () => {
     const form = $("#integration");
     form.reset();
+    window.cdekSettings.reset();
     form.elements.editing.value = "";
     $("#integrationTitle").textContent = "Новая интеграция";
     integrationKind.disabled = false;
@@ -817,7 +822,7 @@ $("#checkCdek").onclick = async (event) => {
     try {
         await apiJson("/api/admin/integrations/cdek/check", {
             method: "POST",
-            timeoutMs: 45000,
+            timeoutMs: 60000,
             headers: { "Content-Type": "application/json" },
             body: "{}",
         });
@@ -881,6 +886,7 @@ $("#configured").onclick = async (event) => {
                     : (form.elements[key].value = value);
         });
         updateIntegrationForm();
+        if (item.provider === "cdek") window.cdekSettings.hydrate(item.public_config);
         form.elements.login.placeholder =
             "Оставьте пустым, чтобы сохранить текущий";
         form.elements.secret.placeholder =

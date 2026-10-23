@@ -555,6 +555,41 @@ tr:hover td {
 .cdek-fields .check {
     align-items: center;
 }
+.cdek-picker { position: relative; min-width: 0; }
+.cdek-picker > label { display: block; margin-bottom: 8px; }
+.cdek-picker > small { display: block; color: var(--ui-muted); margin-top: 6px; font-size: 12px; }
+.cdek-picker__panel {
+    position: absolute;
+    z-index: 25;
+    top: 76px;
+    left: 0;
+    right: 0;
+    max-height: 320px;
+    overflow: auto;
+    border: 1px solid var(--ui-line);
+    border-radius: 10px;
+    background: var(--ui-surface);
+    box-shadow: 0 12px 32px #0003;
+    padding: 6px;
+}
+.cdek-picker__panel[hidden], .cdek-picker__more[hidden] { display: none; }
+.cdek-picker__option, .cdek-picker__more {
+    display: block;
+    width: 100%;
+    padding: 11px 12px;
+    border: 0;
+    border-radius: 6px;
+    text-align: left;
+    background: transparent;
+    color: var(--ui-text);
+    font: inherit;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+}
+.cdek-picker__option small { display: block; color: var(--ui-muted); font-size: 12px; }
+.cdek-picker__option:hover, .cdek-picker__option.is-active, .cdek-picker__more:hover { background: var(--ui-soft); }
+.cdek-picker__option[aria-selected="true"] { color: var(--ui-accent); }
+.cdek-picker__status { margin: 0; padding: 8px 12px; color: var(--ui-muted); font-size: 12px; }
 .loyalty-settings {
     max-width: 800px;
 }
