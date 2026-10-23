@@ -1,3 +1,7 @@
+const uiIcon = (name) =>
+    '<svg class="ui-icon" aria-hidden="true"><use href="/icons.svg#' +
+    name +
+    '"/></svg>';
 let products = [];
 let categories = [];
 let integrations = [];
@@ -106,6 +110,8 @@ async function loadCategories() {
     renderCategories();
 }
 function switchTab(id) {
+    document.body.classList.remove("admin-menu-open");
+    $("#admin-menu-toggle").setAttribute("aria-expanded", "false");
     document
         .querySelectorAll(".tab,.nav-item")
         .forEach((x) => x.classList.remove("active"));
@@ -142,8 +148,14 @@ function renderProducts() {
             (!q || `${p.name} ${p.category}`.toLowerCase().includes(q)) &&
             (!cat || p.category === cat),
     );
-    $("#catalogCount").textContent =
-        `${productOffset + 1}–${productOffset + shown.length} из ${productTotal}`;
+    $("#catalogCount").textContent = productTotal
+        ? productOffset +
+          1 +
+          "–" +
+          (productOffset + shown.length) +
+          " из " +
+          productTotal
+        : "0 товаров";
     $("#rows").innerHTML =
         shown
             .map(
@@ -236,8 +248,37 @@ async function loadIntegrations() {
     $("#configured").innerHTML = integrations.length
         ? integrations
               .map(
-                  (x) =>
-                      `<div><span><b>${esc(x.public_config.name || x.provider.toUpperCase())}</b><br><small>${x.kind === "payment" ? "Оплата" : "Доставка"} · ${esc(x.provider)} · ${x.public_config.environment === "production" ? "Рабочая среда" : "Тестовая среда"}</small></span><span><b class="${x.enabled ? "" : "danger-text"}">${x.enabled ? "Активна" : "Выключена"}</b> <button type="button" class="icon-btn" data-edit-integration="${esc(x.provider)}">Изменить</button> <button type="button" class="icon-btn danger" data-delete-integration="${esc(x.provider)}">Удалить</button></span></div>`,
+                  (item) =>
+                      '<div><span class="status-pill ' +
+                      (item.enabled ? "success" : "") +
+                      '">' +
+                      (item.enabled ? "Подключена" : "Отключена") +
+                      "</span><h3>" +
+                      esc(
+                          item.public_config.name ||
+                              item.provider.toUpperCase(),
+                      ) +
+                      "</h3><small>" +
+                      (item.kind === "payment"
+                          ? "Приём платежей"
+                          : "Доставка") +
+                      " · " +
+                      esc(item.provider) +
+                      " · " +
+                      (item.public_config.environment === "production"
+                          ? "Рабочая среда"
+                          : "Тестовая среда") +
+                      '</small><div class="actions"><button type="button" class="icon-btn" data-edit-integration="' +
+                      esc(item.provider) +
+                      '">Настроить</button>' +
+                      (item.enabled
+                          ? '<button type="button" class="icon-btn" data-disable-integration="' +
+                            esc(item.provider) +
+                            '">Отключить</button>'
+                          : "") +
+                      '<button type="button" class="icon-btn danger" data-delete-integration="' +
+                      esc(item.provider) +
+                      '">Удалить</button></div></div>',
               )
               .join("")
         : '<p class="empty-admin">Пока нет интеграций. Добавьте оплату или доставку в форме слева.</p>';
@@ -260,7 +301,12 @@ async function load() {
     if ($("#settings").classList.contains("active"))
         await loadIntegrations().catch((e) => toast(e.message, true));
     button.disabled = false;
-    button.textContent = "↻ Обновить";
+    button.textContent = "Обновить";
+    const healthy = results.every((result) => result.status === "fulfilled");
+    $("#system-status").textContent = healthy
+        ? "Данные обновлены"
+        : "Нет связи с сервером";
+    $("#system-status").classList.toggle("is-offline", !healthy);
 }
 function openProduct(p = null) {
     const f = $("#productForm");
@@ -663,6 +709,7 @@ $("#categoryList").onclick = async (event) => {
 };
 $("#integration").onsubmit = async (e) => {
     e.preventDefault();
+    $("#integrationError").textContent = "";
     const submit = $("#integration-save");
     submit.disabled = true;
     e.target.classList.add("is-saving");
@@ -722,11 +769,13 @@ $("#integration").onsubmit = async (e) => {
         );
         e.target.reset();
         e.target.elements.editing.value = "";
+        $("#integrationTitle").textContent = "Новая интеграция";
         integrationKind.disabled = false;
         integrationProvider.disabled = false;
         updateIntegrationForm();
         await load();
     } catch (error) {
+        $("#integrationError").textContent = error.message;
         toast(error.message, true);
     } finally {
         submit.disabled = false;
@@ -738,6 +787,7 @@ $("#integration").onsubmit = async (e) => {
 const integrationKind = $("#integration-kind"),
     integrationProvider = $("#integration-provider");
 function updateIntegrationForm() {
+    $("#integrationError").textContent = "";
     const delivery = integrationKind.value === "delivery";
     [...integrationProvider.options].forEach(
         (option) =>
@@ -767,6 +817,7 @@ $("#resetIntegration").onclick = () => {
     const form = $("#integration");
     form.reset();
     form.elements.editing.value = "";
+    $("#integrationTitle").textContent = "Новая интеграция";
     integrationKind.disabled = false;
     integrationProvider.disabled = false;
     form.elements.login.placeholder = "Ключ / логин";
@@ -790,14 +841,43 @@ $("#checkCdek").onclick = async (event) => {
     }
 };
 $("#configured").onclick = async (event) => {
+    const disable = event.target.closest("[data-disable-integration]");
+    if (disable) {
+        disable.disabled = true;
+        const item = integrations.find(
+            (row) => row.provider === disable.dataset.disableIntegration,
+        );
+        try {
+            await apiJson("/api/admin/integrations/" + item.provider, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    ...item.public_config,
+                    provider: item.provider,
+                    enabled: false,
+                }),
+            });
+            await loadIntegrations();
+            toast("Интеграция отключена. История заказов сохранена");
+        } catch (error) {
+            toast(error.message, true);
+        } finally {
+            disable.disabled = false;
+        }
+        return;
+    }
     const edit = event.target.closest("[data-edit-integration]");
     if (edit) {
         const item = integrations.find(
             (x) => x.provider === edit.dataset.editIntegration,
         );
         const form = $("#integration");
+        $("#integrationError").textContent = "";
         form.reset();
         form.elements.editing.value = item.provider;
+        $("#integrationTitle").textContent =
+            "Настройка: " +
+            (item.public_config.name || item.provider.toUpperCase());
         form.elements.kind.value = item.kind;
         form.elements.provider.value = item.provider;
         integrationKind.disabled = true;
@@ -824,23 +904,25 @@ $("#configured").onclick = async (event) => {
     if (
         !button ||
         !confirm(
-            "Вы точно хотите удалить эту интеграцию? Она исчезнет из корзины.",
+            "Удалить интеграцию? Если с ней связаны заказы, используйте «Отключить».",
         )
     )
         return;
-    const response = await fetch(
-        `/api/admin/integrations/${button.dataset.deleteIntegration}`,
-        { method: "DELETE" },
-    );
-    if (response.ok) {
-        toast("Интеграция удалена");
-        load();
-    } else
-        toast(
-            await errorMessage(response, "Не удалось удалить интеграцию"),
-            true,
+    button.disabled = true;
+    try {
+        await apiJson(
+            "/api/admin/integrations/" + button.dataset.deleteIntegration,
+            { method: "DELETE" },
         );
+        await loadIntegrations();
+        toast("Интеграция удалена");
+    } catch (error) {
+        toast(error.message, true);
+    } finally {
+        button.disabled = false;
+    }
 };
+
 let searchTimer;
 $("#search").oninput = () => {
     clearTimeout(searchTimer);
@@ -1072,29 +1154,144 @@ $("#loyaltyForm").onsubmit = async (event) => {
         button.disabled = false;
     }
 };
-async function loadOrders() {
-    const rows = await apiJson("/api/admin/orders");
-    $("#orderRows").innerHTML = rows.length
-        ? rows
-              .map(
-                  (row) =>
-                      `<form class="order-card" data-order-id="${esc(row.id)}"><div class="order-card-head"><div><b>Заказ ${esc(String(row.id).slice(0, 8))}</b><small>${new Date(row.created_at).toLocaleString("ru")} · ${esc(row.customer_email)}</small></div><strong>${Number(row.total).toLocaleString("ru")} ₽</strong><span class="pill">${esc({ CONFIRMED: "Оплачен", NEW: "Ожидает оплаты", REFUNDED: "Возврат", CANCELED: "Отменён" }[row.status] || row.status)}</span></div><p>${esc(row.customer_details.name || "")} · ${esc(row.customer_details.phone || "")}</p><p>${esc(row.delivery_details.pvz?.address || row.delivery_details.cityFullName || (row.delivery_details.type === "pickup" ? "Самовывоз" : ""))}</p><p>${esc(row.customer_details.comment || "")}</p><div class="order-edit"><label>Сборка<select name="fulfillment">${[
-                          ["new", "Новый"],
-                          ["packing", "Собираем"],
-                          ["shipped", "Отправлен"],
-                          ["delivered", "Доставлен"],
-                      ]
+let orderRows = [];
+function renderOrders() {
+    const q = $("#orderSearch").value.toLocaleLowerCase("ru"),
+        status = $("#orderStatus").value;
+    const shown = orderRows.filter(
+        (row) =>
+            (status === "all" || row.status === status) &&
+            [
+                row.id,
+                row.customer_email,
+                row.customer_details?.name,
+                row.customer_details?.phone,
+                row.tracking_number,
+            ]
+                .join(" ")
+                .toLocaleLowerCase("ru")
+                .includes(q),
+    );
+    const paymentNames = {
+        CONFIRMED: "Оплачен",
+        NEW: "Ожидает оплаты",
+        AUTHORIZED: "Авторизован",
+        REFUNDED: "Возврат",
+        PARTIAL_REFUNDED: "Частичный возврат",
+        CANCELED: "Отменён",
+        REVERSED: "Отменён",
+        REJECTED: "Оплата отклонена",
+        DEADLINE_EXPIRED: "Оплата просрочена",
+    };
+    const states = [
+        ["new", "Заказ принят"],
+        ["packing", "Собираем"],
+        ["shipped", "Отправлен"],
+        ["delivered", "Доставлен"],
+    ];
+    const money = (value) =>
+        Number(value || 0).toLocaleString("ru-RU", {
+            style: "currency",
+            currency: "RUB",
+        });
+    $("#orderRows").innerHTML = shown.length
+        ? shown
+              .map((row) => {
+                  const customer = row.customer_details || {},
+                      delivery = row.delivery_details || {};
+                  const items = (row.items || [])
+                      .map(
+                          (item) =>
+                              '<div class="order-item"><span><b>' +
+                              esc(item.name) +
+                              "</b><small>" +
+                              esc(
+                                  [item.color, item.size]
+                                      .filter(Boolean)
+                                      .join(" / "),
+                              ) +
+                              " · " +
+                              Number(item.quantity) +
+                              " шт.</small></span><strong>" +
+                              money(item.line_total) +
+                              "</strong></div>",
+                      )
+                      .join("");
+                  return (
+                      '<form class="order-card" data-order-id="' +
+                      esc(row.id) +
+                      '"><div class="order-card-head"><div><b>Заказ №' +
+                      esc(String(row.id).slice(0, 8)) +
+                      "</b><small>" +
+                      new Date(row.created_at).toLocaleString("ru-RU") +
+                      "</small></div><strong>" +
+                      money(row.total) +
+                      '</strong><span class="status-pill ' +
+                      (row.status === "CONFIRMED"
+                          ? "success"
+                          : row.status === "NEW"
+                            ? "pending"
+                            : "") +
+                      '">' +
+                      esc(paymentNames[row.status] || row.status) +
+                      '</span></div><div class="order-customer"><p><span>Покупатель</span>' +
+                      esc(customer.name || "Не указано") +
+                      "<br>" +
+                      esc(row.customer_email) +
+                      "<br>" +
+                      esc(customer.phone || "") +
+                      "</p><p><span>Получение</span>" +
+                      esc(
+                          delivery.type === "pickup"
+                              ? "Самовывоз"
+                              : delivery.pvz?.address ||
+                                    delivery.cityFullName ||
+                                    "Способ не выбран",
+                      ) +
+                      "</p></div>" +
+                      (customer.comment
+                          ? '<p class="order-note">' +
+                            esc(customer.comment) +
+                            "</p>"
+                          : "") +
+                      (items
+                          ? '<div class="order-items">' + items + "</div>"
+                          : "") +
+                      '<div class="order-edit"><label>Статус сборки<select name="fulfillment">' +
+                      states
                           .map(
                               ([value, title]) =>
-                                  `<option value="${value}" ${row.fulfillment === value ? "selected" : ""}>${title}</option>`,
+                                  '<option value="' +
+                                  value +
+                                  '" ' +
+                                  (row.fulfillment === value
+                                      ? "selected"
+                                      : "") +
+                                  ">" +
+                                  title +
+                                  "</option>",
                           )
-                          .join(
-                              "",
-                          )}</select></label><label>Трек-номер<input name="tracking_number" maxlength="120" value="${esc(row.tracking_number)}"></label><button class="button secondary">Сохранить</button></div></form>`,
-              )
+                          .join("") +
+                      '</select></label><label>Трек-номер<input name="tracking_number" maxlength="120" placeholder="Добавить после отправки" value="' +
+                      esc(row.tracking_number || "") +
+                      '"></label><button class="button primary" type="submit">' +
+                      uiIcon("check") +
+                      "Сохранить</button></div></form>"
+                  );
+              })
               .join("")
-        : '<p class="empty-admin">Заказов пока нет. Здесь появятся покупки после начала оформления.</p>';
+        : '<p class="empty-admin">' +
+          (orderRows.length
+              ? "По этим условиям заказы не найдены."
+              : "Заказов пока нет. Здесь появятся покупки после начала оформления.") +
+          "</p>";
 }
+async function loadOrders() {
+    orderRows = await apiJson("/api/admin/orders");
+    renderOrders();
+}
+$("#orderSearch").oninput = renderOrders;
+$("#orderStatus").onchange = renderOrders;
 $("#orderRows").onsubmit = async (event) => {
     const form = event.target.closest("[data-order-id]");
     if (!form) return;
@@ -1117,3 +1314,20 @@ $("#orderRows").onsubmit = async (event) => {
 $("#refreshOrders").onclick = () =>
     loadOrders().catch((e) => toast(e.message, true));
 load();
+
+const menuToggle = $("#admin-menu-toggle");
+function closeAdminMenu() {
+    document.body.classList.remove("admin-menu-open");
+    menuToggle.setAttribute("aria-expanded", "false");
+}
+menuToggle.onclick = () => {
+    const open = document.body.classList.toggle("admin-menu-open");
+    menuToggle.setAttribute("aria-expanded", String(open));
+};
+$("#admin-menu-backdrop").onclick = closeAdminMenu;
+document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeAdminMenu();
+});
+matchMedia("(min-width: 1025px)").addEventListener("change", (event) => {
+    if (event.matches) closeAdminMenu();
+});

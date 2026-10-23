@@ -4,6 +4,7 @@
 оптимизация каталога и проверки описаны в [DEVELOPMENT.md](DEVELOPMENT.md).
 План RabbitMQ находится в [RABBITMQ.md](RABBITMQ.md); брокер пока не используется.
 Перенос оформления Finish Line Fever описан в [DESIGN_REFERENCE.md](DESIGN_REFERENCE.md).
+Разбор логов, новые интерфейсы и запуск в Windows — в [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
 Готовый к развитию каркас интернет-магазина с чистой архитектурой. Доменная
 логика не зависит от HTTP, базы данных и конкретных платёжных/логистических

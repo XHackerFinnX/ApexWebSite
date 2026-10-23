@@ -168,6 +168,36 @@ class AllowAllLimiter:
 class StoreTests(unittest.TestCase):
     def setUp(self):
         self.repo = MemoryRepository()
+
+    def test_database_disconnect_returns_retryable_json_without_internal_details(self):
+        import psycopg
+
+        class DisconnectedRepository(MemoryRepository):
+            def list_products(self, include_inactive=False):
+                raise psycopg.OperationalError("private-database-host disconnected")
+
+        repo = DisconnectedRepository()
+        app = WebApp(CatalogService(repo), None, None, repo, AllowAllLimiter())
+        server = ThreadingHTTPServer(("127.0.0.1", 0), app.handler())
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        connection = HTTPConnection("127.0.0.1", server.server_port)
+        try:
+            connection.request(
+                "GET", "/api/admin/products",
+                headers={"Cookie": "apex_admin=" + app._session_token(4_000_000_000)},
+            )
+            response = connection.getresponse()
+            payload = json.loads(response.read())
+            self.assertEqual(response.status, 503)
+            self.assertEqual(response.getheader("Retry-After"), "2")
+            self.assertIn("временно недоступна", payload["error"])
+            self.assertNotIn("private-database-host", payload["error"])
+        finally:
+            connection.close()
+            server.shutdown()
+            server.server_close()
+            thread.join()
         
     def test_json_encoder_serializes_database_dates(self):
         payload = {

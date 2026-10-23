@@ -3,154 +3,513 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <meta name="theme-color" content="#f4f2ee" />
+        <meta name="theme-color" content="#f5f6f8" />
         <title>Личный кабинет — APEX GRID</title>
-        <link rel="stylesheet" href="/shop.css?v=2" />
-        <script defer src="/account.js?v=2"></script>
+        <link rel="stylesheet" href="/account.css?v=4" />
+        <script defer src="/appearance.js?v=4"></script>
+        <script defer src="/account.js?v=4"></script>
+        <script defer src="/motion.js?v=4"></script>
     </head>
-    <body class="account-page">
+    <body class="account-page" data-appearance="apex-theme">
         <header class="account-header">
-            <a class="wordmark" href="/">APEX<span>GRID</span></a
-            ><a href="/">← Вернуться в магазин</a>
+            <div class="account-header__inner">
+                <a class="wordmark" href="/">APEX<span>GRID</span></a>
+                <div class="account-header__actions">
+                    <button
+                        type="button"
+                        class="theme-button"
+                        data-theme-toggle
+                        aria-label="Сменить тему"
+                    ></button
+                    ><a class="button secondary" href="/"
+                        >В магазин
+                        <svg class="ui-icon" aria-hidden="true">
+                            <use href="/icons.svg#arrow" /></svg
+                    ></a>
+                </div>
+            </div>
         </header>
         <main class="account-main">
-            <p class="eyebrow">APEX / MEMBERS CLUB</p>
-            <h1>Твой следующий<br />круг начинается здесь.</h1>
-            <p class="account-intro">
-                Заказы, любимые вещи и баллы за каждую оплаченную покупку — в
-                одном месте.
-            </p>
-            <p id="account-message" role="status" aria-live="polite"></p>
-            <section id="auth-panel" class="account-card" hidden>
-                <div class="account-tabs">
-                    <button type="button" data-auth="login" aria-pressed="true">
-                        Войти</button
-                    ><button
-                        type="button"
-                        data-auth="register"
-                        aria-pressed="false"
-                    >
-                        Создать аккаунт
-                    </button>
-                </div>
-                <form id="auth-form">
-                    <label id="register-name" hidden
-                        >Имя<input
-                            name="name"
-                            autocomplete="name"
-                            minlength="2"
-                            maxlength="120" /></label
-                    ><label
-                        >Email<input
-                            name="email"
-                            type="email"
-                            autocomplete="email"
-                            required
-                            maxlength="254" /></label
-                    ><label
-                        >Пароль<input
-                            name="password"
-                            type="password"
-                            autocomplete="current-password"
-                            required
-                            minlength="10"
-                            maxlength="256"
-                    /></label>
-                    <p class="form-note">
-                        Не менее 10 символов. Баллы начисляются после
-                        подтверждения оплаты банком.
-                    </p>
-                    <button class="action-button" id="auth-submit">
-                        Войти
-                    </button>
-                </form>
-            </section>
-            <div id="member-panel" hidden>
-                <section class="loyalty-card">
+            <p
+                id="account-message"
+                class="account-message"
+                role="status"
+                aria-live="polite"
+            ></p>
+            <div
+                id="account-error-actions"
+                class="account-error-actions"
+                hidden
+            >
+                <button
+                    class="button secondary"
+                    type="button"
+                    id="account-retry"
+                >
+                    Попробовать снова
+                </button>
+            </div>
+            <section
+                id="auth-panel"
+                class="auth-layout"
+                hidden
+                aria-label="Вход в личный кабинет"
+            >
+                <div class="auth-story">
                     <div>
-                        <p class="eyebrow">APEX CLUB / ТВОЙ БАЛАНС</p>
-                        <strong id="points-balance">0</strong
-                        ><span>баллов · 1 балл = 1 ₽</span>
-                    </div>
-                    <p id="loyalty-rules"></p>
-                    <a class="action-button" href="/#catalog-filter-title"
-                        >К новым покупкам ↗</a
-                    >
-                </section>
-                <div class="account-columns">
-                    <section class="account-card">
-                        <h2>Мои данные</h2>
-                        <form id="profile-form">
-                            <label
-                                >Имя<input
-                                    name="name"
-                                    required
-                                    minlength="2"
-                                    maxlength="120"
-                                    autocomplete="name" /></label
-                            ><label
-                                >Email<input
-                                    name="email"
-                                    type="email"
-                                    disabled /></label
-                            ><label
-                                >Телефон<input
-                                    name="phone"
-                                    type="tel"
-                                    maxlength="40"
-                                    autocomplete="tel"
-                            /></label>
-                            <details>
-                                <summary>Изменить пароль</summary>
-                                <label
-                                    >Текущий пароль<input
-                                        name="current_password"
-                                        type="password"
-                                        autocomplete="current-password" /></label
-                                ><label
-                                    >Новый пароль<input
-                                        name="new_password"
-                                        type="password"
-                                        minlength="10"
-                                        maxlength="256"
-                                        autocomplete="new-password"
-                                /></label>
-                            </details>
-                            <button class="action-button">
-                                Сохранить данные
-                            </button>
-                        </form>
-                        <button class="text-button" id="account-logout">
-                            Выйти из аккаунта
-                        </button>
-                    </section>
-                    <section class="account-card">
-                        <h2>Движение баллов</h2>
-                        <div id="points-history"></div>
-                        <p class="form-note">
-                            При отмене или полном возврате заказа списанные
-                            баллы возвращаются, начисленные отменяются.
+                        <p class="eyebrow">APEX / MEMBERS CLUB</p>
+                        <h1>Твой стиль.<br />Твои привилегии.</h1>
+                        <p>
+                            Всё, что нужно для следующего круга: заказы, бонусы
+                            и личные данные в одном месте.
                         </p>
-                    </section>
+                    </div>
+                    <div class="auth-benefits">
+                        <div class="auth-benefit">
+                            <svg class="ui-icon" aria-hidden="true">
+                                <use href="/icons.svg#box" />
+                            </svg>
+                            <div>
+                                <b>Заказы под контролем</b
+                                ><small
+                                    >Состав, статус и трек-номер доставки</small
+                                >
+                            </div>
+                        </div>
+                        <div class="auth-benefit">
+                            <svg class="ui-icon" aria-hidden="true">
+                                <use href="/icons.svg#star" />
+                            </svg>
+                            <div>
+                                <b>Покупки с привилегиями</b
+                                ><small>Копи и используй баллы APEX Club</small>
+                            </div>
+                        </div>
+                        <div class="auth-benefit">
+                            <svg class="ui-icon" aria-hidden="true">
+                                <use href="/icons.svg#shield" />
+                            </svg>
+                            <div>
+                                <b>Личное пространство</b
+                                ><small
+                                    >Только твои данные и история покупок</small
+                                >
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <section class="account-card">
-                    <div class="account-section-head">
-                        <h2>Мои заказы</h2>
+                <div class="auth-form-panel">
+                    <h2 id="auth-title">С возвращением</h2>
+                    <p id="auth-description">
+                        Войди, чтобы увидеть свои заказы и бонусы.
+                    </p>
+                    <div class="account-tabs" aria-label="Вход или регистрация">
                         <button
                             type="button"
-                            class="text-button"
-                            id="account-refresh"
+                            data-auth="login"
+                            aria-pressed="true"
                         >
-                            Обновить
+                            Войти</button
+                        ><button
+                            type="button"
+                            data-auth="register"
+                            aria-pressed="false"
+                        >
+                            Создать аккаунт
                         </button>
                     </div>
-                    <div id="account-orders"></div>
+                    <form id="auth-form">
+                        <label id="register-name" hidden
+                            >Как тебя зовут<input
+                                name="name"
+                                autocomplete="name"
+                                minlength="2"
+                                maxlength="120"
+                                placeholder="Александр"
+                        /></label>
+                        <label
+                            >Email<input
+                                name="email"
+                                type="email"
+                                autocomplete="email"
+                                required
+                                maxlength="254"
+                                placeholder="you@example.com"
+                        /></label>
+                        <label
+                            >Пароль
+                            <div class="password-field">
+                                <input
+                                    id="auth-password"
+                                    name="password"
+                                    type="password"
+                                    autocomplete="current-password"
+                                    required
+                                    minlength="10"
+                                    maxlength="256"
+                                    placeholder="Не менее 10 символов"
+                                /><button
+                                    class="password-toggle"
+                                    type="button"
+                                    id="toggle-password"
+                                    aria-label="Показать пароль"
+                                    aria-pressed="false"
+                                >
+                                    <svg class="ui-icon" aria-hidden="true">
+                                        <use href="/icons.svg#eye" />
+                                    </svg>
+                                </button></div
+                        ></label>
+                        <button class="button accent" id="auth-submit">
+                            Войти в кабинет
+                            <svg class="ui-icon" aria-hidden="true">
+                                <use href="/icons.svg#arrow" />
+                            </svg>
+                        </button>
+                    </form>
+                    <p class="auth-legal">
+                        Продолжая, ты соглашаешься с
+                        <a href="/privacy">политикой конфиденциальности</a> и
+                        <a href="/oferta">условиями магазина</a>.
+                    </p>
+                </div>
+            </section>
+            <div id="member-panel" hidden>
+                <section class="member-welcome">
+                    <div class="member-identity">
+                        <div
+                            class="member-avatar"
+                            id="member-avatar"
+                            aria-hidden="true"
+                        ></div>
+                        <div>
+                            <p class="eyebrow">ТВОЙ ЛИЧНЫЙ ПАДДОК</p>
+                            <h1 id="member-greeting">Личный кабинет</h1>
+                            <p>Заказы, бонусы и всё важное — под рукой.</p>
+                        </div>
+                    </div>
+                    <a class="button secondary" href="/#catalog-filter-title"
+                        >Продолжить покупки
+                        <svg class="ui-icon" aria-hidden="true">
+                            <use href="/icons.svg#arrow" /></svg
+                    ></a>
                 </section>
+                <div class="member-layout">
+                    <aside class="member-sidebar">
+                        <nav
+                            class="member-nav"
+                            aria-label="Разделы личного кабинета"
+                        >
+                            <button
+                                type="button"
+                                class="active"
+                                data-member-tab="overview"
+                                aria-current="page"
+                            >
+                                <svg class="ui-icon" aria-hidden="true">
+                                    <use href="/icons.svg#grid" /></svg
+                                >Обзор
+                            </button>
+                            <button type="button" data-member-tab="orders">
+                                <svg class="ui-icon" aria-hidden="true">
+                                    <use href="/icons.svg#box" /></svg
+                                >Заказы
+                            </button>
+                            <button type="button" data-member-tab="bonuses">
+                                <svg class="ui-icon" aria-hidden="true">
+                                    <use href="/icons.svg#star" /></svg
+                                >Бонусы
+                            </button>
+                            <button type="button" data-member-tab="settings">
+                                <svg class="ui-icon" aria-hidden="true">
+                                    <use href="/icons.svg#settings" /></svg
+                                >Настройки
+                            </button>
+                        </nav>
+                        <div class="member-card">
+                            <svg class="ui-icon" aria-hidden="true">
+                                <use href="/icons.svg#shield" /></svg
+                            ><b>Участник APEX Club</b>
+                            <p id="member-number"></p>
+                            <p>
+                                1 балл = 1 ₽ скидки на товары. Условия всегда
+                                доступны в разделе бонусов.
+                            </p>
+                            <button
+                                type="button"
+                                class="text-button"
+                                id="account-logout"
+                            >
+                                Выйти из аккаунта →
+                            </button>
+                        </div>
+                    </aside>
+                    <div class="member-content">
+                        <section
+                            class="account-view"
+                            data-member-view="overview"
+                        >
+                            <div class="account-metrics">
+                                <article class="account-metric reveal">
+                                    <svg class="ui-icon" aria-hidden="true">
+                                        <use href="/icons.svg#star" /></svg
+                                    ><span>Бонусный баланс</span
+                                    ><strong id="points-overview">0</strong
+                                    ><small>1 балл = 1 ₽</small>
+                                </article>
+                                <article class="account-metric reveal">
+                                    <svg class="ui-icon" aria-hidden="true">
+                                        <use href="/icons.svg#box" /></svg
+                                    ><span>Активные заказы</span
+                                    ><strong id="active-orders">0</strong
+                                    ><small>В работе у магазина</small>
+                                </article>
+                                <article class="account-metric reveal">
+                                    <svg class="ui-icon" aria-hidden="true">
+                                        <use href="/icons.svg#bag" /></svg
+                                    ><span>Всего заказов</span
+                                    ><strong id="total-orders">0</strong
+                                    ><small>За всё время</small>
+                                </article>
+                            </div>
+                            <div class="loyalty-card reveal">
+                                <div>
+                                    <p class="eyebrow">
+                                        БОЛЬШЕ, ЧЕМ ПРОСТО ПОКУПКИ
+                                    </p>
+                                    <strong id="overview-earn">5%</strong
+                                    ><span class="points-unit"
+                                        >возвращаем баллами</span
+                                    >
+                                </div>
+                                <span class="club-tag">APEX CLUB / MEMBER</span>
+                                <p id="overview-loyalty-copy"></p>
+                                <button
+                                    type="button"
+                                    class="button"
+                                    data-member-tab="bonuses"
+                                >
+                                    Как работают бонусы
+                                    <svg class="ui-icon" aria-hidden="true">
+                                        <use href="/icons.svg#arrow" />
+                                    </svg>
+                                </button>
+                            </div>
+                            <section class="account-card reveal">
+                                <div class="account-card__head">
+                                    <h2>Последние заказы</h2>
+                                    <button
+                                        class="text-button"
+                                        type="button"
+                                        data-member-tab="orders"
+                                    >
+                                        Все заказы →
+                                    </button>
+                                </div>
+                                <div
+                                    id="recent-orders"
+                                    class="member-orders"
+                                ></div>
+                            </section>
+                        </section>
+                        <section
+                            class="account-view"
+                            data-member-view="orders"
+                            hidden
+                        >
+                            <div class="account-section-title">
+                                <div>
+                                    <h2>Мои заказы</h2>
+                                    <p>
+                                        Последние 100 заказов, их состав и
+                                        статус доставки.
+                                    </p>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="button secondary"
+                                    id="account-refresh"
+                                >
+                                    <svg class="ui-icon" aria-hidden="true">
+                                        <use href="/icons.svg#refresh" /></svg
+                                    >Обновить
+                                </button>
+                            </div>
+                            <div class="account-card">
+                                <div
+                                    id="account-orders"
+                                    class="member-orders"
+                                ></div>
+                            </div>
+                        </section>
+                        <section
+                            class="account-view"
+                            data-member-view="bonuses"
+                            hidden
+                        >
+                            <div class="account-section-title">
+                                <div>
+                                    <h2>Бонусы APEX Club</h2>
+                                    <p>
+                                        Больше любимых вещей с каждым новым
+                                        заказом.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="loyalty-card reveal">
+                                <div>
+                                    <p class="eyebrow">ДОСТУПНО ДЛЯ ПОКУПОК</p>
+                                    <strong id="points-balance">0</strong
+                                    ><span class="points-unit">баллов</span>
+                                </div>
+                                <span class="club-tag">APEX CLUB</span>
+                                <p id="loyalty-rules"></p>
+                                <a class="button" href="/#catalog-filter-title"
+                                    >Выбрать следующий образ
+                                    <svg class="ui-icon" aria-hidden="true">
+                                        <use href="/icons.svg#arrow" /></svg
+                                ></a>
+                            </div>
+                            <section class="account-card">
+                                <div class="account-card__head">
+                                    <h2>История баллов</h2>
+                                </div>
+                                <div class="account-card__body">
+                                    <div id="points-history"></div>
+                                    <p class="form-note">
+                                        При отмене или полном возврате заказа
+                                        списанные баллы возвращаются,
+                                        начисленные отменяются.
+                                    </p>
+                                </div>
+                            </section>
+                        </section>
+                        <section
+                            class="account-view"
+                            data-member-view="settings"
+                            hidden
+                        >
+                            <div class="account-section-title">
+                                <div>
+                                    <h2>Настройки аккаунта</h2>
+                                    <p>
+                                        Контактные данные и безопасность твоего
+                                        кабинета.
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="account-columns">
+                                <section class="account-card">
+                                    <div class="account-card__head">
+                                        <h2>Личные данные</h2>
+                                    </div>
+                                    <div class="account-card__body">
+                                        <form
+                                            id="profile-form"
+                                            class="account-profile"
+                                        >
+                                            <label
+                                                >Имя<input
+                                                    name="name"
+                                                    autocomplete="name"
+                                                    required
+                                                    minlength="2"
+                                                    maxlength="120"
+                                            /></label>
+                                            <label
+                                                >Email<input
+                                                    name="email"
+                                                    type="email"
+                                                    disabled
+                                            /></label>
+                                            <label
+                                                >Телефон<input
+                                                    name="phone"
+                                                    type="tel"
+                                                    maxlength="40"
+                                                    autocomplete="tel"
+                                                    placeholder="+7 (999) 123-45-67"
+                                            /></label>
+                                            <details>
+                                                <summary>
+                                                    Изменить пароль
+                                                </summary>
+                                                <p class="form-note">
+                                                    После смены пароля
+                                                    потребуется войти заново на
+                                                    всех устройствах.
+                                                </p>
+                                                <label
+                                                    >Текущий пароль<input
+                                                        name="current_password"
+                                                        type="password"
+                                                        autocomplete="current-password"
+                                                        maxlength="256" /></label
+                                                ><label
+                                                    >Новый пароль<input
+                                                        name="new_password"
+                                                        type="password"
+                                                        autocomplete="new-password"
+                                                        minlength="10"
+                                                        maxlength="256"
+                                                /></label>
+                                            </details>
+                                            <button
+                                                class="button accent"
+                                                type="submit"
+                                            >
+                                                Сохранить изменения
+                                            </button>
+                                        </form>
+                                    </div>
+                                </section>
+                                <section class="account-card">
+                                    <div
+                                        class="account-card__body security-info"
+                                    >
+                                        <svg class="ui-icon" aria-hidden="true">
+                                            <use href="/icons.svg#shield" />
+                                        </svg>
+                                        <h3>Твой аккаунт защищён</h3>
+                                        <p>
+                                            Пароль хранится в виде защищённого
+                                            хеша. Платёжные данные вводятся на
+                                            странице банка и не сохраняются в
+                                            кабинете.
+                                        </p>
+                                        <p>
+                                            Закончил работу на чужом устройстве?
+                                            Выйди из аккаунта.
+                                        </p>
+                                        <button
+                                            class="button secondary"
+                                            type="button"
+                                            data-account-logout
+                                        >
+                                            <svg
+                                                class="ui-icon"
+                                                aria-hidden="true"
+                                            >
+                                                <use
+                                                    href="/icons.svg#logout"
+                                                /></svg
+                                            >Выйти из аккаунта
+                                        </button>
+                                    </div>
+                                </section>
+                            </div>
+                        </section>
+                    </div>
+                </div>
             </div>
-            <div id="account-loading" role="status">Загружаем кабинет…</div>
+            <div id="account-loading" class="account-loading" role="status">
+                <span class="loading-dot" aria-hidden="true"></span>Загружаем
+                твой кабинет…
+            </div>
         </main>
         <footer class="account-footer">
-            APEX GRID · CREATED FOR THE NEXT LAP
+            <span>© 2026 APEX GRID · CREATED FOR THE NEXT LAP</span
+            ><a href="/privacy">Конфиденциальность и данные</a>
         </footer>
     </body>
 </html>

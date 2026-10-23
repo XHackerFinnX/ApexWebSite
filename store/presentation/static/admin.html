@@ -3,43 +3,97 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <title>Apex Admin</title>
-        <link rel="stylesheet" href="/admin.css?v=2" />
-        <link rel="stylesheet" href="/admin-v2.css?v=2" />
+        <meta name="theme-color" content="#f5f6f8" />
+        <title>Управление магазином — APEX GRID</title>
+        <link rel="stylesheet" href="/admin.css?v=4" />
+        <script src="/appearance.js?v=4" defer></script>
+        <script src="/motion.js?v=4" defer></script>
     </head>
-    <body>
+    <body data-appearance="apex-admin-theme">
+        <button
+            type="button"
+            class="admin-menu-backdrop"
+            id="admin-menu-backdrop"
+            aria-label="Закрыть меню"
+        ></button>
         <div class="admin-shell">
             <aside class="sidebar">
                 <a class="admin-logo" href="/admin">APEX<span>/</span>ADMIN</a>
-                <nav>
+                <p class="sidebar-caption">Управление магазином</p>
+                <nav aria-label="Разделы панели">
                     <button class="nav-item active" data-tab="overview">
-                        ⌁ <span>Обзор</span></button
+                        <svg class="ui-icon" aria-hidden="true">
+                            <use href="/icons.svg#grid" />
+                        </svg>
+                        <span>Обзор</span></button
                     ><button class="nav-item" data-tab="catalog">
-                        ▦ <span>Каталог</span></button
+                        <svg class="ui-icon" aria-hidden="true">
+                            <use href="/icons.svg#bag" />
+                        </svg>
+                        <span>Каталог</span></button
                     ><button class="nav-item" data-tab="orders">
-                        ▤ <span>Заказы</span></button
+                        <svg class="ui-icon" aria-hidden="true">
+                            <use href="/icons.svg#box" />
+                        </svg>
+                        <span>Заказы</span></button
                     ><button class="nav-item" data-tab="reviews">
-                        ★ <span>Отзывы</span></button
+                        <svg class="ui-icon" aria-hidden="true">
+                            <use href="/icons.svg#star" />
+                        </svg>
+                        <span>Отзывы</span></button
                     ><button class="nav-item" data-tab="promotions">
-                        ％ <span>Промокоды</span></button
+                        <svg class="ui-icon" aria-hidden="true">
+                            <use href="/icons.svg#tag" />
+                        </svg>
+                        <span>Промокоды</span></button
                     ><button class="nav-item" data-tab="loyalty">
-                        ◎ <span>Лояльность</span></button
+                        <svg class="ui-icon" aria-hidden="true">
+                            <use href="/icons.svg#chart" />
+                        </svg>
+                        <span>Лояльность</span></button
                     ><button class="nav-item" data-tab="settings">
-                        ⚙ <span>Интеграции</span>
+                        <svg class="ui-icon" aria-hidden="true">
+                            <use href="/icons.svg#settings" />
+                        </svg>
+                        <span>Интеграции</span>
                     </button>
                 </nav>
                 <div class="sidebar-bottom">
-                    <a href="/">↗ <span>Открыть магазин</span></a
-                    ><button id="logout">⇥ <span>Выйти</span></button>
+                    <a href="/"><svg class="ui-icon" aria-hidden="true"><use href="/icons.svg#link"/></svg> <span>Открыть магазин</span></a
+                    ><button id="logout">
+                        <svg class="ui-icon" aria-hidden="true">
+                            <use href="/icons.svg#logout" />
+                        </svg>
+                        <span>Выйти</span>
+                    </button>
                 </div>
             </aside>
             <main class="workspace">
                 <header class="topbar">
-                    <div>
-                        <span class="eyebrow">ПАНЕЛЬ УПРАВЛЕНИЯ</span>
-                        <h1 id="pageTitle">Обзор</h1>
+                    <div class="topbar-title">
+                        <button
+                            type="button"
+                            class="theme-button admin-menu-button"
+                            id="admin-menu-toggle"
+                            aria-expanded="false"
+                            aria-label="Открыть меню"
+                        >
+                            <svg class="ui-icon" aria-hidden="true">
+                                <use href="/icons.svg#menu" />
+                            </svg>
+                        </button>
+                        <div>
+                            <span class="eyebrow">ПАНЕЛЬ УПРАВЛЕНИЯ</span>
+                            <h1 id="pageTitle">Обзор</h1>
+                        </div>
                     </div>
                     <div class="topbar-actions">
+                        <button
+                            type="button"
+                            class="theme-button"
+                            data-theme-toggle
+                            aria-label="Сменить тему"
+                        ></button>
                         <button class="button secondary" data-open-categories>
                             Категории
                         </button>
@@ -54,31 +108,42 @@
                             <span>С возвращением</span>
                             <h2>Держите магазин под контролем.</h2>
                             <p>
-                                Ключевые показатели каталога обновляются в
-                                реальном времени.
+                                Каталог, заказы и сервисы — в одном рабочем
+                                пространстве.
                             </p>
                         </div>
-                        <div class="live">● Система работает</div>
+                        <div class="live" id="system-status">
+                            Данные загружаются
+                        </div>
                     </div>
                     <div class="stats">
                         <article>
-                            <i>▦</i><span>Всего товаров</span
+                            <i
+                                ><svg class="ui-icon" aria-hidden="true">
+                                    <use href="/icons.svg#bag" /></svg></i
+                            ><span>Всего товаров</span
                             ><strong id="count">—</strong
                             ><small>позиций в каталоге</small>
                         </article>
                         <article>
-                            <i>◎</i><span>Просмотры</span
-                            ><strong id="views">—</strong
+                            <i
+                                ><svg class="ui-icon" aria-hidden="true">
+                                    <use href="/icons.svg#eye" /></svg></i
+                            ><span>Просмотры</span><strong id="views">—</strong
                             ><small>интерес к товарам</small>
                         </article>
                         <article>
-                            <i>＋</i><span>В корзину</span
-                            ><strong id="adds">—</strong
+                            <i
+                                ><svg class="ui-icon" aria-hidden="true">
+                                    <use href="/icons.svg#plus" /></svg></i
+                            ><span>В корзину</span><strong id="adds">—</strong
                             ><small>добавлений всего</small>
                         </article>
                         <article>
-                            <i>↗</i><span>Конверсия</span
-                            ><strong id="rate">—</strong
+                            <i
+                                ><svg class="ui-icon" aria-hidden="true">
+                                    <use href="/icons.svg#chart" /></svg></i
+                            ><span>Конверсия</span><strong id="rate">—</strong
                             ><small>просмотр → корзина</small>
                         </article>
                     </div>
@@ -92,22 +157,19 @@
                             </div>
                             <div class="quick-actions">
                                 <button data-open-product>
-                                    <b>＋</b
-                                    ><span
+                                    <b><svg class="ui-icon" aria-hidden="true"><use href="/icons.svg#plus"/></svg></b><span
                                         >Новый товар<small
                                             >Добавить позицию</small
                                         ></span
                                     ></button
                                 ><button data-go="catalog">
-                                    <b>▦</b
-                                    ><span
+                                    <b><svg class="ui-icon" aria-hidden="true"><use href="/icons.svg#bag"/></svg></b><span
                                         >Каталог<small
                                             >Остатки и цены</small
                                         ></span
                                     ></button
                                 ><button data-go="settings">
-                                    <b>⚙</b
-                                    ><span
+                                    <b><svg class="ui-icon" aria-hidden="true"><use href="/icons.svg#settings"/></svg></b><span
                                         >Интеграции<small
                                             >Оплата и доставка</small
                                         ></span
@@ -129,7 +191,7 @@
                 <section class="tab" id="catalog">
                     <div class="toolbar">
                         <div class="search">
-                            ⌕
+                            <svg class="ui-icon" aria-hidden="true"><use href="/icons.svg#search"/></svg>
                             <input
                                 id="search"
                                 placeholder="Поиск по названию или категории"
@@ -183,6 +245,25 @@
                         <button class="button secondary" id="refreshOrders">
                             Обновить
                         </button>
+                    </div>
+                    <div class="toolbar">
+                        <div class="search">
+                            <svg class="ui-icon" aria-hidden="true">
+                                <use href="/icons.svg#search" /></svg
+                            ><input
+                                id="orderSearch"
+                                type="search"
+                                placeholder="Номер заказа, покупатель или трек"
+                                aria-label="Поиск заказов"
+                            />
+                        </div>
+                        <select id="orderStatus" aria-label="Статус оплаты">
+                            <option value="all">Все статусы оплаты</option>
+                            <option value="CONFIRMED">Оплаченные</option>
+                            <option value="NEW">Ожидают оплаты</option>
+                            <option value="REFUNDED">Возвращённые</option>
+                            <option value="CANCELED">Отменённые</option>
+                        </select>
                     </div>
                     <div id="orderRows" class="order-list">
                         <p>Откройте раздел для загрузки заказов.</p>
@@ -350,7 +431,7 @@
                             <div class="panel-head">
                                 <div>
                                     <span class="eyebrow">ПОДКЛЮЧЕНИЕ</span>
-                                    <h2>Новая интеграция</h2>
+                                    <h2 id="integrationTitle">Новая интеграция</h2>
                                     <p>
                                         Секретные ключи шифруются и не
                                         отображаются после сохранения.
@@ -532,7 +613,13 @@
                                         name="enabled"
                                         type="checkbox"
                                     /><span></span>Включить интеграцию</label
-                                ><button
+                                >
+                                <p
+                                    class="form-error"
+                                    id="integrationError"
+                                    role="alert"
+                                ></p>
+                                <button
                                     class="button primary"
                                     id="integration-save"
                                 >
@@ -581,7 +668,14 @@
                         <span class="eyebrow">КАТАЛОГ</span>
                         <h2 id="formTitle">Новый товар</h2>
                     </div>
-                    <button type="button" class="close" data-close>×</button>
+                    <button
+                        type="button"
+                        class="close"
+                        aria-label="Закрыть окно"
+                        data-close
+                    >
+                        ×
+                    </button>
                 </div>
                 <input name="id" type="hidden" />
                 <p class="editor-guide">
@@ -680,7 +774,12 @@
                         <span class="eyebrow">КАТАЛОГ</span>
                         <h2>Категории</h2>
                     </div>
-                    <button type="button" class="close" data-close-category>
+                    <button
+                        type="button"
+                        class="close"
+                        aria-label="Закрыть окно"
+                        data-close-category
+                    >
                         ×
                     </button>
                 </div>
@@ -703,7 +802,12 @@
                         <span class="eyebrow">ОТЗЫВЫ</span>
                         <h2>Новый отзыв</h2>
                     </div>
-                    <button type="button" class="close" data-close-review>
+                    <button
+                        type="button"
+                        class="close"
+                        aria-label="Закрыть окно"
+                        data-close-review
+                    >
                         ×
                     </button>
                 </div>
@@ -761,7 +865,7 @@
                 </div>
             </form>
         </dialog>
-        <div id="toast" class="toast"></div>
-        <script src="/admin.js?v=2" defer></script>
+        <div id="toast" class="toast" role="status" aria-live="polite"></div>
+        <script src="/admin.js?v=4" defer></script>
     </body>
 </html>
