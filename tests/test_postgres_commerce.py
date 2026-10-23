@@ -163,6 +163,143 @@ class PostgreSQLCommerceTests(unittest.TestCase):
                 "SELECT points FROM customers WHERE id=%s", (self.customer["id"],)
             ).fetchone()["points"]
 
+    def test_customer_review_requires_login_ownership_and_confirmed_payment(self):
+        payment = self.payment()
+        payload = {
+            "order_id": payment["order_id"],
+            "body": "Отличная покупка и качество!",
+            "rating": 5,
+        }
+        self.assertEqual(
+            self.http_request("/api/account/reviews", "POST", payload)[0], 401
+        )
+        token = self.repo.create_customer_session(self.customer["id"])
+        headers = {"Cookie": "apex_customer=" + token}
+        self.assertEqual(
+            self.http_request("/api/account/reviews", "POST", payload, headers)[0], 400
+        )
+        self.repo.update_order_by_payment(payment["order_id"], "AUTHORIZED")
+        self.assertEqual(
+            self.http_request("/api/account/reviews", "POST", payload, headers)[0], 400
+        )
+        other = self.repo.register_customer(
+            {
+                "name": "Other",
+                "email": "other-review@example.test",
+                "password": "a-secure-test-password",
+            }
+        )
+        other_token = self.repo.create_customer_session(other["id"])
+        self.repo.update_order_by_payment(payment["order_id"], "CONFIRMED")
+        self.assertEqual(
+            self.http_request(
+                "/api/account/reviews",
+                "POST",
+                payload,
+                {"Cookie": "apex_customer=" + other_token},
+            )[0],
+            400,
+        )
+        status, review, _ = self.http_request(
+            "/api/account/reviews", "POST", payload, headers
+        )
+        self.assertEqual(status, 201)
+        self.assertFalse(review["is_published"])
+        self.assertEqual(
+            self.http_request("/api/account/reviews", "POST", payload, headers)[0], 400
+        )
+        history = self.repo.customer_history(self.customer["id"])["orders"][0]
+        self.assertEqual(history["review_id"], review["id"])
+        self.assertFalse(history["review_published"])
+
+    def test_customer_review_ignores_publication_and_author_overrides(self):
+        payment = self.payment()
+        self.repo.update_order_by_payment(payment["order_id"], "CONFIRMED")
+        review = self.repo.submit_customer_review(
+            self.customer["id"],
+            {
+                "order_id": payment["order_id"],
+                "body": "Качественная куртка, всё понравилось.",
+                "rating": 4,
+                "author": "Impersonated",
+                "customer_id": 99999,
+                "is_published": True,
+            },
+        )
+        self.assertEqual(self.repo.list_reviews()["total"], 0)
+        stored = self.repo.admin_review(review["id"])
+        self.assertEqual(stored["customer_id"], self.customer["id"])
+        self.assertEqual(stored["author"], self.customer["name"])
+        self.repo.save_review({**stored, "is_published": True})
+        self.assertEqual(self.repo.list_reviews()["total"], 1)
+        self.assertTrue(
+            self.repo.customer_history(self.customer["id"])["orders"][0][
+                "review_published"
+            ]
+        )
+
+    def test_customer_review_rejects_invalid_inputs_and_refunded_orders(self):
+        payment = self.payment()
+        self.repo.update_order_by_payment(payment["order_id"], "CONFIRMED")
+        valid = {
+            "order_id": payment["order_id"],
+            "body": "Хорошее качество товара",
+            "rating": 5,
+        }
+        for patch in [
+            {"rating": 0},
+            {"rating": 6},
+            {"rating": True},
+            {"rating": 4.5},
+            {"body": "Коротко"},
+            {"body": "x" * 5001},
+            {"title": "x" * 161},
+            {"order_id": "invalid"},
+        ]:
+            with self.subTest(patch=list(patch)):
+                with self.assertRaises(ValueError):
+                    self.repo.submit_customer_review(
+                        self.customer["id"], {**valid, **patch}
+                    )
+        self.repo.update_order_by_payment(payment["order_id"], "REFUNDED")
+        with self.assertRaisesRegex(ValueError, "после подтверждения"):
+            self.repo.submit_customer_review(self.customer["id"], valid)
+
+    def test_customer_review_concurrent_submissions_create_one_review(self):
+        payment = self.payment()
+        self.repo.update_order_by_payment(payment["order_id"], "CONFIRMED")
+        payload = {
+            "order_id": payment["order_id"],
+            "body": "Покупка оправдала ожидания",
+            "rating": 5,
+        }
+
+        def submit():
+            try:
+                self.repo.submit_customer_review(self.customer["id"], payload)
+                return "created"
+            except ValueError:
+                return "duplicate"
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(lambda _: submit(), range(2)))
+        self.assertCountEqual(results, ["created", "duplicate"])
+        self.assertEqual(len(self.repo.list_admin_reviews()), 1)
+
+    def test_client_service_and_existing_document_links(self):
+        for path in (
+            "/client-service",
+            "/client-service/",
+            "/privacy",
+            "/oferta",
+            "/cookie",
+        ):
+            with self.subTest(path=path):
+                status, body, _ = self.http_request(path)
+                self.assertEqual(status, 200)
+                self.assertIn("Клиентский сервис".encode(), body)
+                self.assertIn("ИП ШЕЛОМОВСКАЯ".encode(), body)
+
     def http_request(self, path, method="GET", data=None, headers=None):
         request = urllib.request.Request(
             "http://127.0.0.1:" + str(self.http.server_port) + path,
@@ -223,9 +360,9 @@ class PostgreSQLCommerceTests(unittest.TestCase):
         self.assertEqual(headers["Content-Encoding"], "gzip")
         self.assertIn(b":root", body)
         self.assertEqual(
-            self.http_request("/storefront.css", headers={"If-None-Match": headers["ETag"]})[
-                0
-            ],
+            self.http_request(
+                "/storefront.css", headers={"If-None-Match": headers["ETag"]}
+            )[0],
             304,
         )
 
@@ -414,7 +551,9 @@ class PostgreSQLCommerceTests(unittest.TestCase):
             repo.pool.wait(timeout=5)
             with repo._db() as db:
                 old_pid = db.info.backend_pid
-                self.assertEqual(db.execute("SHOW timezone").fetchone()["TimeZone"], "UTC")
+                self.assertEqual(
+                    db.execute("SHOW timezone").fetchone()["TimeZone"], "UTC"
+                )
             with psycopg.connect(**self.connection, autocommit=True) as control:
                 control.execute("SELECT pg_terminate_backend(%s)", (old_pid,))
             with repo._db() as db:
@@ -446,7 +585,11 @@ class PostgreSQLCommerceTests(unittest.TestCase):
         first = self.payment()
         self.repo.update_order_by_payment(first["order_id"], "CONFIRMED")
         other = self.repo.register_customer(
-            {"email": "other@example.test", "name": "Another Person", "password": "another-secure-password"}
+            {
+                "email": "other@example.test",
+                "name": "Another Person",
+                "password": "another-secure-password",
+            }
         )
         self.checkout.create_payment(
             {**self.payload, "points": 0, "idempotency_key": str(uuid4())}, other

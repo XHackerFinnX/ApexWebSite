@@ -256,18 +256,44 @@ function renderCommunityGallery() {
 }
 function renderCatalogNavigation() {
     const links = availableCategories
-        .slice(0, 5)
         .map(
             (category) =>
-                `<a href="#catalog-filter-title" data-store-category="${esc(category)}">${esc(category)}</a>`,
+                '<a href="#catalog-filter-title" data-store-category="' +
+                esc(category) +
+                '">' +
+                esc(category) +
+                "</a>",
         )
         .join("");
+    const arrow =
+        '<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+    const categories =
+        '<details class="header-help nav-categories"><summary>Категории товаров ' +
+        arrow +
+        "</summary><div>" +
+        (links || '<p class="nav-empty">Категории скоро появятся</p>') +
+        "</div></details>";
     const help =
-        '<details class="header-help"><summary>Помощь <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg></summary><div><a href="#faq-list">Доставка и возврат</a><a href="#story">О коллекции</a><a href="/account">Мои заказы</a></div></details>';
+        '<details class="header-help"><summary>Помощь ' +
+        arrow +
+        "</summary><div>" +
+        '<a href="/client-service">Клиентский сервис</a><a href="/client-service#delivery">Доставка</a>' +
+        '<a href="/client-service#refund">Обмен и возврат</a><a href="/client-service#preorder">Предзаказ</a>' +
+        '<a href="/account">Мои заказы</a></div></details>';
     document.getElementById("desktop-nav").innerHTML =
-        `${links}<a href="#catalog-filter-title" data-store-category="all">Каталог</a>${help}`;
+        '<a href="#catalog-filter-title" data-store-category="all">Каталог</a>' +
+        categories +
+        help +
+        '<a href="#story">О бренде</a>';
     document.getElementById("mobile-nav").innerHTML =
-        `${links}<a href="#catalog-filter-title" data-store-category="all">Все товары</a><a href="#faq-list">Доставка и возврат</a><a href="/account">Кабинет и заказы</a><a href="#story">О коллекции</a>`;
+        '<div class="mobile-nav-links"><a href="#catalog-filter-title" data-store-category="all">Весь каталог</a>' +
+        categories +
+        help +
+        '<a href="#story">О бренде</a></div>' +
+        '<div class="mobile-nav-footer"><img class="brand-logo" src="/images/apex-logo.webp" alt="APEX" width="640" height="148">' +
+        '<a href="/account">Личный кабинет ' +
+        ICONS.arrow +
+        "</a></div>";
 }
 function renderCategoryTiles() {
     const definitions = [
@@ -942,7 +968,7 @@ function renderCheckoutForm() {
         '<form class="checkout" id="checkout-form" novalidate><h3 class="checkout__title display">Оформление заказа</h3><p class="checkout__intro">Остался один шаг до следующего гоночного образа.</p><div class="checkout-layout"><div class="checkout-main">' +
         '<section class="checkout-section"><h4><span>1</span>Контактные данные</h4><div class="checkout__grid"><label>Имя<input id="customer-name" autocomplete="given-name" required placeholder="Иван"></label><label>Почта<input id="customer-email" type="email" autocomplete="email" required placeholder="name@example.com"></label><label class="checkout__wide">Телефон<input id="customer-phone" type="tel" autocomplete="tel" required value="+7 " placeholder="+7 (999) 123-45-67"></label></div></section>' +
         '<section class="checkout-section"><h4><span>2</span>Получение заказа</h4><div class="checkout__radio" id="delivery-options"><span class="checkout__hint">Загрузка способов доставки…</span></div><label id="city-label">Город<div class="suggest-wrap"><input id="delivery-city" autocomplete="off" disabled placeholder="Начните вводить город"><div class="suggestions" id="city-suggestions"></div></div></label><div class="checkout__hint" id="delivery-status">Проверяем доступные способы доставки…</div><label id="pvz-label">Пункт получения<div class="suggest-wrap"><input id="delivery-point" autocomplete="off" disabled placeholder="Сначала выберите город"><div class="suggestions" id="pvz-suggestions"></div></div></label><div class="pvz-info" id="pvz-info"></div><label>ФИО получателя полностью<input id="recipient-name" autocomplete="name" required placeholder="Иванов Иван Иванович"></label><label>Комментарий к заказу<textarea id="order-comment" rows="3" placeholder="Что нам стоит знать о заказе"></textarea></label></section>' +
-        '<section class="checkout-section"><h4><span>3</span>Способ оплаты</h4><div class="checkout__radio" id="payment-options"><span class="checkout__hint">Загрузка способов оплаты…</span></div><label class="check"><input type="checkbox" id="privacy-consent" required><span>Я согласен с <a href="/privacy" target="_blank" rel="noopener">политикой обработки персональных данных</a>.</span></label><label class="check"><input type="checkbox" id="delivery-consent" required><span>Я ознакомился с условиями доставки и <a href="/oferta" target="_blank" rel="noopener">публичной офертой</a>.</span></label></section></div>' +
+        '<section class="checkout-section"><h4><span>3</span>Способ оплаты</h4><div class="checkout__radio" id="payment-options"><span class="checkout__hint">Загрузка способов оплаты…</span></div><label class="check"><input type="checkbox" id="privacy-consent" required><span>Я согласен с <a href="/client-service#policy" target="_blank" rel="noopener">политикой обработки персональных данных</a>.</span></label><label class="check"><input type="checkbox" id="delivery-consent" required><span>Я ознакомился с условиями доставки и <a href="/client-service#public-offer" target="_blank" rel="noopener">публичной офертой</a>.</span></label></section></div>' +
         '<aside class="checkout-summary"><h4>Ваш заказ · ' +
         cartCount() +
         ' шт.</h4><div class="checkout-preview">' +
@@ -1404,34 +1430,68 @@ let setMobileMenu = () => {};
 function initMobileMenu() {
     const toggle = document.getElementById("menu-toggle"),
         nav = document.getElementById("mobile-nav"),
+        menu = document.getElementById("mobile-menu"),
+        close = document.getElementById("mobile-menu-close"),
         backdrop = document.getElementById("mobile-menu-backdrop");
+    menu.hidden = false;
+    backdrop.hidden = false;
+    toggle.setAttribute("aria-controls", "mobile-menu");
     setMobileMenu = (open) => {
-        nav.classList.toggle("hidden", !open);
-        backdrop.hidden = !open;
+        const hadFocus = menu.contains(document.activeElement);
+        menu.classList.toggle("is-open", open);
+        backdrop.classList.toggle("is-open", open);
+        menu.inert = !open;
+        menu.setAttribute("aria-hidden", String(!open));
         toggle.setAttribute("aria-expanded", String(open));
-        document
-            .getElementById("menu-icon-open")
-            .classList.toggle("hidden", open);
-        document
-            .getElementById("menu-icon-close")
-            .classList.toggle("hidden", !open);
         document.querySelector(".header").classList.toggle("menu-open", open);
         document.body.classList.toggle("menu-open", open);
-        if (open) nav.querySelector("a")?.focus();
+        if (open) close.focus({ preventScroll: true });
+        else if (hadFocus) toggle.focus({ preventScroll: true });
     };
     toggle.onclick = () =>
         setMobileMenu(toggle.getAttribute("aria-expanded") !== "true");
-    backdrop.onclick = () => setMobileMenu(false);
-    nav.addEventListener("click", (event) => {
-        if (event.target.closest("a")) setMobileMenu(false);
-    });
+    close.onclick = backdrop.onclick = () => setMobileMenu(false);
+    menu.onclick = (event) => {
+        if (event.target === menu || event.target.closest("a"))
+            setMobileMenu(false);
+    };
     window
         .matchMedia("(min-width: 1101px)")
         .addEventListener("change", (event) => {
             if (event.matches) setMobileMenu(false);
         });
     document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") setMobileMenu(false);
+        if (event.key === "Escape") {
+            setMobileMenu(false);
+            document
+                .querySelectorAll("#desktop-nav details[open]")
+                .forEach((details) => {
+                    if (details.contains(document.activeElement))
+                        details.querySelector("summary").focus();
+                    details.open = false;
+                });
+        }
+        if (event.key !== "Tab" || !menu.classList.contains("is-open")) return;
+        const focusable = [...menu.querySelectorAll("button,a,summary")].filter(
+            (node) => node.getClientRects().length,
+        );
+        const first = focusable[0],
+            last = focusable.at(-1);
+        if (event.shiftKey && document.activeElement === first) {
+            event.preventDefault();
+            last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+            event.preventDefault();
+            first.focus();
+        }
+    });
+    document.addEventListener("click", (event) => {
+        const current = event.target.closest("#desktop-nav details");
+        document
+            .querySelectorAll("#desktop-nav details[open]")
+            .forEach((details) => {
+                if (details !== current) details.open = false;
+            });
     });
     const observer = new IntersectionObserver(
         (entries) =>
@@ -1645,6 +1705,7 @@ function initEvents() {
     });
 }
 renderAnnouncement();
+renderCatalogNavigation();
 renderCategoryTiles();
 jsonFetch("/api/loyalty")
     .then((rules) => {

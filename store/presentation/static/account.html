@@ -4,16 +4,23 @@
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <meta name="theme-color" content="#f5f6f8" />
-        <title>Личный кабинет — APEX GRID</title>
-        <link rel="stylesheet" href="/account.css?v=5" />
+        <title>Личный кабинет — APEX</title>
+        <link rel="stylesheet" href="/account.css?v=6" />
         <script defer src="/appearance.js?v=4"></script>
-        <script defer src="/account.js?v=4"></script>
+        <script defer src="/account.js?v=6"></script>
         <script defer src="/motion.js?v=4"></script>
     </head>
     <body class="account-page" data-appearance="apex-theme">
         <header class="account-header">
             <div class="account-header__inner">
-                <a class="wordmark" href="/">APEX<span>GRID</span></a>
+                <a class="wordmark" href="/" aria-label="APEX — главная"
+                    ><img
+                        class="brand-logo"
+                        src="/images/apex-logo.webp"
+                        alt="APEX"
+                        width="640"
+                        height="148"
+                /></a>
                 <div class="account-header__actions">
                     <button
                         type="button"
@@ -507,9 +514,92 @@
                 твой кабинет…
             </div>
         </main>
+        <dialog
+            id="customer-review-dialog"
+            class="customer-review-dialog"
+            aria-labelledby="customer-review-title"
+        >
+            <div class="customer-review-head">
+                <div>
+                    <p class="eyebrow" id="review-order-label"></p>
+                    <h2 id="customer-review-title">Твой отзыв о покупке</h2>
+                </div>
+                <button
+                    type="button"
+                    id="close-customer-review"
+                    class="theme-button"
+                    aria-label="Закрыть отзыв"
+                >
+                    ×
+                </button>
+            </div>
+            <form id="customer-review-form">
+                <input type="hidden" name="order_id" />
+                <fieldset class="review-rating">
+                    <legend>Твоя оценка</legend>
+                    <label
+                        ><input type="radio" name="rating" value="1" /><span
+                            >1 ★</span
+                        ></label
+                    >
+                    <label
+                        ><input type="radio" name="rating" value="2" /><span
+                            >2 ★</span
+                        ></label
+                    >
+                    <label
+                        ><input type="radio" name="rating" value="3" /><span
+                            >3 ★</span
+                        ></label
+                    >
+                    <label
+                        ><input type="radio" name="rating" value="4" /><span
+                            >4 ★</span
+                        ></label
+                    >
+                    <label
+                        ><input
+                            type="radio"
+                            name="rating"
+                            value="5"
+                            checked
+                        /><span>5 ★</span></label
+                    >
+                </fieldset>
+                <label
+                    >Заголовок <span class="form-note">необязательно</span
+                    ><input
+                        name="title"
+                        maxlength="160"
+                        placeholder="Что понравилось больше всего?"
+                /></label>
+                <label
+                    >Впечатления о покупке<textarea
+                        name="body"
+                        rows="5"
+                        minlength="10"
+                        maxlength="5000"
+                        required
+                        placeholder="Расскажи о качестве, посадке и своём опыте. Минимум 10 символов."
+                    ></textarea>
+                </label>
+                <p class="form-note">
+                    Отзыв появится на сайте после модерации. Имя берётся из
+                    твоего профиля.
+                </p>
+                <p
+                    class="form-error"
+                    id="customer-review-error"
+                    role="alert"
+                ></p>
+                <button class="button primary" type="submit">
+                    Отправить отзыв
+                </button>
+            </form>
+        </dialog>
         <footer class="account-footer">
-            <span>© 2026 APEX GRID · CREATED FOR THE NEXT LAP</span
-            ><a href="/privacy">Конфиденциальность и данные</a>
+            <span>© 2026 APEX · CREATED FOR THE NEXT LAP</span
+            ><a href="/client-service#policy">Конфиденциальность и данные</a>
         </footer>
     </body>
 </html>

@@ -4,8 +4,8 @@
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <meta name="theme-color" content="#f5f6f8" />
-        <title>Управление магазином — APEX GRID</title>
-        <link rel="stylesheet" href="/admin.css?v=5" />
+        <title>Управление магазином — APEX</title>
+        <link rel="stylesheet" href="/admin.css?v=6" />
         <script src="/appearance.js?v=4" defer></script>
         <script src="/motion.js?v=4" defer></script>
     </head>
@@ -18,7 +18,15 @@
         ></button>
         <div class="admin-shell">
             <aside class="sidebar">
-                <a class="admin-logo" href="/admin">APEX<span>/</span>ADMIN</a>
+                <a class="admin-logo" href="/admin"
+                    ><img
+                        class="brand-logo"
+                        src="/images/apex-logo.webp"
+                        alt="APEX"
+                        width="640"
+                        height="148"
+                    /><span class="admin-brand-label">ADMIN</span></a
+                >
                 <p class="sidebar-caption">Управление магазином</p>
                 <nav aria-label="Разделы панели">
                     <button class="nav-item active" data-tab="overview">
@@ -59,7 +67,11 @@
                     </button>
                 </nav>
                 <div class="sidebar-bottom">
-                    <a href="/"><svg class="ui-icon" aria-hidden="true"><use href="/icons.svg#link"/></svg> <span>Открыть магазин</span></a
+                    <a href="/"
+                        ><svg class="ui-icon" aria-hidden="true">
+                            <use href="/icons.svg#link" />
+                        </svg>
+                        <span>Открыть магазин</span></a
                     ><button id="logout">
                         <svg class="ui-icon" aria-hidden="true">
                             <use href="/icons.svg#logout" />
@@ -157,19 +169,43 @@
                             </div>
                             <div class="quick-actions">
                                 <button data-open-product>
-                                    <b><svg class="ui-icon" aria-hidden="true"><use href="/icons.svg#plus"/></svg></b><span
+                                    <b
+                                        ><svg
+                                            class="ui-icon"
+                                            aria-hidden="true"
+                                        >
+                                            <use
+                                                href="/icons.svg#plus"
+                                            /></svg></b
+                                    ><span
                                         >Новый товар<small
                                             >Добавить позицию</small
                                         ></span
                                     ></button
                                 ><button data-go="catalog">
-                                    <b><svg class="ui-icon" aria-hidden="true"><use href="/icons.svg#bag"/></svg></b><span
+                                    <b
+                                        ><svg
+                                            class="ui-icon"
+                                            aria-hidden="true"
+                                        >
+                                            <use
+                                                href="/icons.svg#bag"
+                                            /></svg></b
+                                    ><span
                                         >Каталог<small
                                             >Остатки и цены</small
                                         ></span
                                     ></button
                                 ><button data-go="settings">
-                                    <b><svg class="ui-icon" aria-hidden="true"><use href="/icons.svg#settings"/></svg></b><span
+                                    <b
+                                        ><svg
+                                            class="ui-icon"
+                                            aria-hidden="true"
+                                        >
+                                            <use
+                                                href="/icons.svg#settings"
+                                            /></svg></b
+                                    ><span
                                         >Интеграции<small
                                             >Оплата и доставка</small
                                         ></span
@@ -191,7 +227,9 @@
                 <section class="tab" id="catalog">
                     <div class="toolbar">
                         <div class="search">
-                            <svg class="ui-icon" aria-hidden="true"><use href="/icons.svg#search"/></svg>
+                            <svg class="ui-icon" aria-hidden="true">
+                                <use href="/icons.svg#search" />
+                            </svg>
                             <input
                                 id="search"
                                 placeholder="Поиск по названию или категории"
@@ -431,7 +469,9 @@
                             <div class="panel-head">
                                 <div>
                                     <span class="eyebrow">ПОДКЛЮЧЕНИЕ</span>
-                                    <h2 id="integrationTitle">Новая интеграция</h2>
+                                    <h2 id="integrationTitle">
+                                        Новая интеграция
+                                    </h2>
                                     <p>
                                         Секретные ключи шифруются и не
                                         отображаются после сохранения.
@@ -800,7 +840,7 @@
                 <div class="dialog-head">
                     <div>
                         <span class="eyebrow">ОТЗЫВЫ</span>
-                        <h2>Новый отзыв</h2>
+                        <h2 id="review-dialog-title">Новый отзыв</h2>
                     </div>
                     <button
                         type="button"
@@ -851,7 +891,7 @@
                             name="is_published"
                             type="checkbox"
                             checked
-                        /><span>Сразу опубликовать на сайте</span></label
+                        /><span>Опубликовать на сайте</span></label
                     >
                 </div>
                 <div class="dialog-actions">
@@ -861,11 +901,13 @@
                         data-close-review
                     >
                         Отмена</button
-                    ><button class="button primary">Добавить отзыв</button>
+                    ><button class="button primary" id="save-review">
+                        Добавить отзыв
+                    </button>
                 </div>
             </form>
         </dialog>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
-        <script src="/admin.js?v=4" defer></script>
+        <script src="/admin.js?v=6" defer></script>
     </body>
 </html>

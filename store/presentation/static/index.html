@@ -9,8 +9,8 @@
             name="description"
             content="Премиальный гоночный стритвир: худи, куртки и футболки из плотных материалов с деталями в духе автоспорта."
         />
-        <link rel="stylesheet" href="/ui.css?v=5" />
-        <link rel="stylesheet" href="/storefront.css?v=5" />
+        <link rel="stylesheet" href="/ui.css?v=6" />
+        <link rel="stylesheet" href="/storefront.css?v=6" />
         <script defer src="/filters.js?v=4"></script>
         <script defer src="/motion.js?v=4"></script>
         <link
@@ -56,9 +56,17 @@
                             </svg>
                         </button>
 
-                        <a href="#top" class="header__logo display"
-                            >APEX<span class="text-primary"></span></a
-                        >
+                        <a
+                            href="#top"
+                            class="header__logo display"
+                            aria-label="APEX — главная"
+                            ><img
+                                class="brand-logo"
+                                src="/images/apex-logo.webp"
+                                alt="APEX"
+                                width="640"
+                                height="148"
+                        /></a>
 
                         <nav class="header__nav" id="desktop-nav">
                             <a href="#story">История</a>
@@ -119,10 +127,6 @@
                             </button>
                         </div>
                     </div>
-
-                    <nav class="header__mobile-nav hidden" id="mobile-nav">
-                        <a href="#story">История</a>
-                    </nav>
 
                     <div
                         class="search-panel"
@@ -462,9 +466,18 @@
                         <a class="action-button" href="/account"
                             >Присоединиться к клубу</a
                         >
-                        <p class="display footer__logo">
-                            APEX<span class="text-primary"></span>
-                        </p>
+                        <a
+                            class="footer__logo"
+                            href="#top"
+                            aria-label="APEX — главная"
+                            ><img
+                                class="brand-logo"
+                                src="/images/apex-logo.webp"
+                                alt="APEX"
+                                width="640"
+                                height="148"
+                                loading="lazy"
+                        /></a>
                         <p class="footer__tagline">
                             Премиальный гоночный стритвир Formula 1. Создано для
                             одержимых скоростью.
@@ -474,20 +487,34 @@
                         <p class="footer__heading">Документы</p>
                         <ul>
                             <li>
-                                <a href="/privacy"
+                                <a href="/client-service#policy"
                                     >Политика конфиденциальности</a
                                 >
                             </li>
-                            <li><a href="/oferta">Публичная оферта</a></li>
-                            <li><a href="/cookie">Cookie</a></li>
+                            <li>
+                                <a href="/client-service#public-offer"
+                                    >Публичная оферта</a
+                                >
+                            </li>
+                            <li>
+                                <a href="/client-service#cookies">Cookie</a>
+                            </li>
                         </ul>
                     </div>
                     <div class="footer__col">
                         <p class="footer__heading">Помощь</p>
                         <ul>
-                            <li><a href="#faq-list">Доставка</a></li>
-                            <li><a href="#faq-list">Возврат</a></li>
-                            <li><a href="#faq-list">Выбор размера</a></li>
+                            <li>
+                                <a href="/client-service#delivery">Доставка</a>
+                            </li>
+                            <li>
+                                <a href="/client-service#refund"
+                                    >Обмен и возврат</a
+                                >
+                            </li>
+                            <li>
+                                <a href="/client-service">Клиентский сервис</a>
+                            </li>
                             <li><a href="/account">Мои заказы</a></li>
                         </ul>
                     </div>
@@ -518,6 +545,38 @@
             aria-label="Закрыть меню"
             hidden
         ></button>
+
+        <div
+            class="mobile-menu"
+            id="mobile-menu"
+            role="dialog"
+            aria-label="Меню магазина"
+            aria-modal="true"
+            aria-hidden="true"
+            hidden
+            inert
+        >
+            <div class="mobile-menu__sheet">
+                <button
+                    type="button"
+                    class="mobile-menu__close"
+                    id="mobile-menu-close"
+                    aria-label="Закрыть меню"
+                >
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                </button>
+                <nav
+                    class="header__mobile-nav"
+                    id="mobile-nav"
+                    aria-label="Мобильная навигация"
+                >
+                    <a href="#catalog-filter-title">Весь каталог</a
+                    ><a href="/client-service">Клиентский сервис</a>
+                </nav>
+            </div>
+        </div>
         <aside
             class="cart"
             id="cart"
@@ -653,6 +712,6 @@
         <!-- Add-to-bag toast -->
         <div class="toast" id="toast" role="status" aria-hidden="true"></div>
 
-        <script src="/script.js?v=4" defer></script>
+        <script src="/script.js?v=6" defer></script>
     </body>
 </html>
