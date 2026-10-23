@@ -363,10 +363,6 @@ button {
 .round-arrow {
     display: grid;
     place-items: center;
-    width: 34px;
-    height: 34px;
-    border-radius: 50%;
-    background: var(--soft);
     font-size: 21px;
 }
 .grid {
@@ -1718,7 +1714,6 @@ button {
     overflow-y: auto;
     background: #0c1424b3;
     backdrop-filter: blur(4px);
-    padding: 30px;
 }
 .checkout-modal.is-open {
     display: block;
@@ -1798,6 +1793,8 @@ button {
     grid-column: 1/-1;
 }
 .checkout .check {
+    display: flex;
+    align-items: center;
     font-size: 11px;
     line-height: 1.7;
     font-weight: 500;
@@ -2298,11 +2295,9 @@ button {
     .footer__top {
         gap: 26px;
     }
-    .checkout-modal {
-        padding: 20px;
-    }
     .checkout-modal__shell {
         padding: 25px;
+        border-radius: 0px;
     }
     .checkout-layout {
         gap: 20px;
@@ -2787,11 +2782,10 @@ button {
         font-size: 14px;
     }
     .checkout-modal {
-        padding: 8px;
+        padding: 0px;
     }
     .checkout-modal__shell {
         padding: 23px 16px;
-        border-radius: 12px;
     }
     .checkout-modal__close {
         top: 15px;
@@ -2805,9 +2799,6 @@ button {
     }
     .checkout-layout {
         gap: 18px;
-    }
-    .checkout-summary {
-        padding: 20px;
     }
     .checkout__grid {
         grid-template-columns: 1fr;
