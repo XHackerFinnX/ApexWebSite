@@ -989,22 +989,24 @@ function renderCheckoutForm() {
 
 /* ---------- Delivery / checkout ---------- */
 async function jsonFetch(url, options = {}) {
-    let r;
-    try {
-        r = await fetch(url, {
-            ...options,
-            signal: options.signal || AbortSignal.timeout(15000),
-        });
-    } catch (error) {
-        throw new Error(
-            ["AbortError", "TimeoutError"].includes(error.name)
-                ? "Сервер долго не отвечает. Попробуйте ещё раз."
-                : "Не удалось связаться с магазином. Проверьте подключение.",
-        );
-    }
-    const data = await r.json().catch(() => null);
-    if (!r.ok) throw new Error(data?.error || `Ошибка запроса (${r.status})`);
-    return data;
+    return apexLoading.run(async () => {
+        let r;
+        try {
+            r = await fetch(url, {
+                ...options,
+                signal: options.signal || AbortSignal.timeout(15000),
+            });
+        } catch (error) {
+            throw new Error(
+                ["AbortError", "TimeoutError"].includes(error.name)
+                    ? "Сервер долго не отвечает. Попробуйте ещё раз."
+                    : "Не удалось связаться с магазином. Проверьте подключение.",
+            );
+        }
+        const data = await r.json().catch(() => null);
+        if (!r.ok) throw new Error(data?.error || `Ошибка запроса (${r.status})`);
+        return data;
+    });
 }
 async function fetchCities(query) {
     return jsonFetch("/api/delivery/cities?q=" + encodeURIComponent(query));

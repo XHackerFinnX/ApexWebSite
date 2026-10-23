@@ -3,6 +3,7 @@ form.addEventListener("submit", async (event) => {
     event.preventDefault();
     const button = form.querySelector("button");
     const error = document.querySelector("#loginError");
+    const finishLoading = apexLoading.start();
     button.disabled = true;
     error.textContent = "";
     try {
@@ -20,6 +21,7 @@ form.addEventListener("submit", async (event) => {
         error.textContent =
             "Не удалось связаться с сервером. Проверьте подключение и попробуйте ещё раз.";
     } finally {
+        finishLoading();
         button.disabled = false;
     }
 });

@@ -39,26 +39,28 @@ function message(text, error = false) {
     select("#account-message").classList.toggle("error-text", error);
 }
 async function api(url, method = "GET", data) {
-    let response;
-    try {
-        response = await fetch(url, {
-            method,
-            headers: data ? { "Content-Type": "application/json" } : {},
-            body: data ? JSON.stringify(data) : undefined,
-            signal: AbortSignal.timeout(15000),
-        });
-    } catch {
-        throw new Error(
-            "Не удалось связаться с магазином. Проверь подключение и попробуй ещё раз.",
-        );
-    }
-    const result = await response.json().catch(() => ({}));
-    if (!response.ok) {
-        const error = new Error(result.error || "Не удалось выполнить запрос");
-        error.status = response.status;
-        throw error;
-    }
-    return result;
+    return apexLoading.run(async () => {
+        let response;
+        try {
+            response = await fetch(url, {
+                method,
+                headers: data ? { "Content-Type": "application/json" } : {},
+                body: data ? JSON.stringify(data) : undefined,
+                signal: AbortSignal.timeout(15000),
+            });
+        } catch {
+            throw new Error(
+                "Не удалось связаться с магазином. Проверь подключение и попробуй ещё раз.",
+            );
+        }
+        const result = await response.json().catch(() => ({}));
+        if (!response.ok) {
+            const error = new Error(result.error || "Не удалось выполнить запрос");
+            error.status = response.status;
+            throw error;
+        }
+        return result;
+    });
 }
 function setSection(value) {
     const section = sections.includes(value) ? value : "overview";

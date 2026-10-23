@@ -1,4 +1,14 @@
 @import url("/ui.css?v=6");
+.cdek-order {
+    padding: 16px;
+    margin-bottom: 16px;
+    background: var(--ui-soft);
+    border: 1px solid var(--ui-line);
+    border-radius: 12px;
+    overflow-wrap: anywhere;
+}
+.cdek-order small { display: block; margin-top: 8px; }
+.cdek-order__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
 .admin-shell {
     min-height: 100dvh;
 }

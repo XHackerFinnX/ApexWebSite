@@ -1,0 +1,34 @@
+.request-loading {
+    position: fixed;
+    inset: auto 0 max(24px, env(safe-area-inset-bottom)) 0;
+    z-index: 20000;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    margin: 0 auto;
+    padding: 14px 20px;
+    border: 1px solid var(--ui-line, #ddd);
+    border-radius: 100px;
+    background: var(--ui-surface, #fff);
+    color: var(--ui-text, #20242e);
+    box-shadow: 0 8px 32px #0003;
+    font: 500 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+    pointer-events: none;
+}
+.request-loading[hidden] { display: none; }
+.request-loading::backdrop { background: transparent; pointer-events: none; }
+.request-loading__spinner {
+    flex: 0 0 22px;
+    width: 22px;
+    height: 22px;
+    border: 3px solid var(--ui-line, #ddd);
+    border-top-color: var(--ui-accent, #dd4336);
+    border-radius: 50%;
+    animation: request-spin .75s linear infinite;
+}
+@keyframes request-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) {
+    .request-loading__spinner { animation: none; }
+}

@@ -203,6 +203,7 @@ class CheckoutService:
                 float(subtotal - promo_discount),
                 city_code=city_code,
                 items=items,
+                delivery_point=str((delivery.get("pvz") or {}).get("code") or ""),
             )
             shipping = Decimal(str(result["price"])).quantize(CENT)
         elif delivery.get("type") in {"pickup", "self"}:

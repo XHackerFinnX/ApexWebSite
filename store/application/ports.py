@@ -38,3 +38,9 @@ class StoreRepository(Protocol):
 
 class CaptchaVerifier(Protocol):
     def verify(self, token: str, ip: str) -> bool: ...
+
+
+class DeliveryError(ValueError):
+    def __init__(self, message, code=None):
+        super().__init__(message)
+        self.code = code

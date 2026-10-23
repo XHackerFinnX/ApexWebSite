@@ -5,7 +5,9 @@
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <meta name="theme-color" content="#f5f6f8" />
         <title>Управление магазином — APEX</title>
-        <link rel="stylesheet" href="/admin.css?v=6" />
+        <link rel="stylesheet" href="/admin.css?v=7" />
+        <link rel="stylesheet" href="/loading.css?v=1" />
+        <script defer src="/loading.js?v=1"></script>
         <script src="/appearance.js?v=4" defer></script>
         <script src="/motion.js?v=4" defer></script>
     </head>
@@ -277,7 +279,7 @@
                             <h2>Заказы и отправления</h2>
                             <p>
                                 Оплату подтверждает банк. Здесь можно изменить
-                                этап сборки и добавить трек-номер.
+                                этап сборки, создать отправление СДЭК и получить трек-номер.
                             </p>
                         </div>
                         <button class="button secondary" id="refreshOrders">
@@ -549,6 +551,7 @@
                                             name="tariff_code"
                                             type="number"
                                             value="136"
+                                            title="Для витрины нужен тариф склад–склад, например 136"
                                     /></label>
                                     <label
                                         >Город отправителя<input
@@ -908,6 +911,6 @@
             </form>
         </dialog>
         <div id="toast" class="toast" role="status" aria-live="polite"></div>
-        <script src="/admin.js?v=6" defer></script>
+        <script src="/admin.js?v=7" defer></script>
     </body>
 </html>

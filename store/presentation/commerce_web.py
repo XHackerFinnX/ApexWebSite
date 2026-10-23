@@ -178,6 +178,32 @@ class CommerceHandler:
                 return self._send(201, app.repo.save_promotion(self._body()))
         if method == "GET" and path == "/api/admin/orders":
             return self._send(data=app.repo.list_admin_orders())
+        if (
+            len(parts) == 5
+            and parts[:3] == ["api", "admin", "orders"]
+            and parts[4] == "cdek"
+        ):
+            from uuid import UUID
+
+            from store.application.shipping import ShippingService
+
+            order_id = str(UUID(parts[3]))
+            if not app.delivery:
+                raise ValueError("Интеграция СДЭК недоступна")
+            service = ShippingService(app.repo, app.delivery)
+            action = {
+                "POST": service.create,
+                "GET": service.sync,
+                "DELETE": service.cancel,
+            }.get(method)
+            if action:
+                result = action(order_id)
+                return self._send(
+                    data={
+                        key: result.get(key)
+                        for key in ("external_id", "status", "tracking_number", "error")
+                    }
+                )
         if method == "POST" and path == "/api/admin/integrations/cdek/check":
             config = app.repo.get_integration_config("cdek", enabled_only=False)
             if not config:

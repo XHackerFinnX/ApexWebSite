@@ -1,0 +1,7 @@
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS weight INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE order_items ADD COLUMN IF NOT EXISTS dimensions TEXT NOT NULL DEFAULT '';
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS request_payload JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS account_key TEXT NOT NULL DEFAULT '';
+ALTER TABLE deliveries ADD COLUMN IF NOT EXISTS error TEXT NOT NULL DEFAULT '';
+CREATE UNIQUE INDEX IF NOT EXISTS deliveries_provider_external_idx
+    ON deliveries(provider, external_id) WHERE external_id IS NOT NULL;

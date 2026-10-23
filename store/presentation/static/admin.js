@@ -46,6 +46,7 @@ async function apiJson(
     options = {},
     fallback = "Не удалось загрузить данные",
 ) {
+    const finishLoading = apexLoading.start();
     const controller = new AbortController();
     const timeoutMs = options.timeoutMs || 15000;
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
@@ -71,6 +72,7 @@ async function apiJson(
         throw error;
     } finally {
         clearTimeout(timeout);
+        finishLoading();
     }
 }
 function renderCategories() {
@@ -179,7 +181,7 @@ function renderProducts() {
     document
         .querySelectorAll("[data-delete]")
         .forEach(
-            (b) => (b.onclick = () => removeProduct(Number(b.dataset.delete))),
+            (b) => (b.onclick = () => removeProduct(Number(b.dataset.delete)).catch((error) => toast(error.message, true))),
         );
 }
 function renderReviews() {
@@ -412,6 +414,7 @@ const prepareImage = (file) =>
 async function readImage(file) {
     if (file.size > 10000000) throw new Error("Фотография превышает 10 МБ");
     pendingUploads++;
+    const finishLoading = apexLoading.start();
     try {
         return (
             await apiJson("/api/admin/media", {
@@ -422,6 +425,7 @@ async function readImage(file) {
         ).url;
     } finally {
         pendingUploads--;
+        finishLoading();
     }
 }
 const variantRow = (variant = {}) => `<tr class="variant-row">
@@ -611,7 +615,7 @@ $("#productForm").onsubmit = async (e) => {
     saveButton.textContent = "Сохраняем…";
     try {
         const editingId = e.target.elements.id.value;
-        const r = await fetch(
+        await apiJson(
             editingId
                 ? `/api/admin/products/${editingId}`
                 : "/api/admin/products",
@@ -621,8 +625,6 @@ $("#productForm").onsubmit = async (e) => {
                 body: JSON.stringify(d),
             },
         );
-        if (!r.ok)
-            return toast(await errorMessage(r, "Товар не сохранён"), true);
         $("#productDialog").close();
         toast(d.id ? "Товар обновлён" : "Товар добавлен");
         load();
@@ -635,13 +637,11 @@ $("#productForm").onsubmit = async (e) => {
 };
 async function removeProduct(id) {
     if (confirm("Удалить товар из каталога?")) {
-        const r = await fetch("/api/admin/products/" + id, {
+        await apiJson("/api/admin/products/" + id, {
             method: "DELETE",
         });
-        if (r.ok) {
-            toast("Товар удалён");
-            load();
-        } else toast(await errorMessage(r, "Товар не удалён"), true);
+        toast("Товар удалён");
+        await load();
     }
 }
 document.querySelectorAll("[data-open-categories]").forEach((button) => {
@@ -656,7 +656,7 @@ $("#categoryForm").onsubmit = async (event) => {
     event.preventDefault();
     try {
         const id = event.target.elements.id.value;
-        const response = await fetch(
+        await apiJson(
             "/api/admin/categories" + (id ? "/" + id : ""),
             {
                 method: id ? "PUT" : "POST",
@@ -666,11 +666,6 @@ $("#categoryForm").onsubmit = async (event) => {
                 }),
             },
         );
-        if (!response.ok)
-            return toast(
-                await errorMessage(response, "Категория не добавлена"),
-                true,
-            );
         event.target.reset();
         await loadCategories();
         toast("Категория добавлена");
@@ -692,15 +687,10 @@ $("#categoryList").onclick = async (event) => {
     const button = event.target.closest("[data-delete-category]");
     if (!button || button.disabled || !confirm("Удалить категорию?")) return;
     try {
-        const response = await fetch(
+        await apiJson(
             `/api/admin/categories/${button.dataset.deleteCategory}`,
             { method: "DELETE" },
         );
-        if (!response.ok)
-            return toast(
-                await errorMessage(response, "Категория не удалена"),
-                true,
-            );
         await loadCategories();
         toast("Категория удалена");
     } catch (error) {
@@ -749,7 +739,7 @@ $("#integration").onsubmit = async (e) => {
     d.insurance = f.has("insurance");
     try {
         const editing = f.get("editing");
-        const r = await fetch(
+        const result = await apiJson(
             editing
                 ? `/api/admin/integrations/${editing}`
                 : "/api/admin/integrations",
@@ -757,11 +747,9 @@ $("#integration").onsubmit = async (e) => {
                 method: editing ? "PUT" : "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(d),
+                timeoutMs: 45000,
             },
         );
-        if (!r.ok)
-            throw new Error(await errorMessage(r, "Настройки не сохранены"));
-        const result = await r.json();
         toast(
             result.test
                 ? "Настройки сохранены, тест СДЭК пройден"
@@ -829,11 +817,11 @@ $("#checkCdek").onclick = async (event) => {
     try {
         await apiJson("/api/admin/integrations/cdek/check", {
             method: "POST",
-            timeoutMs: 30000,
+            timeoutMs: 45000,
             headers: { "Content-Type": "application/json" },
             body: "{}",
         });
-        toast("Авторизация и расчёт СДЭК прошли проверку");
+        toast("Авторизация, расчёт и офис отправителя СДЭК проверены");
     } catch (error) {
         toast(error.message, true);
     } finally {
@@ -979,7 +967,7 @@ $("#reviewForm").onsubmit = async (event) => {
     }
 };
 $("#logout").onclick = async () => {
-    await fetch("/api/admin/logout", { method: "POST" });
+    await apiJson("/api/admin/logout", { method: "POST" });
     location.replace("/admin");
 };
 $("#reviewRows").onclick = async (event) => {
@@ -1164,6 +1152,34 @@ $("#loyaltyForm").onsubmit = async (event) => {
     }
 };
 let orderRows = [];
+function cdekControls(order) {
+    if (!["pvz", "cdek"].includes(order.delivery_details?.type)) return "";
+    const labels = {
+        CREATING: "Запрос отправлен, уточните результат",
+        UNKNOWN: "Результат запроса пока неизвестен",
+        FAILED: "Запрос отклонён, можно повторить после исправления настроек",
+        PROCESSING: "СДЭК обрабатывает запрос",
+        ACCEPTED: "Проходит проверку СДЭК",
+        CREATED: "Накладная создана",
+        INVALID: "СДЭК отклонил отправление",
+        CANCEL_PENDING: "Запрос отмены обрабатывается",
+        REMOVED: "Отправление отменено",
+        RECEIVED_AT_SHIPMENT_WAREHOUSE: "Принят на склад СДЭК",
+        DELIVERED: "Вручён получателю",
+        NOT_DELIVERED: "Не вручён",
+    };
+    const state = order.cdek_status;
+    const create = !state || ["FAILED", "INVALID"].includes(state);
+    return '<div class="cdek-order"><b>СДЭК</b><p>' +
+        esc(labels[state] || state || "Отправление ещё не создано") + '</p>' +
+        (order.cdek_error ? '<p class="error-text">' + esc(order.cdek_error) + '</p>' : '') +
+        (order.cdek_uuid ? '<small>UUID: ' + esc(order.cdek_uuid) + '</small>' : '') +
+        '<div class="cdek-order__actions">' +
+        (create ? '<button type="button" class="button secondary" data-cdek-action="create" ' + (order.status === "CONFIRMED" ? '' : 'disabled title="Доступно после оплаты"') + '>' + (state ? 'Повторить создание' : 'Создать отправление') + '</button>' :
+            '<button type="button" class="button secondary" data-cdek-action="sync">Уточнить статус</button>') +
+        (order.cdek_uuid && !["DELIVERED", "NOT_DELIVERED", "REMOVED", "CANCEL_PENDING", "INVALID"].includes(state) ? '<button type="button" class="button secondary" data-cdek-action="cancel">Отменить отправление</button>' : '') +
+        '</div></div>';
+}
 function renderOrders() {
     const q = $("#orderSearch").value.toLocaleLowerCase("ru"),
         status = $("#orderStatus").value;
@@ -1266,6 +1282,7 @@ function renderOrders() {
                       (items
                           ? '<div class="order-items">' + items + "</div>"
                           : "") +
+                      cdekControls(row) +
                       '<div class="order-edit"><label>Статус сборки<select name="fulfillment">' +
                       states
                           .map(
@@ -1305,7 +1322,7 @@ $("#orderRows").onsubmit = async (event) => {
     const form = event.target.closest("[data-order-id]");
     if (!form) return;
     event.preventDefault();
-    const button = form.querySelector("button");
+    const button = form.querySelector('button[type="submit"]');
     button.disabled = true;
     try {
         await apiJson("/api/admin/orders/" + form.dataset.orderId, {
@@ -1318,6 +1335,29 @@ $("#orderRows").onsubmit = async (event) => {
         toast(error.message, true);
     } finally {
         button.disabled = false;
+    }
+};
+$("#orderRows").onclick = async (event) => {
+    const button = event.target.closest("[data-cdek-action]");
+    if (!button || button.disabled) return;
+    const action = button.dataset.cdekAction;
+    if (action === "cancel" && !confirm("Отменить отправление в СДЭК? Оплата заказа при этом не меняется.")) return;
+    const form = button.closest("[data-order-id]");
+    const buttons = [...form.querySelectorAll("button")];
+    const disabled = buttons.map((item) => item.disabled);
+    buttons.forEach((item) => item.disabled = true);
+    try {
+        const result = await apiJson('/api/admin/orders/' + form.dataset.orderId + '/cdek', {
+            method: { create: "POST", sync: "GET", cancel: "DELETE" }[action],
+            timeoutMs: 45000,
+        });
+        toast(result.error || (result.tracking_number ? 'Накладная СДЭК: ' + result.tracking_number : 'Данные СДЭК обновлены. Запрос может ещё обрабатываться.'), Boolean(result.error));
+        await loadOrders();
+    } catch (error) {
+        toast(error.message, true);
+        await loadOrders().catch(() => {});
+    } finally {
+        buttons.forEach((item, index) => item.disabled = disabled[index]);
     }
 };
 $("#refreshOrders").onclick = () =>

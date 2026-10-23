@@ -403,7 +403,7 @@ class CommerceRepository:
             ).fetchone()
             with db.cursor() as cursor:
                 cursor.executemany(
-                    "INSERT INTO order_items(order_id,product_id,size,color,sku,name,quantity,unit_price,line_total) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                    "INSERT INTO order_items(order_id,product_id,size,color,sku,name,quantity,unit_price,line_total,weight,dimensions) VALUES(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                     [
                         (
                             order["id"],
@@ -415,6 +415,8 @@ class CommerceRepository:
                             i["quantity"],
                             i["unit_price"],
                             i.get("line_total", i["unit_price"] * i["quantity"]),
+                            int(i.get("weight") or 0),
+                            str(i.get("dimensions") or ""),
                         )
                         for i in items
                     ],
@@ -630,11 +632,122 @@ class CommerceRepository:
         with self._db() as db:
             orders = list(
                 db.execute(
-                    "SELECT id,status,total,customer_email,customer_details,delivery_details,fulfillment,tracking_number,promo_code,points_spent,created_at FROM orders ORDER BY created_at DESC LIMIT 200"
+                    """SELECT o.id,o.status,o.total,o.customer_email,o.customer_details,
+                    o.delivery_details,o.fulfillment,o.tracking_number,o.promo_code,
+                    o.points_spent,o.created_at,d.external_id AS cdek_uuid,
+                    d.status AS cdek_status,d.error AS cdek_error
+                    FROM orders o LEFT JOIN deliveries d ON d.order_id=o.id AND d.provider='cdek'
+                    ORDER BY o.created_at DESC LIMIT 200"""
                 ).fetchall()
             )
             self._attach_order_items(db, orders)
             return orders
+
+    def shipping_order(self, order_id):
+        with self._db() as db:
+            order = db.execute(
+                "SELECT * FROM orders WHERE id=%s", (order_id,)
+            ).fetchone()
+            if not order:
+                raise LookupError("Заказ не найден")
+            order["items"] = list(
+                db.execute(
+                    "SELECT * FROM order_items WHERE order_id=%s ORDER BY id",
+                    (order_id,),
+                ).fetchall()
+            )
+            return order
+
+    def cdek_shipment(self, order_id):
+        with self._db() as db:
+            return db.execute(
+                "SELECT * FROM deliveries WHERE order_id=%s AND provider='cdek'",
+                (order_id,),
+            ).fetchone()
+
+    def claim_cdek_shipment(self, order_id, payload, account_key):
+        # Commit the claim BEFORE sending anything. A process crash or ambiguous
+        # provider response leaves a durable record that prevents duplicate POSTs.
+        with self._db() as db:
+            order = db.execute(
+                "SELECT * FROM orders WHERE id=%s FOR UPDATE", (order_id,)
+            ).fetchone()
+            if not order:
+                raise LookupError("Заказ не найден")
+            if order["status"] != "CONFIRMED" or order["delivery_details"].get(
+                "type"
+            ) not in {"pvz", "cdek"}:
+                raise ValueError(
+                    "Создание СДЭК доступно для оплаченного заказа с доставкой в ПВЗ"
+                )
+            previous = db.execute(
+                "SELECT * FROM deliveries WHERE order_id=%s", (order_id,)
+            ).fetchone()
+            if previous and (
+                previous["provider"] != "cdek"
+                or previous["status"] not in {"FAILED", "INVALID"}
+            ):
+                return previous, False
+            row = db.execute(
+                """INSERT INTO deliveries(order_id,provider,status,address,request_payload,account_key)
+                VALUES(%s,'cdek','CREATING',%s,%s,%s)
+                ON CONFLICT(order_id) DO UPDATE SET status='CREATING',request_payload=excluded.request_payload,
+                account_key=excluded.account_key,external_id=NULL,tracking_number=NULL,error='',updated_at=now() RETURNING *""",
+                (
+                    order_id,
+                    Jsonb(order["delivery_details"]),
+                    Jsonb(payload),
+                    account_key,
+                ),
+            ).fetchone()
+            return row, True
+
+    def save_cdek_shipment(self, order_id, result, expected_updated_at=None):
+        with self._db() as db:
+            db.execute("SELECT id FROM orders WHERE id=%s FOR UPDATE", (order_id,))
+            previous = db.execute(
+                "SELECT * FROM deliveries WHERE order_id=%s AND provider='cdek' FOR UPDATE",
+                (order_id,),
+            ).fetchone()
+            if (
+                previous
+                and expected_updated_at is not None
+                and previous["updated_at"] != expected_updated_at
+            ):
+                return previous
+            row = db.execute(
+                """UPDATE deliveries SET external_id=coalesce(%s,external_id),status=%s,
+                tracking_number=coalesce(nullif(%s,''),tracking_number),error=%s,updated_at=clock_timestamp()
+                WHERE order_id=%s AND provider='cdek' RETURNING *""",
+                (
+                    result.get("external_id"),
+                    result["status"],
+                    result.get("tracking_number", ""),
+                    result.get("error", ""),
+                    order_id,
+                ),
+            ).fetchone()
+            if not row:
+                raise LookupError("Отправление не найдено")
+            if row.get("tracking_number") and row["status"] not in {
+                "INVALID",
+                "REMOVED",
+                "CANCEL_PENDING",
+            }:
+                db.execute(
+                    "UPDATE orders SET tracking_number=%s,updated_at=now() WHERE id=%s",
+                    (row["tracking_number"], order_id),
+                )
+            if row["status"] == "DELIVERED":
+                db.execute(
+                    "UPDATE orders SET fulfillment='delivered' WHERE id=%s", (order_id,)
+                )
+            elif row["status"] == "RECEIVED_AT_SHIPMENT_WAREHOUSE":
+                db.execute(
+                    "UPDATE orders SET fulfillment='shipped' WHERE id=%s AND fulfillment IN ('new','packing')",
+                    (order_id,),
+                )
+            return row
 
     def update_fulfillment(self, order_id, data):
         state = str(data.get("fulfillment", "new"))

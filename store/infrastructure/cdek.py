@@ -9,12 +9,12 @@ from decimal import ROUND_HALF_UP, Decimal
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+from uuid import UUID
+
+from store.application.ports import DeliveryError
 
 
-class CDEKError(ValueError):
-    def __init__(self, message, code=None):
-        super().__init__(message)
-        self.code = code
+CDEKError = DeliveryError
 
 
 class CDEKDelivery:
@@ -48,7 +48,11 @@ class CDEKDelivery:
     def _error_message(payload):
         if not isinstance(payload, dict):
             return "СДЭК отклонил запрос без пояснения"
-        errors = payload.get("errors") or []
+        errors = payload.get("errors") or [
+            error
+            for request in payload.get("requests", [])
+            for error in request.get("errors", [])
+        ]
         if isinstance(errors, dict):
             errors = [errors]
         return (
@@ -181,7 +185,57 @@ class CDEKDelivery:
         )
         if result.get("total_sum") is None and result.get("delivery_sum") is None:
             raise CDEKError("Тест СДЭК не вернул стоимость доставки")
-        return {"authorization": True, "calculation": True}
+        checks = {"authorization": True, "calculation": True}
+        if config.get("sender_office"):
+            offices = self._request_json(
+                self._url(
+                    "deliverypoints?"
+                    + urlencode(
+                        {
+                            "code": config["sender_office"],
+                            "city_code": config["sender_city"],
+                            "is_reception": "true",
+                        }
+                    ),
+                    config,
+                ),
+                headers={"Authorization": "Bearer " + token},
+            )
+            if not isinstance(offices, list) or not any(
+                p.get("code") == config["sender_office"]
+                and p.get("is_reception") is not False
+                and p.get("status", "ACTIVE") == "ACTIVE"
+                for p in offices
+            ):
+                raise CDEKError(
+                    "Офис отправителя СДЭК не найден в указанном городе или не принимает отправления"
+                )
+            checks["sender_office"] = True
+            tariffs = self._request_json(
+                self._url("calculator/tarifflist", config),
+                method="POST",
+                data=self._calculation_payload(
+                    config, {"code": int(config["sender_city"])}
+                ),
+                headers={
+                    "Authorization": "Bearer " + token,
+                    "Content-Type": "application/json",
+                },
+            )
+            selected = next(
+                (
+                    tariff
+                    for tariff in tariffs.get("tariff_codes", [])
+                    if str(tariff.get("tariff_code")) == str(config["tariff_code"])
+                ),
+                None,
+            )
+            if not selected or str(selected.get("delivery_mode")) != "4":
+                raise CDEKError(
+                    "Для доставки витрины в ПВЗ выберите доступный тариф СДЭК «склад–склад»"
+                )
+            checks["tariff_mode"] = True
+        return checks
 
     def _calculation_payload(self, config, destination, items=None, order_total=0):
         dispatch = datetime.now(timezone(timedelta(hours=3))) + timedelta(
@@ -218,6 +272,17 @@ class CDEKDelivery:
                         "height": math.ceil(dims[2] * quantity / 10),
                     }
                 )
+        elif items:
+            fallback = max(
+                1, int(config["weight"]) // sum(int(item["quantity"]) for item in items)
+            )
+            packages[0]["weight"] = max(
+                packages[0]["weight"],
+                sum(
+                    int(item.get("weight") or fallback) * int(item["quantity"])
+                    for item in items
+                ),
+            )
         result = {
             "date": dispatch.strftime("%Y-%m-%dT%H:%M:%S%z"),
             "type": int(config["contract_type"]),
@@ -228,9 +293,143 @@ class CDEKDelivery:
             "to_location": destination,
             "packages": packages,
         }
+        if config.get("sender_office"):
+            result["shipment_point"] = str(config["sender_office"])
         if str(config.get("insurance", "false")).lower() == "true" and order_total > 0:
             result["services"] = [{"code": "INSURANCE", "parameter": str(order_total)}]
         return result
+
+    def order_payload(self, config, order):
+        """Build a prepaid warehouse-to-PVZ shipment from persisted order data."""
+        destination = order.get("delivery_details") or {}
+        point = str((destination.get("pvz") or {}).get("code") or "")
+        if destination.get("type") not in {"pvz", "cdek"} or not point:
+            raise ValueError("Заказ должен содержать выбранный ПВЗ СДЭК")
+        if not config.get("sender_office"):
+            raise ValueError("Укажите офис отправителя в настройках СДЭК")
+        contact = order.get("customer_details") or {}
+        name = str(contact.get("recipient") or "").strip()
+        phone = re.sub(r"\D", "", str(contact.get("phone") or ""))
+        if len(name.split()) < 2 or not 10 <= len(phone) <= 15:
+            raise ValueError("В заказе отсутствуют ФИО или телефон получателя")
+        items = order.get("items") or []
+        if not items:
+            raise ValueError("В заказе нет товаров")
+        calculation = self._calculation_payload(config, {}, items)
+        packages = []
+        groups = (
+            [[item] for item in items]
+            if config.get("dimension_type") == "product"
+            else [items]
+        )
+        for index, (dimensions, group) in enumerate(
+            zip(calculation["packages"], groups), 1
+        ):
+            products = []
+            for item in group:
+                quantity = int(item["quantity"])
+                # Allocate remaining kopecks to a separate line, as in the receipt.
+                cents, remainder = divmod(
+                    int(Decimal(str(item["line_total"])) * 100), quantity
+                )
+                for unit, amount in (
+                    (cents, quantity - remainder),
+                    (cents + 1, remainder),
+                ):
+                    if amount:
+                        products.append(
+                            {
+                                "name": str(item["name"])[:255],
+                                "ware_key": str(
+                                    item.get("sku")
+                                    or f"{item['product_id']}-{item.get('color', '')}-{item.get('size', '')}"
+                                )[:255],
+                                "payment": {"value": 0},
+                                "cost": float(Decimal(unit) / 100),
+                                "weight": max(
+                                    1,
+                                    int(
+                                        item.get("weight")
+                                        or int(config["weight"])
+                                        // sum(int(i["quantity"]) for i in group)
+                                    ),
+                                ),
+                                "amount": amount,
+                            }
+                        )
+            packages.append({**dimensions, "number": str(index), "items": products})
+        if sum(len(p["items"]) for p in packages) > 126:
+            raise ValueError("В отправлении СДЭК допускается до 126 товарных позиций")
+        return {
+            "type": int(config["contract_type"]),
+            "number": "APEX-" + UUID(str(order["id"])).hex,
+            "tariff_code": int(config["tariff_code"]),
+            "shipment_point": str(config["sender_office"]),
+            "delivery_point": point,
+            "recipient": {
+                "name": name[:255],
+                "phones": [{"number": "+" + phone}],
+                "email": str(order["customer_email"]),
+            },
+            "delivery_recipient_cost": {"value": 0},
+            "comment": str(contact.get("comment") or "")[:255],
+            "packages": packages,
+        }
+
+    @staticmethod
+    def order_result(payload):
+        if not isinstance(payload, dict) or not isinstance(payload.get("entity"), dict):
+            raise CDEKError("СДЭК не вернул информацию об отправлении. Уточните статус")
+        entity = payload["entity"]
+        try:
+            external_id = str(UUID(str(entity["uuid"])))
+        except (KeyError, ValueError, TypeError) as exc:
+            raise CDEKError("СДЭК не вернул UUID отправления. Уточните статус") from exc
+        requests = payload.get("requests") or []
+        latest = (
+            max(requests, key=lambda request: request.get("date_time", ""))
+            if requests
+            else {}
+        )
+        errors = latest.get("errors") or []
+        statuses = entity.get("statuses") or []
+        status = str((statuses[0] if statuses else {}).get("code") or "PROCESSING")
+        if (latest.get("state") == "INVALID" or errors) and latest.get(
+            "type"
+        ) != "DELETE":
+            status = "INVALID"
+        elif latest.get("type") == "DELETE" and latest.get("state") in {
+            "ACCEPTED",
+            "WAITING",
+            "PROCESSING",
+        }:
+            status = "CANCEL_PENDING"
+        return {
+            "external_id": external_id,
+            "status": status,
+            "tracking_number": str(entity.get("cdek_number") or ""),
+            "error": "; ".join(
+                str(e.get("message") or e.get("code") or "") for e in errors
+            )[:1000],
+        }
+
+    def register_order(self, config, payload):
+        if payload["type"] == 2:
+            payload = {key: value for key, value in payload.items() if key != "number"}
+        return self.order_result(self._authorized("orders", config, "POST", payload))
+
+    def order_info(self, config, *, external_id="", number=""):
+        path = (
+            "orders/" + str(UUID(str(external_id)))
+            if external_id
+            else "orders?" + urlencode({"im_number": number})
+        )
+        return self.order_result(self._authorized(path, config))
+
+    def cancel_order(self, config, external_id):
+        return self.order_result(
+            self._authorized("orders/" + str(UUID(str(external_id))), config, "DELETE")
+        )
 
     @staticmethod
     def _destination(postal_code="", city_code=0):
@@ -242,11 +441,21 @@ class CDEKDelivery:
             raise ValueError("Укажите город или шестизначный почтовый индекс")
         return {"postal_code": str(postal_code)}
 
-    def calculate(self, postal_code="", order_total=0, *, city_code=0, items=None):
+    def calculate(
+        self,
+        postal_code="",
+        order_total=0,
+        *,
+        city_code=0,
+        items=None,
+        delivery_point="",
+    ):
         config = self._config()
         payload = self._calculation_payload(
             config, self._destination(postal_code, city_code), items, order_total
         )
+        if delivery_point:
+            payload["delivery_point"] = str(delivery_point)
         # Exclude seconds from cache identity: the dispatch date is sufficient.
         cache_payload = {**payload, "date": payload["date"][:10]}
         key = (
@@ -307,7 +516,8 @@ class CDEKDelivery:
         if cached and time.monotonic() - cached[0] < 300:
             return cached[1]
         data = self._authorized(
-            "deliverypoints?" + urlencode({**query, "type": "PVZ", "lang": "rus"}),
+            "deliverypoints?"
+            + urlencode({**query, "type": "PVZ", "is_handout": "true", "lang": "rus"}),
             config,
         )
         points = data if isinstance(data, list) else data.get("pvz", [])
@@ -322,6 +532,8 @@ class CDEKDelivery:
                 "phone": str((p.get("phones") or [{}])[0].get("number", "")),
             }
             for p in points
+            if p.get("is_handout") is not False
+            and p.get("status", "ACTIVE") == "ACTIVE"
         ]
         with self._lock:
             if len(self._cache) > 256:

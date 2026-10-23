@@ -13,6 +13,7 @@ import urllib.error
 import urllib.request
 from http.server import ThreadingHTTPServer
 from uuid import uuid4
+from unittest.mock import Mock
 
 import psycopg
 from psycopg import sql
@@ -22,6 +23,8 @@ from store.application.services import (
     CheckoutService,
     IntegrationService,
 )
+from store.application.shipping import ShippingService
+from store.infrastructure.cdek import CDEKDelivery
 from store.config import get_settings
 from store.domain import Integration
 from store.infrastructure.postgres_repo import PostgreSQLRepository
@@ -162,6 +165,128 @@ class PostgreSQLCommerceTests(unittest.TestCase):
             return db.execute(
                 "SELECT points FROM customers WHERE id=%s", (self.customer["id"],)
             ).fetchone()["points"]
+
+    def cdek_fixture(self, paid=True):
+        config = {
+            "environment": "test",
+            "client_id": "test-only",
+            "client_secret": "test-only",
+            "contract_type": "1",
+            "tariff_code": "136",
+            "sender_city": "44",
+            "sender_office": "MSK1",
+            "dispatch_days": "1",
+            "weight": "600",
+            "length": "300",
+            "width": "200",
+            "height": "50",
+            "dimension_type": "shipment",
+        }
+        self.repo.save_integration(Integration("cdek", "delivery", True, config, {}))
+        payment = self.payment()
+        order_id = payment["order_id"]
+        if paid:
+            self.repo.update_order_by_payment(order_id, "CONFIRMED")
+        with self.repo._db() as db:
+            db.execute(
+                "UPDATE orders SET delivery_details=%s WHERE id=%s",
+                (
+                    psycopg.types.json.Jsonb(
+                        {"type": "pvz", "pvz": {"code": "SPB1"}, "city_code": 270}
+                    ),
+                    order_id,
+                ),
+            )
+        return config, order_id
+
+    def test_cdek_parallel_claims_allow_exactly_one_registration(self):
+        config, order_id = self.cdek_fixture()
+        payload = CDEKDelivery(self.repo).order_payload(
+            config, self.repo.shipping_order(order_id)
+        )
+        with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+            results = list(
+                pool.map(
+                    lambda _: self.repo.claim_cdek_shipment(
+                        order_id, payload, ShippingService.account_key(config)
+                    ),
+                    range(4),
+                )
+            )
+        self.assertEqual(sum(claimed for _, claimed in results), 1)
+        self.assertEqual(self.repo.cdek_shipment(order_id)["request_payload"], payload)
+
+    def test_cdek_endpoints_require_admin_and_persist_tracking_without_changing_payment(
+        self,
+    ):
+        _, order_id = self.cdek_fixture()
+        provider = Mock(wraps=CDEKDelivery(self.repo))
+        external_id = str(uuid4())
+        provider.register_order = Mock(
+            return_value={
+                "external_id": external_id,
+                "status": "PROCESSING",
+                "error": "",
+            }
+        )
+        provider.order_info = Mock(
+            return_value={
+                "external_id": external_id,
+                "status": "CREATED",
+                "tracking_number": "1234567890",
+                "error": "",
+            }
+        )
+        provider.cancel_order = Mock(
+            return_value={"external_id": external_id, "status": "REMOVED", "error": ""}
+        )
+        self.web.delivery = provider
+        path = "/api/admin/orders/" + order_id + "/cdek"
+        for method in ("GET", "POST", "DELETE"):
+            self.assertEqual(self.http_request(path, method)[0], 401)
+        headers = {"Cookie": "apex_admin=" + self.web._session_token(4_000_000_000)}
+        status, first, _ = self.http_request(path, "POST", headers=headers)
+        self.assertEqual(status, 200)
+        self.assertEqual(first["status"], "PROCESSING")
+        self.assertNotIn("request_payload", first)
+        status, second, _ = self.http_request(path, "POST", headers=headers)
+        self.assertEqual(status, 200)
+        self.assertEqual(second["tracking_number"], "1234567890")
+        self.assertEqual(provider.register_order.call_count, 1)
+        history = self.repo.customer_history(self.customer["id"])["orders"][0]
+        self.assertEqual(history["tracking_number"], "1234567890")
+        self.assertEqual(self.repo.list_admin_orders()[0]["cdek_uuid"], external_id)
+        self.assertEqual(self.http_request(path, "DELETE", headers=headers)[0], 200)
+        self.assertEqual(self.repo.get_order(order_id)["status"], "CONFIRMED")
+
+    def test_cdek_unpaid_orders_cannot_be_claimed(self):
+        config, order_id = self.cdek_fixture(paid=False)
+        with self.assertRaisesRegex(ValueError, "оплаченного"):
+            self.repo.claim_cdek_shipment(
+                order_id, {"number": "test"}, ShippingService.account_key(config)
+            )
+        self.assertIsNone(self.repo.cdek_shipment(order_id))
+
+    def test_cdek_late_response_does_not_overwrite_newer_status(self):
+        config, order_id = self.cdek_fixture()
+        shipment, _ = self.repo.claim_cdek_shipment(
+            order_id, {"number": "test"}, ShippingService.account_key(config)
+        )
+        self.repo.save_cdek_shipment(
+            order_id,
+            {
+                "external_id": str(uuid4()),
+                "status": "DELIVERED",
+                "tracking_number": "12345",
+            },
+        )
+        saved = self.repo.save_cdek_shipment(
+            order_id,
+            {"status": "PROCESSING"},
+            expected_updated_at=shipment["updated_at"],
+        )
+        self.assertEqual(saved["status"], "DELIVERED")
+        self.assertEqual(self.repo.shipping_order(order_id)["fulfillment"], "delivered")
 
     def test_customer_review_requires_login_ownership_and_confirmed_payment(self):
         payment = self.payment()
