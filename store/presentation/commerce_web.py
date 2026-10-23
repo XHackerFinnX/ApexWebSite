@@ -36,6 +36,17 @@ class CommerceHandler:
             return self._send(201, {"url": store_image(value)})
         if method == "GET" and path == "/account":
             return self._serve_static("account.html")
+        if method == "GET" and path in {"/client-service", "/client-service/"}:
+            return self._serve_static("client-service.html")
+        if method == "GET" and path in {"/privacy", "/oferta", "/cookie"}:
+            return self._redirect(
+                "/client-service#"
+                + {
+                    "/privacy": "policy",
+                    "/oferta": "public-offer",
+                    "/cookie": "cookies",
+                }[path]
+            )
         if method == "GET" and path in {"/payment/success", "/payment/fail"}:
             return self._serve_static(
                 "payment-success.html"
@@ -132,6 +143,13 @@ class CommerceHandler:
             return self._send(
                 data={"ok": True},
                 headers={"Set-Cookie": self._customer_cookie("", True)},
+            )
+        if method == "POST" and path == "/api/account/reviews":
+            customer = self._customer()
+            if not customer:
+                return self._send(401, {"error": "Войдите в личный кабинет"})
+            return self._send(
+                201, app.repo.submit_customer_review(customer["id"], self._body())
             )
         if path in {"/api/account", "/api/account/profile"}:
             customer = self._customer()

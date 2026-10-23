@@ -104,6 +104,20 @@ function orderCard(order) {
     };
     const success = order.status === "CONFIRMED";
     const pending = ["NEW", "AUTHORIZED"].includes(order.status);
+    const reviewAction = order.review_id
+        ? '<p class="member-order__review-status">' +
+          icon("check") +
+          (order.review_published
+              ? "Отзыв опубликован. Спасибо!"
+              : "Отзыв отправлен на модерацию. Спасибо!") +
+          "</p>"
+        : success
+          ? '<div class="member-order__review"><p>Как тебе покупка?</p><button type="button" class="button secondary" data-review-order="' +
+            escapeText(order.id) +
+            '">Оставить отзыв ' +
+            icon("star") +
+            "</button></div>"
+          : "";
     const address =
         order.delivery_details?.pvz?.address ||
         order.delivery_details?.cityFullName ||
@@ -173,7 +187,9 @@ function orderCard(order) {
         rubles(order.shipping) +
         "</span></div><div><span>Итого</span><span>" +
         rubles(order.total) +
-        "</span></div></div></div></details></article>"
+        "</span></div></div></div></details>" +
+        reviewAction +
+        "</article>"
     );
 }
 async function loadMember() {
@@ -374,6 +390,17 @@ select("#toggle-password").onclick = (event) => {
     );
 };
 document.addEventListener("click", async (event) => {
+    const review = event.target.closest("[data-review-order]");
+    if (review) {
+        const form = select("#customer-review-form");
+        form.reset();
+        form.elements.order_id.value = review.dataset.reviewOrder;
+        select("#review-order-label").textContent =
+            "Заказ №" + review.dataset.reviewOrder.slice(0, 8);
+        select("#customer-review-error").textContent = "";
+        select("#customer-review-dialog").showModal();
+        return;
+    }
     const tab = event.target.closest("[data-member-tab]");
     if (tab) {
         setSection(tab.dataset.memberTab);
@@ -390,4 +417,37 @@ document.addEventListener("click", async (event) => {
     }
 });
 window.addEventListener("hashchange", () => setSection(location.hash.slice(1)));
+select("#close-customer-review").onclick = () =>
+    select("#customer-review-dialog").close();
+select("#customer-review-dialog").addEventListener("click", (event) => {
+    if (event.target !== event.currentTarget) return;
+    const box = event.currentTarget.getBoundingClientRect();
+    if (
+        event.clientX < box.left ||
+        event.clientX > box.right ||
+        event.clientY < box.top ||
+        event.clientY > box.bottom
+    )
+        event.currentTarget.close();
+});
+select("#customer-review-form").onsubmit = async (event) => {
+    event.preventDefault();
+    const button = event.target.querySelector('[type="submit"]');
+    button.disabled = true;
+    select("#customer-review-error").textContent = "";
+    try {
+        await api(
+            "/api/account/reviews",
+            "POST",
+            Object.fromEntries(new FormData(event.target)),
+        );
+        select("#customer-review-dialog").close();
+        await loadMember();
+        message("Спасибо! Отзыв отправлен на модерацию.");
+    } catch (error) {
+        select("#customer-review-error").textContent = error.message;
+    } finally {
+        button.disabled = false;
+    }
+};
 loadMember();

@@ -234,6 +234,25 @@ button {
     border: 1px solid var(--line);
     border-radius: 10px;
     box-shadow: 0 10px 35px #0002;
+    max-height: min(420px, calc(100dvh - 170px));
+    overflow-y: auto;
+}
+.header-help[open] > summary .icon {
+    transform: rotate(180deg);
+}
+.nav-empty {
+    color: var(--muted);
+    font-size: 13px;
+}
+.header__logo .brand-logo {
+    width: 140px;
+}
+.footer__logo .brand-logo {
+    width: 190px;
+    margin-block: 28px 18px;
+}
+.mobile-menu {
+    display: none;
 }
 .header__mobile-nav,
 .mobile-menu-backdrop {
@@ -2104,34 +2123,136 @@ button {
     .header__logo {
         margin-right: auto;
     }
-    .header__mobile-nav {
+    .mobile-menu {
         display: flex;
         position: fixed;
-        top: 132px;
-        bottom: 0;
-        left: 0;
-        width: min(360px, 88vw);
-        padding: 20px 24px;
+        inset: 0;
+        align-items: flex-end;
+        justify-content: center;
+        padding: 8px 8px max(8px, env(safe-area-inset-bottom));
+        z-index: 71;
+        visibility: hidden;
+        pointer-events: none;
+        transition: visibility 0s 0.35s;
+    }
+    .mobile-menu__sheet {
+        position: relative;
+        width: min(680px, 100%);
+        height: min(74dvh, 760px);
+        max-height: calc(100dvh - 100px);
+        transform: translateY(calc(100% + 90px));
+        transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1);
+    }
+    .mobile-menu.is-open {
+        visibility: visible;
+        pointer-events: auto;
+        transition-delay: 0s;
+    }
+    .mobile-menu.is-open .mobile-menu__sheet {
+        transform: translateY(0);
+    }
+    .header__mobile-nav {
+        display: flex;
+        height: 100%;
+        padding: 22px 24px;
         flex-direction: column;
         overflow-y: auto;
+        overscroll-behavior: contain;
         background: var(--paper);
         color: var(--ink);
-        z-index: 31;
-        box-shadow: 10px 0 30px #0001;
+        border-radius: 12px;
+        box-shadow: 0 14px 60px #0003;
     }
-    .header__mobile-nav a {
-        padding: 18px 0;
-        border-bottom: 1px solid var(--line);
-        font-size: 16px;
+    .mobile-menu__close {
+        position: absolute;
+        left: 50%;
+        top: -68px;
+        transform: translateX(-50%);
+        display: grid;
+        place-items: center;
+        width: 48px;
+        height: 48px;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: var(--paper);
+        color: var(--ink);
+        box-shadow: 0 6px 20px #0002;
+    }
+    .mobile-nav-links {
+        display: grid;
+        gap: 2px;
+    }
+    .mobile-nav-links > a,
+    .mobile-nav-links summary {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 13px 0;
+        font-size: 21px;
         font-weight: 700;
+        white-space: normal;
+        line-height: 1.3;
+    }
+    .mobile-nav-links summary .icon {
+        width: 18px;
+        height: 18px;
+        flex-shrink: 0;
+    }
+    .mobile-nav-links .header-help > div {
+        position: static;
+        max-height: none;
+        min-width: 0;
+        margin: 2px 0 10px;
+        padding: 8px 0 8px 16px;
+        border: 0;
+        border-left: 2px solid var(--line);
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none;
+        gap: 0;
+    }
+    .mobile-nav-links .header-help > div a {
+        padding: 10px 0;
+        font-size: 15px;
+        line-height: 1.45;
+    }
+    .mobile-nav-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-top: auto;
+        padding-top: 24px;
+    }
+    .mobile-nav-footer .brand-logo {
+        width: 88px;
+    }
+    .mobile-nav-footer a {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 12px;
+        font-weight: 600;
     }
     .mobile-menu-backdrop {
         display: block;
         position: fixed;
-        inset: 132px 0 0;
-        z-index: 25;
-        background: #0007;
+        inset: 0;
+        z-index: 70;
+        background: #0008;
         border: 0;
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition:
+            opacity 0.25s,
+            visibility 0s 0.35s;
+    }
+    .mobile-menu-backdrop.is-open {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+        transition-delay: 0s;
     }
     .menu-open {
         overflow: hidden;
@@ -2188,6 +2309,7 @@ button {
     }
 }
 @media (min-width: 1101px) {
+    .mobile-menu,
     .header__mobile-nav,
     .mobile-menu-backdrop {
         display: none !important;
@@ -2250,6 +2372,9 @@ button {
     .header .header__actions {
         gap: 8px;
     }
+    .header .header__logo .brand-logo {
+        width: 88px;
+    }
 }
 @media (max-width: 699px) {
     :root {
@@ -2278,6 +2403,9 @@ button {
         margin: 0;
         font-size: 23px;
     }
+    .header__logo .brand-logo {
+        width: 104px;
+    }
     .header__actions {
         margin-left: auto;
         gap: 11px;
@@ -2295,12 +2423,6 @@ button {
     }
     .bag-btn__count {
         font-size: 9px;
-    }
-    .header__mobile-nav {
-        top: 100px;
-    }
-    .mobile-menu-backdrop {
-        top: 100px;
     }
     .hero {
         aspect-ratio: 3/4;
@@ -2582,9 +2704,11 @@ button {
         font-size: 10px;
     }
     .cart {
-        inset: 8px;
-        width: calc(100vw - 16px);
-        border-radius: 12px;
+        inset: 0;
+        width: 100%;
+        height: 100dvh;
+        border: 0;
+        border-radius: 0;
     }
     .cart__header {
         padding: 20px;
@@ -2616,11 +2740,20 @@ button {
         font-size: 13px;
     }
     .product-modal {
-        padding: 8px;
+        padding: 0;
+        align-items: stretch;
     }
     .product-modal__dialog {
-        max-height: calc(100dvh - 16px);
-        border-radius: 10px;
+        width: 100%;
+        height: 100dvh;
+        max-height: 100dvh;
+        border: 0;
+        border-radius: 0;
+    }
+    .product-modal__close {
+        position: fixed;
+        top: max(14px, env(safe-area-inset-top));
+        right: 14px;
     }
     .product-view {
         grid-template-columns: 1fr;
@@ -2723,5 +2856,12 @@ button {
         width: 30px;
         height: 36px;
         font-size: 22px;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    .mobile-menu,
+    .mobile-menu__sheet,
+    .mobile-menu-backdrop {
+        transition: none;
     }
 }

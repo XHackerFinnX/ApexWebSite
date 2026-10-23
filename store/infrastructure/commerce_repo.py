@@ -5,6 +5,7 @@ import re
 import secrets
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal, InvalidOperation
+from uuid import UUID
 
 import psycopg
 from psycopg.types.json import Jsonb
@@ -124,7 +125,12 @@ class CommerceRepository:
         with self._db() as db:
             orders = list(
                 db.execute(
-                    "SELECT id,status,total,subtotal,discount,shipping,promo_code,points_spent,points_earned,fulfillment,tracking_number,delivery_details,created_at FROM orders WHERE customer_id=%s ORDER BY created_at DESC LIMIT 100",
+                    """SELECT o.id,o.status,o.total,o.subtotal,o.discount,o.shipping,
+                    o.promo_code,o.points_spent,o.points_earned,o.fulfillment,
+                    o.tracking_number,o.delivery_details,o.created_at,
+                    r.id AS review_id,r.is_published AS review_published
+                    FROM orders o LEFT JOIN reviews r ON r.order_id=o.id
+                    WHERE o.customer_id=%s ORDER BY o.created_at DESC LIMIT 100""",
                     (customer_id,),
                 ).fetchall()
             )
@@ -144,6 +150,49 @@ class CommerceRepository:
                 ).fetchall()
             )
         return {"orders": orders, "ledger": ledger, "stats": stats}
+
+    def submit_customer_review(self, customer_id, data):
+        try:
+            order_id = UUID(str(data.get("order_id", "")))
+        except (ValueError, TypeError) as exc:
+            raise ValueError("Выберите заказ для отзыва") from exc
+        title = str(data.get("title", "")).strip()
+        body = str(data.get("body", "")).strip()
+        rating = data.get("rating", 5)
+        if isinstance(rating, bool) or str(rating) not in {"1", "2", "3", "4", "5"}:
+            raise ValueError("Оценка должна быть от 1 до 5")
+        if not 10 <= len(body) <= 5000 or len(title) > 160:
+            raise ValueError("Текст отзыва: от 10 до 5000 символов; заголовок — до 160")
+        with self._db() as db:
+            # The order lock serializes duplicate submissions and payment updates.
+            order = db.execute(
+                "SELECT status FROM orders WHERE id=%s AND customer_id=%s FOR UPDATE",
+                (order_id, customer_id),
+            ).fetchone()
+            if not order:
+                raise ValueError("Заказ не найден")
+            if order["status"] != "CONFIRMED":
+                raise ValueError("Отзыв доступен после подтверждения оплаты заказа")
+            if db.execute(
+                "SELECT 1 FROM reviews WHERE order_id=%s", (order_id,)
+            ).fetchone():
+                raise ValueError("Отзыв на этот заказ уже отправлен")
+            customer = db.execute(
+                "SELECT name FROM customers WHERE id=%s", (customer_id,)
+            ).fetchone()
+            return db.execute(
+                """INSERT INTO reviews(customer_id,order_id,author,title,body,rating,is_published)
+                VALUES(%s,%s,%s,%s,%s,%s,false)
+                RETURNING id,order_id,rating,is_published,created_at""",
+                (
+                    customer_id,
+                    order_id,
+                    customer["name"] or "Покупатель APEX",
+                    title,
+                    body,
+                    int(rating),
+                ),
+            ).fetchone()
 
     @staticmethod
     def _attach_order_items(db, orders):

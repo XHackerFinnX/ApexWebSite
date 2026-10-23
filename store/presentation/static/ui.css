@@ -134,6 +134,13 @@ img {
     display: block;
     max-width: 100%;
 }
+.brand-logo {
+    display: block;
+    width: 136px;
+    height: auto;
+    flex-shrink: 0;
+    object-fit: contain;
+}
 [hidden],
 .hidden {
     display: none !important;

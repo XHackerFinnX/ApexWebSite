@@ -937,6 +937,9 @@ $("#refresh").onclick = load;
 document.querySelectorAll("[data-open-review]").forEach((button) => {
     button.onclick = () => {
         $("#reviewForm").reset();
+        $("#reviewForm").elements.id.value = "";
+        $("#review-dialog-title").textContent = "Новый отзыв";
+        $("#save-review").textContent = "Добавить отзыв";
         $("#reviewForm").elements.is_published.checked = true;
         $("#reviewDialog").showModal();
     };
@@ -954,6 +957,8 @@ $("#reviewForm").onsubmit = async (event) => {
         .split("\n")
         .map((value) => value.trim())
         .filter(Boolean);
+    const button = $("#save-review");
+    button.disabled = true;
     try {
         await apiJson(
             "/api/admin/reviews" + (data.id ? "/" + data.id : ""),
@@ -965,10 +970,12 @@ $("#reviewForm").onsubmit = async (event) => {
             "Не удалось добавить отзыв",
         );
         $("#reviewDialog").close();
-        toast("Отзыв добавлен");
+        toast(data.id ? "Отзыв сохранён" : "Отзыв добавлен");
         await loadReviews();
     } catch (error) {
         toast(error.message, true);
+    } finally {
+        button.disabled = false;
     }
 };
 $("#logout").onclick = async () => {
@@ -989,6 +996,8 @@ $("#reviewRows").onclick = async (event) => {
                 form.elements[key].value = row[key];
             form.elements.images.value = row.images.join("\n");
             form.elements.is_published.checked = row.is_published;
+            $("#review-dialog-title").textContent = "Редактирование отзыва";
+            $("#save-review").textContent = "Сохранить отзыв";
             $("#reviewDialog").showModal();
         }
         if (remove && confirm("Удалить отзыв и его фотографии?")) {
