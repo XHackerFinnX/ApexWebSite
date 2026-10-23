@@ -1,4 +1,4 @@
-@import url("/ui.css?v=4");
+@import url("/ui.css?v=5");
 .account-header {
     border-bottom: 1px solid var(--ui-line);
     background: var(--ui-surface);
