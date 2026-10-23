@@ -27,12 +27,19 @@ class PostgreSQLRepository(CommerceRepository):
         kwargs = {"row_factory": dict_row, "connect_timeout": 5}
         if isinstance(connection, dict):
             kwargs.update(connection)
+        # Keep timestamps portable (including Windows) and detect dead idle
+        # sessions before handing them to a request. Never retry a transaction
+        # here: a write may already have committed before the connection failed.
+        kwargs["options"] = (
+            str(kwargs.get("options", "")) + " -c timezone=UTC"
+        ).strip()
         self.pool = ConnectionPool(
             connection if isinstance(connection, str) else "",
             kwargs=kwargs,
             min_size=1,
             max_size=8,
             timeout=5,
+            check=ConnectionPool.check_connection,
             open=True,
         )
         if migrate:
@@ -53,7 +60,7 @@ class PostgreSQLRepository(CommerceRepository):
                 if not db.execute(
                     "SELECT 1 FROM schema_migrations WHERE name=%s", (path.name,)
                 ).fetchone():
-                    db.execute(path.read_text())
+                    db.execute(path.read_text(encoding="utf-8"))
                     db.execute(
                         "INSERT INTO schema_migrations(name) VALUES(%s)", (path.name,)
                     )
@@ -460,13 +467,18 @@ class PostgreSQLRepository(CommerceRepository):
             )
 
     def delete_integration(self, provider: str) -> bool:
-        with self._db() as db:
-            return (
-                db.execute(
-                    "DELETE FROM integrations WHERE provider=%s", (provider,)
-                ).rowcount
-                > 0
-            )
+        try:
+            with self._db() as db:
+                return (
+                    db.execute(
+                        "DELETE FROM integrations WHERE provider=%s", (provider,)
+                    ).rowcount
+                    > 0
+                )
+        except psycopg.errors.ForeignKeyViolation as exc:
+            raise ValueError(
+                "С интеграцией связаны заказы. Отключите её, чтобы сохранить историю оплат и доставки."
+            ) from exc
 
     def get_integration_config(
         self, provider: str, enabled_only: bool = True

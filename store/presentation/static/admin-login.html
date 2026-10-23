@@ -4,11 +4,18 @@
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <title>Вход — Apex Admin</title>
-        <link rel="stylesheet" href="admin.css" />
+        <link rel="stylesheet" href="/admin.css?v=4" />
+        <script defer src="/appearance.js?v=4"></script>
     </head>
-    <body class="login-page">
+    <body class="login-page" data-appearance="apex-admin-theme">
         <main class="login-card">
             <a class="admin-logo" href="/">APEX<span>/</span>ADMIN</a>
+            <button
+                type="button"
+                class="theme-button"
+                data-theme-toggle
+                aria-label="Сменить тему"
+            ></button>
             <div class="login-badge">Защищённая зона</div>
             <h1>Вход в панель</h1>
             <p>Управление каталогом, остатками и интеграциями магазина.</p>
@@ -33,6 +40,6 @@
             </form>
             <a class="back-link" href="/">← Вернуться в магазин</a>
         </main>
-        <script src="admin-login.js"></script>
+        <script src="/admin-login.js?v=4"></script>
     </body>
 </html>

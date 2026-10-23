@@ -9,9 +9,10 @@
             name="description"
             content="Премиальный гоночный стритвир: худи, куртки и футболки из плотных материалов с деталями в духе автоспорта."
         />
-        <link rel="stylesheet" href="/style.css?v=3" />
-        <link rel="stylesheet" href="/shop.css?v=3" />
-        <link rel="stylesheet" href="/reference.css?v=3" />
+        <link rel="stylesheet" href="/ui.css?v=4" />
+        <link rel="stylesheet" href="/storefront.css?v=4" />
+        <script defer src="/filters.js?v=4"></script>
+        <script defer src="/motion.js?v=4"></script>
         <link
             rel="preload"
             href="/fonts/barlow-700.woff2"
@@ -199,7 +200,7 @@
             </section>
 
             <section
-                class="section featured-collection"
+                class="section featured-collection reveal"
                 id="featured-collection"
                 aria-labelledby="featured-title"
             >
@@ -222,7 +223,7 @@
                 ></div>
             </section>
             <section
-                class="category-collection"
+                class="category-collection reveal"
                 id="shop-categories"
                 aria-label="Выберите коллекцию"
             >
@@ -315,7 +316,10 @@
                 <div class="grid" id="new-arrivals-grid"></div>
             </section>
 
-            <section class="club-feature" aria-labelledby="club-feature-title">
+            <section
+                class="club-feature reveal"
+                aria-labelledby="club-feature-title"
+            >
                 <div class="club-feature__media">
                     <img
                         src="/images/reference/category-hoodies.webp"
@@ -405,7 +409,10 @@
                 </button>
             </div>
             <!-- Community gallery -->
-            <section class="flf-gallery" aria-labelledby="flf-gallery-title">
+            <section
+                class="flf-gallery reveal"
+                aria-labelledby="flf-gallery-title"
+            >
                 <h2
                     class="display flf-gallery__title"
                     id="flf-gallery-title"
@@ -417,7 +424,7 @@
             </section>
 
             <!-- FAQ -->
-            <section class="faq">
+            <section class="faq reveal">
                 <div>
                     <p class="eyebrow">Поможем с выбором</p>
                     <h2 class="display faq__title">
@@ -646,6 +653,6 @@
         <!-- Add-to-bag toast -->
         <div class="toast" id="toast" role="status" aria-hidden="true"></div>
 
-        <script src="/script.js?v=3" defer></script>
+        <script src="/script.js?v=4" defer></script>
     </body>
 </html>

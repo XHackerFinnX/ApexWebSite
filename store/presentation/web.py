@@ -15,6 +15,9 @@ from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 from uuid import UUID
 
+import psycopg
+from psycopg_pool import PoolTimeout
+
 from store.infrastructure.security import RateLimiter
 from store.infrastructure.tbank import TBankError
 from store.presentation.commerce_web import CommerceHandler
@@ -104,6 +107,13 @@ class WebApp:
             def setup(self):
                 super().setup()
                 self.connection.settimeout(20)
+
+            def handle(self):
+                try:
+                    super().handle()
+                except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+                    self.close_connection = True
+                    logger.debug("Client closed HTTP connection from %s", self.address_string())
 
             def _send(
                 self,
@@ -463,6 +473,17 @@ class WebApp:
                 except TBankError as e:
                     logger.warning("T-Bank payment request failed: %s", e)
                     return self._send(502, {"error": str(e)})
+                except (psycopg.OperationalError, PoolTimeout):
+                    logger.warning(
+                        "Database connection unavailable for %s %s", self.command, path
+                    )
+                    return self._send(
+                        503,
+                        {
+                            "error": "База данных временно недоступна. Попробуйте ещё раз через несколько секунд."
+                        },
+                        headers={"Retry-After": "2"},
+                    )
                 except Exception:
                     logger.exception(
                         "Unhandled error while processing %s %s", self.command, path
@@ -481,5 +502,15 @@ class WebApp:
 
             def log_message(self, fmt, *args):
                 print("http", self.address_string(), fmt % args)
+
+            def log_error(self, fmt, *args):
+                # Browsers leave keep-alive/preconnect sockets idle. Closing
+                # one after its timeout is normal and isn't a failed API call.
+                if fmt.startswith("Request timed out:"):
+                    logger.debug(
+                        "Idle HTTP connection closed from %s", self.address_string()
+                    )
+                    return
+                super().log_error(fmt, *args)
 
         return Handler

@@ -124,17 +124,46 @@ class CommerceRepository:
         with self._db() as db:
             orders = list(
                 db.execute(
-                    "SELECT id,status,total,subtotal,discount,shipping,promo_code,points_spent,points_earned,fulfillment,tracking_number,created_at FROM orders WHERE customer_id=%s ORDER BY created_at DESC LIMIT 100",
+                    "SELECT id,status,total,subtotal,discount,shipping,promo_code,points_spent,points_earned,fulfillment,tracking_number,delivery_details,created_at FROM orders WHERE customer_id=%s ORDER BY created_at DESC LIMIT 100",
                     (customer_id,),
                 ).fetchall()
             )
+            self._attach_order_items(db, orders)
+            stats = db.execute(
+                """SELECT count(*) AS total_orders,
+                count(*) FILTER (WHERE status IN ('NEW','AUTHORIZED','CONFIRMED')
+                  AND fulfillment <> 'delivered') AS active_orders,
+                coalesce(sum(total) FILTER (WHERE status='CONFIRMED'),0) AS paid_total
+                FROM orders WHERE customer_id=%s""",
+                (customer_id,),
+            ).fetchone()
             ledger = list(
                 db.execute(
                     "SELECT order_id,kind,amount,created_at FROM loyalty_ledger WHERE customer_id=%s ORDER BY created_at DESC,id DESC LIMIT 100",
                     (customer_id,),
                 ).fetchall()
             )
-        return {"orders": orders, "ledger": ledger}
+        return {"orders": orders, "ledger": ledger, "stats": stats}
+
+    @staticmethod
+    def _attach_order_items(db, orders):
+        by_id = {order["id"]: order for order in orders}
+        for order in orders:
+            order["items"] = []
+        if not orders:
+            return
+        for item in db.execute(
+            """SELECT i.order_id,coalesce(nullif(i.name,''),p.name,'Товар') AS name,
+            i.size,i.color,i.quantity,i.unit_price,
+            CASE WHEN i.name='' AND i.line_total=0 THEN i.unit_price*i.quantity
+                 ELSE i.line_total END AS line_total
+            FROM order_items i LEFT JOIN products p ON p.id=i.product_id
+            WHERE i.order_id=ANY(%s) ORDER BY i.id""",
+            (list(by_id),),
+        ).fetchall():
+            by_id[item["order_id"]]["items"].append(
+                {key: value for key, value in item.items() if key != "order_id"}
+            )
 
     def list_promotions(self):
         with self._db() as db:
@@ -550,11 +579,13 @@ class CommerceRepository:
 
     def list_admin_orders(self):
         with self._db() as db:
-            return list(
+            orders = list(
                 db.execute(
                     "SELECT id,status,total,customer_email,customer_details,delivery_details,fulfillment,tracking_number,promo_code,points_spent,created_at FROM orders ORDER BY created_at DESC LIMIT 200"
                 ).fetchall()
             )
+            self._attach_order_items(db, orders)
+            return orders
 
     def update_fulfillment(self, order_id, data):
         state = str(data.get("fulfillment", "new"))

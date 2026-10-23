@@ -217,13 +217,13 @@ class PostgreSQLCommerceTests(unittest.TestCase):
 
     def test_static_compression_and_etag_revalidation(self):
         status, body, headers = self.http_request(
-            "/style.css", headers={"Accept-Encoding": "gzip"}
+            "/storefront.css", headers={"Accept-Encoding": "gzip"}
         )
         self.assertEqual(status, 200)
         self.assertEqual(headers["Content-Encoding"], "gzip")
         self.assertIn(b":root", body)
         self.assertEqual(
-            self.http_request("/style.css", headers={"If-None-Match": headers["ETag"]})[
+            self.http_request("/storefront.css", headers={"If-None-Match": headers["ETag"]})[
                 0
             ],
             304,
@@ -403,6 +403,81 @@ class PostgreSQLCommerceTests(unittest.TestCase):
         self.repo.migrate()
         self.repo.migrate()
         self.assertEqual(self.repo.catalog_page()["total"], 1)
+
+    def test_pool_replaces_terminated_idle_connection_before_query(self):
+        repo = PostgreSQLRepository(
+            {**self.connection, "options": "-c search_path=" + self.schema},
+            SecretBox("test-only-key"),
+            migrate=False,
+        )
+        try:
+            repo.pool.wait(timeout=5)
+            with repo._db() as db:
+                old_pid = db.info.backend_pid
+                self.assertEqual(db.execute("SHOW timezone").fetchone()["TimeZone"], "UTC")
+            with psycopg.connect(**self.connection, autocommit=True) as control:
+                control.execute("SELECT pg_terminate_backend(%s)", (old_pid,))
+            with repo._db() as db:
+                self.assertNotEqual(db.info.backend_pid, old_pid)
+                self.assertEqual(db.execute("SELECT 1 AS n").fetchone()["n"], 1)
+        finally:
+            repo.pool.close()
+
+    def test_integration_with_orders_can_be_disabled_but_not_deleted(self):
+        payment = self.payment()
+        headers = {"Cookie": "apex_admin=" + self.web._session_token(4_000_000_000)}
+        status, body, _ = self.http_request(
+            "/api/admin/integrations/tbank", "DELETE", headers=headers
+        )
+        self.assertEqual(status, 400)
+        self.assertIn("Отключите", body["error"])
+        status, _, _ = self.http_request(
+            "/api/admin/integrations/tbank", "PUT", {"enabled": False}, headers
+        )
+        self.assertEqual(status, 200)
+        self.assertIsNone(self.repo.get_integration_config("tbank"))
+        self.assertIsNotNone(self.repo.get_order(payment["order_id"]))
+        self.assertEqual(
+            self.repo.get_integration_config("tbank", enabled_only=False)["password"],
+            "test-terminal-password",
+        )
+
+    def test_customer_order_details_and_metrics_exclude_other_customers(self):
+        first = self.payment()
+        self.repo.update_order_by_payment(first["order_id"], "CONFIRMED")
+        other = self.repo.register_customer(
+            {"email": "other@example.test", "name": "Another Person", "password": "another-secure-password"}
+        )
+        self.checkout.create_payment(
+            {**self.payload, "points": 0, "idempotency_key": str(uuid4())}, other
+        )
+        history = self.repo.customer_history(self.customer["id"])
+        self.assertEqual(history["stats"]["total_orders"], 1)
+        self.assertEqual(history["stats"]["active_orders"], 1)
+        self.assertEqual(history["stats"]["paid_total"], 900)
+        self.assertEqual(len(history["orders"]), 1)
+        self.assertEqual(history["orders"][0]["items"][0]["name"], self.product.name)
+        self.assertEqual(history["orders"][0]["items"][0]["quantity"], 1)
+        self.assertNotIn("customer_email", history["orders"][0])
+        self.assertEqual(len(self.repo.list_admin_orders()), 2)
+        self.assertEqual(len(self.repo.list_admin_orders()[0]["items"]), 1)
+
+    def test_legacy_order_item_fallback_does_not_change_free_discounted_items(self):
+        payment = self.payment()
+        with self.repo._db() as db:
+            db.execute(
+                "UPDATE order_items SET name='',line_total=0 WHERE order_id=%s",
+                (payment["order_id"],),
+            )
+        item = self.repo.list_admin_orders()[0]["items"][0]
+        self.assertEqual(item["name"], self.product.name)
+        self.assertEqual(item["line_total"], 1000)
+        with self.repo._db() as db:
+            db.execute(
+                "UPDATE order_items SET name='Fully discounted item',line_total=0 WHERE order_id=%s",
+                (payment["order_id"],),
+            )
+        self.assertEqual(self.repo.list_admin_orders()[0]["items"][0]["line_total"], 0)
 
     def test_legacy_inline_media_migration_is_repeatable_and_preserves_stock(self):
         import base64

@@ -93,6 +93,10 @@ function normalizeProduct(item) {
     };
 }
 function imageAttributes(url, width = 480) {
+    url =
+        typeof url === "string" && url
+            ? url
+            : "/images/product-placeholder.svg";
     if (url.startsWith("/media/"))
         return `src="${esc(url)}?w=${width}" srcset="${esc(url)}?w=240 240w, ${esc(url)}?w=480 480w, ${esc(url)}?w=960 960w" sizes="(max-width:699px) 48vw,33vw"`;
     return `src="${esc(url)}"`;
@@ -117,6 +121,15 @@ async function ensureProduct(id) {
 async function loadCatalog(reset = true) {
     const sequence = ++catalogRequest;
     const catalog = document.getElementById("collections");
+    let feedback = document.getElementById("catalog-feedback");
+    if (!feedback) {
+        feedback = document.createElement("div");
+        feedback.id = "catalog-feedback";
+        feedback.className = "catalog-feedback";
+        feedback.setAttribute("role", "status");
+        document.getElementById("catalog-count").after(feedback);
+    }
+    feedback.hidden = true;
     catalog.setAttribute("aria-busy", "true");
     if (reset && !catalogItems.length)
         catalog.innerHTML =
@@ -165,6 +178,7 @@ async function loadCatalog(reset = true) {
             select.value = options.includes(value) ? value : "all";
         }
         availableCategories = page.categories;
+        window.refreshCatalogFilters?.();
         renderCatalogNavigation();
         renderCategoryTiles();
         renderCollections();
@@ -202,7 +216,13 @@ async function loadCatalog(reset = true) {
         if (!catalogItems.length)
             catalog.innerHTML =
                 '<section class="section"><div class="empty-state"><h2>Не удалось загрузить каталог</h2><p>Проверьте соединение. Содержимое корзины сохранено.</p><button class="button button--dark" type="button" data-retry-catalog>Попробовать снова</button></div></section>';
-        else showToast("Не удалось обновить каталог. Попробуйте ещё раз");
+        else {
+            feedback.innerHTML =
+                "<span>" +
+                esc(error.message) +
+                ' Показаны предыдущие товары.</span><button type="button" data-retry-catalog>Повторить</button>';
+            feedback.hidden = false;
+        }
     } finally {
         if (sequence === catalogRequest) catalog.removeAttribute("aria-busy");
     }
@@ -453,7 +473,7 @@ function selectedProductView(p, color = activeColor) {
         variants.find((variant) => variant.images?.length)?.images || p.images;
     const prices = variants.map((variant) => Number(variant.price));
     return {
-        images: images.length ? images : [""],
+        images: images.length ? images : ["/images/product-placeholder.svg"],
         price: prices.length ? Math.min(...prices) : Number(p.price),
         sizes: variants.length
             ? [
@@ -766,7 +786,10 @@ async function refreshQuote() {
                 : "Скидки и итог проверены магазином";
         const points = document.getElementById("loyalty-points");
         if (points) points.max = result.max_points;
-        if (button) button.disabled = false;
+        if (button)
+            button.disabled =
+                !document.querySelector('input[name="payment"]:checked') ||
+                !document.querySelector('input[name="delivery-type"]:checked');
         renderTotals();
     } catch (error) {
         if (sequence !== quoteSequence) return;
@@ -881,15 +904,78 @@ function closeCheckout() {
 }
 
 function renderCheckoutForm() {
-    return `<form class="checkout" id="checkout-form" novalidate><h3 class="checkout__title display">Оформление заказа</h3><div class="checkout__grid"><label>Имя<input id="customer-name" required placeholder="Иван" /></label><label>Почта<input id="customer-email" type="email" required placeholder="name@example.com" /></label><label class="checkout__wide">Телефон<input id="customer-phone" type="tel" required value="+7 " placeholder="+7 (999) 999-99-99" /></label></div><h4>Доставка</h4><label>Город<div class="suggest-wrap"><input id="delivery-city" autocomplete="off" placeholder="Начните вводить город" /><div class="suggestions" id="city-suggestions"></div></div></label><div class="checkout__hint" id="delivery-status">Выберите город — мы рассчитаем доставку СДЭК и загрузим пункты выдачи.</div><div class="checkout__radio" id="delivery-options"><span>Загрузка способов доставки…</span></div><label id="pvz-label">Пункт получения<div class="suggest-wrap"><input id="delivery-point" autocomplete="off" disabled placeholder="Сначала выберите город" /><div class="suggestions" id="pvz-suggestions"></div></div></label><div class="pvz-info" id="pvz-info"></div><label>ФИО получателя полностью<input id="recipient-name" required placeholder="Иванов Иван Иванович" /></label><label>Комментарий<textarea id="order-comment" placeholder="Комментарий к заказу"></textarea></label><h4>Промокод</h4><div class="promo-row"><input id="promo-code" placeholder="Введите промокод" /><button type="button" id="apply-promo">Применить</button></div><div class="checkout__hint" id="promo-status">Промокод может действовать на весь заказ или только на выбранные товары.</div>${member ? `<h4>APEX Club · ${Number(member.points)} баллов</h4><label>Списать баллы<input id="loyalty-points" type="number" min="0" step="1" value="0"></label><p class="checkout__hint">Лимит списания рассчитает магазин. 1 балл = 1 ₽.</p>` : '<p class="checkout__hint"><a href="/account">Войдите в кабинет</a>, чтобы копить и тратить баллы.</p>'}<h4>Согласия</h4><label class="check"><input type="checkbox" id="privacy-consent" required />Я даю согласие на обработку персональных данных в соответствии с политикой конфиденциальности</label><label class="check"><input type="checkbox" id="delivery-consent" required />Срок отправки заказов зависит от загруженности магазина, отправка заказов осуществляется в течение 2 недель</label><h4>Способ оплаты</h4><div class="checkout__radio" id="payment-options"><span>Загрузка способов оплаты…</span></div><div class="checkout__totals" id="checkout-totals"></div><button type="submit" class="cart__checkout">Оформить заказ</button></form>`;
+    const preview = [...cart]
+        .map(([key, quantity]) => {
+            const selection = cartSelection(key),
+                product = cartProduct(key);
+            if (!product) return "";
+            const variant = selectionVariant(
+                    product,
+                    selection.color,
+                    selection.size,
+                ),
+                image = variant?.images?.[0] || product.image;
+            return (
+                '<div class="checkout-preview__item">' +
+                (image
+                    ? "<img " +
+                      imageAttributes(image, 240) +
+                      ' alt="" width="48" height="58">'
+                    : "") +
+                "<span>" +
+                esc(product.name) +
+                "<small>" +
+                esc(
+                    [selection.color, selection.size]
+                        .filter(Boolean)
+                        .join(" / "),
+                ) +
+                " · " +
+                quantity +
+                " шт.</small></span><b>" +
+                money(Number(variant?.price ?? product.price) * quantity) +
+                "</b></div>"
+            );
+        })
+        .join("");
+    return (
+        '<form class="checkout" id="checkout-form" novalidate><h3 class="checkout__title display">Оформление заказа</h3><p class="checkout__intro">Остался один шаг до следующего гоночного образа.</p><div class="checkout-layout"><div class="checkout-main">' +
+        '<section class="checkout-section"><h4><span>1</span>Контактные данные</h4><div class="checkout__grid"><label>Имя<input id="customer-name" autocomplete="given-name" required placeholder="Иван"></label><label>Почта<input id="customer-email" type="email" autocomplete="email" required placeholder="name@example.com"></label><label class="checkout__wide">Телефон<input id="customer-phone" type="tel" autocomplete="tel" required value="+7 " placeholder="+7 (999) 123-45-67"></label></div></section>' +
+        '<section class="checkout-section"><h4><span>2</span>Получение заказа</h4><div class="checkout__radio" id="delivery-options"><span class="checkout__hint">Загрузка способов доставки…</span></div><label id="city-label">Город<div class="suggest-wrap"><input id="delivery-city" autocomplete="off" disabled placeholder="Начните вводить город"><div class="suggestions" id="city-suggestions"></div></div></label><div class="checkout__hint" id="delivery-status">Проверяем доступные способы доставки…</div><label id="pvz-label">Пункт получения<div class="suggest-wrap"><input id="delivery-point" autocomplete="off" disabled placeholder="Сначала выберите город"><div class="suggestions" id="pvz-suggestions"></div></div></label><div class="pvz-info" id="pvz-info"></div><label>ФИО получателя полностью<input id="recipient-name" autocomplete="name" required placeholder="Иванов Иван Иванович"></label><label>Комментарий к заказу<textarea id="order-comment" rows="3" placeholder="Что нам стоит знать о заказе"></textarea></label></section>' +
+        '<section class="checkout-section"><h4><span>3</span>Способ оплаты</h4><div class="checkout__radio" id="payment-options"><span class="checkout__hint">Загрузка способов оплаты…</span></div><label class="check"><input type="checkbox" id="privacy-consent" required><span>Я согласен с <a href="/privacy" target="_blank" rel="noopener">политикой обработки персональных данных</a>.</span></label><label class="check"><input type="checkbox" id="delivery-consent" required><span>Я ознакомился с условиями доставки и <a href="/oferta" target="_blank" rel="noopener">публичной офертой</a>.</span></label></section></div>' +
+        '<aside class="checkout-summary"><h4>Ваш заказ · ' +
+        cartCount() +
+        ' шт.</h4><div class="checkout-preview">' +
+        preview +
+        '</div><label for="promo-code">Промокод</label><div class="promo-row"><input id="promo-code" placeholder="Введите промокод" autocomplete="off"><button type="button" id="apply-promo">Применить</button></div><p class="checkout__hint" id="promo-status">Если у тебя есть промокод, укажи его здесь.</p>' +
+        (member
+            ? "<label>APEX Club · " +
+              Number(member.points) +
+              ' баллов<input id="loyalty-points" type="number" min="0" step="1" value="0"></label><p class="checkout__hint">1 балл = 1 ₽. Доступную сумму рассчитает магазин.</p>'
+            : '<p class="checkout__hint"><a href="/account">Войди в кабинет</a>, чтобы копить и тратить баллы.</p>') +
+        '<div class="checkout__totals" id="checkout-totals" aria-live="polite"></div><button type="submit" class="cart__checkout">Перейти к оплате ' +
+        ICONS.arrow +
+        '</button><p class="checkout-secure">' +
+        ICONS.bag +
+        "Защищённая оплата на странице банка</p></aside></div></form>"
+    );
 }
 
 /* ---------- Delivery / checkout ---------- */
 async function jsonFetch(url, options = {}) {
-    const r = await fetch(url, {
-        ...options,
-        signal: options.signal || AbortSignal.timeout(15000),
-    });
+    let r;
+    try {
+        r = await fetch(url, {
+            ...options,
+            signal: options.signal || AbortSignal.timeout(15000),
+        });
+    } catch (error) {
+        throw new Error(
+            ["AbortError", "TimeoutError"].includes(error.name)
+                ? "Сервер долго не отвечает. Попробуйте ещё раз."
+                : "Не удалось связаться с магазином. Проверьте подключение.",
+        );
+    }
     const data = await r.json().catch(() => null);
     if (!r.ok) throw new Error(data?.error || `Ошибка запроса (${r.status})`);
     return data;
@@ -935,9 +1021,12 @@ function validateFio(v) {
     return v.trim().split(/\s+/).length >= 3 && v.trim().length >= 8;
 }
 function markInvalid(el, invalid) {
-    if (el) el.classList.toggle("input-error", invalid);
+    if (!el) return;
+    el.classList.toggle("input-error", invalid);
+    el.setAttribute("aria-invalid", String(invalid));
 }
 let checkoutIntegrations = [];
+let deliveryRequest = 0;
 async function loadCheckoutIntegrations() {
     const paymentBox = document.getElementById("payment-options"),
         deliveryBox = document.getElementById("delivery-options");
@@ -955,29 +1044,60 @@ async function loadCheckoutIntegrations() {
             ? payments
                   .map(
                       (item, index) =>
-                          `<label><input type="radio" name="payment" value="${esc(item.provider)}" ${index === 0 ? "checked" : ""}>${esc(item.name)}</label>`,
+                          '<label><input type="radio" name="payment" value="' +
+                          esc(item.provider) +
+                          '" ' +
+                          (index === 0 ? "checked" : "") +
+                          "><span>" +
+                          esc(item.name) +
+                          "</span></label>",
                   )
                   .join("")
-            : '<span class="checkout__hint">Оплата пока не настроена. Попробуйте позже.</span>';
-        deliveryBox.innerHTML =
-            deliveries
-                .map(
-                    (item) =>
-                        `<label><input type="radio" name="delivery-type" value="${item.provider === "cdek" ? "pvz" : "pickup"}">${esc(item.name)}</label>`,
-                )
-                .join("") ||
-            '<span class="checkout__hint">Доставка пока не настроена</span>';
+            : '<p class="checkout__hint">Оплата пока не настроена. Магазину нужно подключить оплату.</p>';
+        const hasCdek = deliveries.some((item) => item.provider === "cdek");
+        document.getElementById("delivery-city").disabled = !hasCdek;
+        if (
+            !deliveries.some(
+                (item) =>
+                    (item.provider === "cdek" ? "pvz" : "pickup") ===
+                    deliveryState.type,
+            )
+        )
+            deliveryState.type = hasCdek ? "pvz" : "pickup";
+        deliveryBox.innerHTML = deliveries.length
+            ? deliveries
+                  .map((item) => {
+                      const value = item.provider === "cdek" ? "pvz" : "pickup";
+                      return (
+                          '<label><input type="radio" name="delivery-type" value="' +
+                          value +
+                          '" ' +
+                          (value === deliveryState.type ? "checked" : "") +
+                          "><span>" +
+                          esc(item.name) +
+                          "</span></label>"
+                      );
+                  })
+                  .join("")
+            : '<p class="checkout__hint">Доставка пока не настроена. Магазину нужно подключить способ получения.</p>';
+        document.getElementById("city-label").hidden =
+            !hasCdek || deliveryState.type === "pickup";
+        document.getElementById("pvz-label").hidden =
+            !hasCdek || deliveryState.type === "pickup";
+        document.getElementById("delivery-status").textContent =
+            hasCdek && deliveryState.type !== "pickup"
+                ? "Выбери город из подсказок — рассчитаем доставку и покажем пункты выдачи."
+                : deliveries.some((item) => item.provider === "pickup")
+                  ? "Выбран самовывоз. Город и пункт СДЭК не требуются."
+                  : "Сейчас нет доступных способов получения.";
         bindDeliveryType();
-        if (!deliveries.some((item) => item.provider === "cdek"))
-            document.getElementById("delivery-status").textContent =
-                "СДЭК сейчас недоступен. Выберите другой способ доставки, если он есть.";
+        refreshQuote();
     } catch (error) {
         paymentBox.textContent = error.message;
         deliveryBox.textContent =
-            "Повторите оформление после восстановления соединения";
+            "Повтори оформление после восстановления соединения.";
     }
 }
-
 function bindCheckoutControls() {
     renderTotals();
     loadCheckoutIntegrations();
@@ -1014,8 +1134,12 @@ function bindCityAutocomplete() {
     const input = document.getElementById("delivery-city"),
         box = document.getElementById("city-suggestions"),
         status = document.getElementById("delivery-status");
-    let timer;
+    let timer,
+        request = 0;
     input.oninput = () => {
+        const sequence = ++request;
+        ++deliveryRequest;
+        if (input.disabled) return;
         deliveryState.city_code = 0;
         deliveryState.postalCode = "";
         deliveryState.pvz = null;
@@ -1028,6 +1152,12 @@ function bindCityAutocomplete() {
             status.textContent = "Ищем город...";
             try {
                 const cities = await fetchCities(input.value.trim());
+                if (
+                    sequence !== request ||
+                    !input.isConnected ||
+                    input.disabled
+                )
+                    return;
                 box.innerHTML = cities
                     .slice(0, 8)
                     .map(
@@ -1039,9 +1169,16 @@ function bindCityAutocomplete() {
                 status.textContent = cities.length
                     ? "Выберите город из списка."
                     : "Город не найден.";
-            } catch {
+            } catch (error) {
+                if (
+                    sequence !== request ||
+                    !input.isConnected ||
+                    input.disabled
+                )
+                    return;
                 status.textContent =
-                    "Не удалось загрузить города. Проверьте подключение.";
+                    error.message ||
+                    "Не удалось загрузить города. Попробуй ещё раз.";
             }
         }, 350);
     };
@@ -1058,6 +1195,7 @@ function bindCityAutocomplete() {
     };
 }
 async function refreshDelivery() {
+    const sequence = ++deliveryRequest;
     const status = document.getElementById("delivery-status"),
         opts = document.getElementById("delivery-options"),
         point = document.getElementById("delivery-point");
@@ -1070,6 +1208,7 @@ async function refreshDelivery() {
             calculateDelivery(deliveryState.postalCode),
             loadPvz(deliveryState.postalCode),
         ]);
+        if (sequence !== deliveryRequest || !status.isConnected) return;
         deliveryState.price = Number(calc.price || 0);
         deliveryState.days = Number(calc.days || calc.day || 0);
         deliveryState.type = "pvz";
@@ -1088,10 +1227,11 @@ async function refreshDelivery() {
         point.disabled = false;
         status.textContent = "Выберите пункт получения (снизу).";
     } catch (err) {
+        if (sequence !== deliveryRequest || !status.isConnected) return;
         status.textContent = err.message
             ? `Не удалось рассчитать доставку: ${err.message}`
             : "К сожалению, доставку в выбранный город сейчас не удалось рассчитать.";
-        opts.innerHTML = "";
+        // Keep self-pickup available when a CDEK request fails.
     }
     refreshQuote();
 }
@@ -1099,15 +1239,19 @@ function bindDeliveryType() {
     document.querySelectorAll('input[name="delivery-type"]').forEach(
         (r) =>
             (r.onchange = () => {
+                ++deliveryRequest;
                 deliveryState.type = r.value;
-                document.getElementById("pvz-label").style.display = [
-                    "self",
-                    "pickup",
-                ].includes(r.value)
-                    ? "none"
-                    : "block";
-                if (["self", "pickup"].includes(r.value))
+                const pickup = ["self", "pickup"].includes(r.value);
+                document.getElementById("city-label").hidden = pickup;
+                document.getElementById("pvz-label").hidden = pickup;
+                document.getElementById("delivery-city").disabled = pickup;
+                if (pickup) {
                     deliveryState.pvz = null;
+                    deliveryState.price = 0;
+                }
+                document.getElementById("delivery-status").textContent = pickup
+                    ? "Выбран самовывоз."
+                    : "Выбери город и пункт выдачи СДЭК.";
                 refreshQuote();
             }),
     );
@@ -1165,15 +1309,21 @@ async function submitOrder(e) {
     if (!["self", "pickup"].includes(deliveryState.type))
         required.push(["delivery-point", () => !!deliveryState.pvz]);
     let ok = true;
+    let firstInvalid;
     required.forEach(([id, fn]) => {
         const el = document.getElementById(id);
         const bad = !fn(el.value, el);
         markInvalid(el, bad);
+        if (bad && !firstInvalid) firstInvalid = el;
         ok = ok && !bad;
     });
     const payment = document.querySelector('input[name="payment"]:checked');
     if (!payment) ok = false;
-    if (!ok) return showToast("Проверьте обязательные поля");
+    if (!ok) {
+        firstInvalid?.focus({ preventScroll: true });
+        firstInvalid?.scrollIntoView({ block: "center" });
+        return showToast("Проверьте обязательные поля");
+    }
     const button = e.currentTarget.querySelector('[type="submit"]');
     button.disabled = true;
     button.textContent = "Переходим к оплате…";
@@ -1217,7 +1367,7 @@ async function submitOrder(e) {
     } catch (error) {
         showToast(error.message || "Не удалось перейти к оплате");
         button.disabled = false;
-        button.textContent = "Оформить заказ";
+        button.textContent = "Перейти к оплате";
     }
 }
 
@@ -1276,7 +1426,7 @@ function initMobileMenu() {
         if (event.target.closest("a")) setMobileMenu(false);
     });
     window
-        .matchMedia("(min-width: 901px)")
+        .matchMedia("(min-width: 1101px)")
         .addEventListener("change", (event) => {
             if (event.matches) setMobileMenu(false);
         });
