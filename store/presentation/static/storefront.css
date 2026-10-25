@@ -416,7 +416,7 @@ button {
 .card__dots {
     position: absolute;
     z-index: 2;
-    bottom: 62px;
+    bottom: 8px;
     left: 50%;
     transform: translateX(-50%);
     display: flex;
@@ -424,7 +424,6 @@ button {
     max-width: calc(100% - 20px);
     overflow-x: auto;
     scrollbar-width: none;
-    padding: 2px 5px;
     border-radius: 999px;
     background: #ffffffe8;
     box-shadow: 0 1px 8px #0001;
@@ -432,9 +431,9 @@ button {
 .card__dot {
     display: grid;
     place-items: center;
-    flex: 0 0 24px;
-    width: 24px;
-    height: 24px;
+    flex: 0 0 12px;
+    width: 12px;
+    height: 12px;
     padding: 0;
     border: 0;
     border-radius: 50%;
