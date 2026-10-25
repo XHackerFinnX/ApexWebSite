@@ -39,18 +39,24 @@ class S3MediaStorage:
             "NotFound",
         }
 
-    def put(self, filename, content):
-        key = self.key(filename)
+    def exists(self, filename):
         try:
-            try:
-                self.client.head_object(Bucket=self.bucket, Key=key)
-                return
-            except ClientError as exc:
-                if not self._missing(exc):
-                    raise
+            self.client.head_object(Bucket=self.bucket, Key=self.key(filename))
+            return True
+        except ClientError as exc:
+            if self._missing(exc):
+                return False
+            raise MediaStorageError("Хранилище фотографий временно недоступно") from exc
+        except BotoCoreError as exc:
+            raise MediaStorageError("Хранилище фотографий временно недоступно") from exc
+
+    def put(self, filename, content):
+        if self.exists(filename):
+            return
+        try:
             self.client.put_object(
                 Bucket=self.bucket,
-                Key=key,
+                Key=self.key(filename),
                 Body=content,
                 ContentType="image/webp",
                 CacheControl="public, max-age=31536000, immutable",

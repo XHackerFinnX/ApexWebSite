@@ -6,6 +6,7 @@ import ssl
 import tempfile
 import threading
 import unittest
+from contextlib import chdir
 from http.server import ThreadingHTTPServer
 from pathlib import Path
 from unittest.mock import Mock, patch
@@ -17,9 +18,10 @@ from botocore.response import StreamingBody
 from botocore.stub import Stubber
 from PIL import Image
 
-from store.config import Settings
+from store.config import Settings, get_settings
 from store.infrastructure import media
 from store.infrastructure.object_storage import S3MediaStorage
+from store.manage import check_product_media, main as manage_main
 from store.presentation.web import WebApp
 
 
@@ -42,7 +44,7 @@ def settings(**values):
 
 class DeploymentSettingsTests(unittest.TestCase):
     def test_production_requires_persistent_key_password_and_https_origin(self):
-        settings(APP_ENV="production")
+        settings(APP_ENV="production", STORE_MEDIA_BACKEND="local")
         for values, message in [
             ({"STORE_MASTER_KEY": "unsafe-development-key"}, "STORE_MASTER_KEY"),
             ({"ADMIN_PASSWORD": "admin"}, "ADMIN_PASSWORD"),
@@ -53,7 +55,48 @@ class DeploymentSettingsTests(unittest.TestCase):
                 self.subTest(values=list(values)),
                 self.assertRaisesRegex(ValueError, message),
             ):
-                settings(APP_ENV="production", **values)
+                settings(APP_ENV="production", STORE_MEDIA_BACKEND="local", **values)
+
+    def test_production_defaults_to_apextop_and_requires_s3_configuration(self):
+        values = settings().model_dump(exclude={"WEBAPP_URL", "STORE_MEDIA_BACKEND"})
+        values["APP_ENV"] = "production"
+        with self.assertRaisesRegex(ValueError, "S3_BUCKET"):
+            Settings(_env_file=None, **values)
+        values.update(
+            S3_BUCKET="test-bucket",
+            S3_ACCESS_KEY_ID="test-only",
+            S3_SECRET_ACCESS_KEY="test-only",
+        )
+        config = Settings(_env_file=None, **values)
+        self.assertEqual(config.WEBAPP_URL, "https://apextop.ru")
+        self.assertEqual(config.STORE_MEDIA_BACKEND, "s3")
+        self.assertEqual(settings().STORE_MEDIA_BACKEND, "local")
+
+    def test_plain_dotenv_is_loaded_and_environment_overrides_it(self):
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.dict(os.environ, {}, clear=True),
+        ):
+            Path(directory, ".env").write_text(
+                "APP_ENV=production\n"
+                "POSTGRESQL_HOST=database.example.test\n"
+                "POSTGRESQL_DATABASE=shop\n"
+                "POSTGRESQL_USER=shop\n"
+                "POSTGRESQL_PASSWORD=test-only-database-password\n"
+                "ADMIN_PASSWORD=test-only-administrator-password\n"
+                "STORE_MASTER_KEY=test-only-persistent-master-key-1234567890\n"
+                "S3_BUCKET=test-bucket\n"
+                "S3_ACCESS_KEY_ID=test-only\n"
+                "S3_SECRET_ACCESS_KEY=test-only\n",
+                encoding="utf-8",
+            )
+            with chdir(directory):
+                config = get_settings()
+                self.assertEqual(config.APP_ENV, "production")
+                self.assertEqual(config.STORE_MEDIA_BACKEND, "s3")
+                self.assertEqual(config.WEBAPP_URL, "https://apextop.ru")
+                with patch.dict(os.environ, {"WEBAPP_URL": "https://moto.apextop.ru"}):
+                    self.assertEqual(get_settings().WEBAPP_URL, "https://moto.apextop.ru")
 
     def test_s3_requires_credentials_and_https_in_production(self):
         with self.assertRaisesRegex(ValueError, "S3_BUCKET"):
@@ -92,7 +135,9 @@ class DeploymentSettingsTests(unittest.TestCase):
     def test_configuration_errors_do_not_echo_runtime_secrets(self):
         with self.assertRaises(ValueError) as error:
             settings(
-                APP_ENV="production", STORE_MASTER_KEY="unsafe-secret-from-environment"
+                APP_ENV="production",
+                STORE_MEDIA_BACKEND="local",
+                STORE_MASTER_KEY="unsafe-secret-from-environment",
             )
         self.assertNotIn("unsafe-secret-from-environment", str(error.exception))
         self.assertNotIn("test-only-database-password", str(error.exception))
@@ -295,3 +340,89 @@ class DeploymentHTTPTests(unittest.TestCase):
                 "temporarily unavailable"
             )
             self.assertEqual(self.request(f"/media/{name}.webp")[0], 503)
+
+    def test_admin_upload_requires_login_and_s3_failure_never_reports_success(self):
+        buffer = io.BytesIO()
+        Image.new("RGB", (64, 64), "blue").save(buffer, "PNG")
+        data = {
+            "image": "data:image/png;base64," + base64.b64encode(buffer.getvalue()).decode()
+        }
+        self.assertEqual(self.request("/api/admin/media", data)[0], 401)
+        login = self.request(
+            "/api/admin/login",
+            {"username": "admin", "password": "test-only-administrator"},
+        )
+        headers = {"Cookie": login[2]["Set-Cookie"].split(";", 1)[0]}
+        backend = Mock()
+        backend.put.side_effect = media.MediaStorageError(
+            "Хранилище фотографий временно недоступно"
+        )
+        with (
+            tempfile.TemporaryDirectory() as directory,
+            patch.object(media, "_object_storage", backend),
+            patch.object(media, "MEDIA_ROOT", Path(directory) / "unused"),
+        ):
+            response = self.request("/api/admin/media", data, headers)
+            self.assertEqual(response[0], 503)
+            self.assertNotIn("url", json.loads(response[1]))
+            self.assertFalse(media.MEDIA_ROOT.exists())
+
+
+class MediaAuditTests(unittest.TestCase):
+    def test_audit_checks_variations_and_thumbnails_without_writing(self):
+        main = "/media/" + "a" * 64 + ".webp"
+        variant = "/media/" + "b" * 64 + ".webp"
+        missing = "b" * 64 + "-960.webp"
+        backend = Mock()
+        backend.exists.side_effect = lambda name: name != missing
+        with patch.object(media, "_object_storage", backend):
+            report = check_product_media(
+                [
+                    {
+                        "image_url": main, "images": [main],
+                        "variants": [{"images": [main, variant]}],
+                    },
+                    {
+                        "image_url": "",
+                        "images": [
+                            "/images/demo.webp", "https://example.test/photo.jpg",
+                            "data:image/png;base64,AAAA", "/media/invalid.webp",
+                        ],
+                        "variants": [],
+                    },
+                ]
+            )
+        self.assertEqual(
+            report,
+            {
+                "products": 2, "s3_photos": 2, "s3_objects": 8,
+                "bundled": 1, "external": 1, "inline": 1, "invalid": 1,
+                "missing": [missing],
+            },
+        )
+        self.assertEqual(backend.exists.call_count, 8)
+        backend.put.assert_not_called()
+        backend.read.assert_not_called()
+
+    def test_audit_cli_does_not_initialize_repository_or_migrate_database(self):
+        config = settings(
+            STORE_MEDIA_BACKEND="s3",
+            S3_BUCKET="test-bucket",
+            S3_ACCESS_KEY_ID="test-only",
+            S3_SECRET_ACCESS_KEY="test-only",
+        )
+        with (
+            patch("sys.argv", ["store.manage", "check-media"]),
+            patch("store.manage.get_settings", return_value=config),
+            patch("store.manage.configure_media"),
+            patch("store.manage.psycopg.connect") as connect,
+            patch("store.manage.PostgreSQLRepository") as repository,
+            patch("sys.stdout", new_callable=io.StringIO),
+        ):
+            db = connect.return_value.__enter__.return_value
+            db.execute.return_value.fetchall.return_value = []
+            manage_main()
+            self.assertEqual(
+                db.execute.call_args_list[0].args[0], "SET TRANSACTION READ ONLY"
+            )
+            repository.assert_not_called()

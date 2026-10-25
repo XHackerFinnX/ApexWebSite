@@ -37,6 +37,12 @@ def read_media(filename):
     return (MEDIA_ROOT / filename).read_bytes()
 
 
+def media_exists(filename):
+    if _object_storage is not None:
+        return _object_storage.exists(filename)
+    return (MEDIA_ROOT / filename).is_file()
+
+
 def upload_media_directory(directory):
     if _object_storage is None:
         raise ValueError("Для переноса фотографий установите STORE_MEDIA_BACKEND=s3")

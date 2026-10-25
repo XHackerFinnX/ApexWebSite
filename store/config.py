@@ -78,6 +78,15 @@ class Settings(BaseSettings):
         hide_input_in_errors=True,
     )
 
+    @model_validator(mode="before")
+    @classmethod
+    def production_defaults(cls, values):
+        if isinstance(values, dict) and values.get("APP_ENV") == "production":
+            values = dict(values)
+            values.setdefault("WEBAPP_URL", "https://apextop.ru")
+            values.setdefault("STORE_MEDIA_BACKEND", "s3")
+        return values
+
     @field_validator("APP_PORT")
     @classmethod
     def validate_app_port(cls, value: int) -> int:
