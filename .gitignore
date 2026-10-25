@@ -2,9 +2,8 @@ __pycache__/
 *.py[cod]
 var/
 .env
-.env.*
-!.env.example
-!.env.production.example
+.env.production.example
+.env.example
 .vscode/
 venv
 docs/
