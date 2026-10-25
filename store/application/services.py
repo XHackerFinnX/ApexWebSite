@@ -162,18 +162,57 @@ class IntegrationService:
             "name": name,
             "environment": str(data.get("environment", "test")),
         }
-        if public["environment"] not in {"test", "production"}:
+        if public["environment"] not in (
+            {"test", "production", "demo"}
+            if provider == "tbank"
+            else {"test", "production"}
+        ):
             raise ValueError("Выберите тестовую или рабочую среду")
         if provider == "tbank":
-            public.update(
-                {
-                    "taxation": "usn_income",
-                    "item_tax": "none",
-                    "delivery_tax": "none",
-                    "language": "ru",
-                    "ffd_receipt_enabled": "false",
-                }
-            )
+            saved = self.repo.get_integration_config("tbank", enabled_only=False) or {}
+            for key, default in [
+                ("taxation", "usn_income"),
+                ("item_tax", "none"),
+                ("delivery_tax", "none"),
+                ("language", "ru"),
+                ("pay_type", "O"),
+                ("ffd_version", "1.05"),
+            ]:
+                public[key] = str(data.get(key, saved.get(key, default)))
+            public["receipt_enabled"] = str(
+                data.get("receipt_enabled", saved.get("receipt_enabled", "true"))
+            ).lower()
+            taxes = {
+                "none",
+                "vat0",
+                "vat5",
+                "vat7",
+                "vat10",
+                "vat20",
+                "vat22",
+                "vat105",
+                "vat107",
+                "vat110",
+                "vat120",
+                "vat122",
+            }
+            if (
+                public["taxation"]
+                not in {"osn", "usn_income", "usn_income_outcome", "esn", "patent"}
+                or public["item_tax"] not in taxes
+                or public["delivery_tax"] not in taxes
+            ):
+                raise ValueError("Проверьте систему налогообложения и ставки НДС чека")
+            if (
+                public["ffd_version"] not in {"1.05", "1.2"}
+                or public["pay_type"] not in {"O", "T"}
+                or public["language"] not in {"ru", "en"}
+                or public["receipt_enabled"] not in {"true", "false"}
+            ):
+                raise ValueError("Проверьте формат чека и схему оплаты Т-Банка")
+            from store.infrastructure.tbank import TBankPayment
+
+            TBankPayment.base_url({**saved, **public, **secrets})
         if provider == "cdek" and "name" in data:
             required = (
                 "contract_type",

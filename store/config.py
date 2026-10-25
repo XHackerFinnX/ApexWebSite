@@ -61,6 +61,8 @@ class Settings(BaseSettings):
     CDEK_FINAL_MARKUP: int = 150
     TBANK_CA_CERT: str | None = None
     TBANK_CA_CERT_PEM: SecretStr = SecretStr("")
+    ORDER_WEBHOOK_URL: str = "https://2p2p.ru/tilda/apex/webhook"
+    ORDER_TEST_WEBHOOK_URL: str = ""
     STORE_MEDIA_BACKEND: Literal["local", "s3"] = "local"
     STORE_MEDIA_ROOT: str = str(Path(__file__).parents[1] / "var" / "media")
     S3_ENDPOINT_URL: str = "https://s3.twcstorage.ru"

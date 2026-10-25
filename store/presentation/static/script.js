@@ -1164,8 +1164,13 @@ async function jsonFetch(url, options = {}) {
             );
         }
         const data = await r.json().catch(() => null);
-        if (!r.ok)
-            throw new Error(data?.error || `Ошибка запроса (${r.status})`);
+        if (!r.ok) {
+            const error = new Error(
+                data?.error || `Ошибка запроса (${r.status})`,
+            );
+            error.retryCheckout = data?.retry_checkout === true;
+            throw error;
+        }
         return data;
     });
 }
@@ -1637,11 +1642,22 @@ async function submitOrder(e) {
     try {
         const result = await jsonFetch("/api/checkout/payment", {
             method: "POST",
+            signal: AbortSignal.timeout(45000),
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify(payload),
         });
+        try {
+            sessionStorage.setItem(
+                "apex-checkout-order",
+                JSON.stringify({ id: result.order_id, cart: [...cart] }),
+            );
+        } catch {}
         window.location.assign(result.payment_url);
     } catch (error) {
+        if (error.retryCheckout) {
+            pendingCheckoutKey = null;
+            submittedCartFingerprint = null;
+        }
         showToast(error.message || "Не удалось перейти к оплате");
         button.disabled = false;
         button.textContent = "Перейти к оплате";

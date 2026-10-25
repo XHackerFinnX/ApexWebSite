@@ -181,7 +181,11 @@ function renderProducts() {
     document
         .querySelectorAll("[data-delete]")
         .forEach(
-            (b) => (b.onclick = () => removeProduct(Number(b.dataset.delete)).catch((error) => toast(error.message, true))),
+            (b) =>
+                (b.onclick = () =>
+                    removeProduct(Number(b.dataset.delete)).catch((error) =>
+                        toast(error.message, true),
+                    )),
         );
 }
 function renderReviews() {
@@ -656,16 +660,13 @@ $("#categoryForm").onsubmit = async (event) => {
     event.preventDefault();
     try {
         const id = event.target.elements.id.value;
-        await apiJson(
-            "/api/admin/categories" + (id ? "/" + id : ""),
-            {
-                method: id ? "PUT" : "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    name: new FormData(event.target).get("name"),
-                }),
-            },
-        );
+        await apiJson("/api/admin/categories" + (id ? "/" + id : ""), {
+            method: id ? "PUT" : "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                name: new FormData(event.target).get("name"),
+            }),
+        });
         event.target.reset();
         await loadCategories();
         toast("Категория добавлена");
@@ -739,6 +740,17 @@ $("#integration").onsubmit = async (e) => {
     ])
         d[key] = f.get(key);
     d.insurance = f.has("insurance");
+    if (provider === "tbank") {
+        for (const key of [
+            "pay_type",
+            "taxation",
+            "ffd_version",
+            "item_tax",
+            "delivery_tax",
+        ])
+            d[key] = f.get(key);
+        d.receipt_enabled = f.has("receipt_enabled");
+    }
     try {
         const editing = f.get("editing");
         const result = await apiJson(
@@ -792,6 +804,22 @@ function updateIntegrationForm() {
     if (integrationProvider.selectedOptions[0]?.hidden && visible)
         integrationProvider.value = visible.value;
     $("#cdek-fields").hidden = integrationProvider.value !== "cdek";
+    const bank = integrationProvider.value === "tbank";
+    $("#tbank-fields").hidden = !bank;
+    const environment = $("#integration").elements.environment;
+    let demo = environment.querySelector('[value="demo"]');
+    if (bank && !demo) {
+        demo = new Option("DEMO — тестовый терминал", "demo");
+        environment.add(demo);
+    }
+    if (!bank && demo) {
+        if (environment.value === "demo") environment.value = "test";
+        demo.remove();
+    }
+    environment.querySelector('[value="test"]').textContent = bank
+        ? "Тестовый API — нужен белый список IP"
+        : "Тестовая";
+
     window.cdekSettings.setEnabled(integrationProvider.value === "cdek");
     const credentials = ["tbank", "alfabank", "cdek"].includes(
         integrationProvider.value,
@@ -875,6 +903,7 @@ $("#configured").onclick = async (event) => {
         form.elements.provider.value = item.provider;
         integrationKind.disabled = true;
         integrationProvider.disabled = true;
+        updateIntegrationForm();
         form.elements.name.value = item.public_config.name || "";
         form.elements.environment.value =
             item.public_config.environment || "test";
@@ -886,7 +915,8 @@ $("#configured").onclick = async (event) => {
                     : (form.elements[key].value = value);
         });
         updateIntegrationForm();
-        if (item.provider === "cdek") window.cdekSettings.hydrate(item.public_config);
+        if (item.provider === "cdek")
+            window.cdekSettings.hydrate(item.public_config);
         form.elements.login.placeholder =
             "Оставьте пустым, чтобы сохранить текущий";
         form.elements.secret.placeholder =
@@ -1176,36 +1206,54 @@ function cdekControls(order) {
     };
     const state = order.cdek_status;
     const create = !state || ["FAILED", "INVALID"].includes(state);
-    return '<div class="cdek-order"><b>СДЭК</b><p>' +
-        esc(labels[state] || state || "Отправление ещё не создано") + '</p>' +
-        (order.cdek_error ? '<p class="error-text">' + esc(order.cdek_error) + '</p>' : '') +
-        (order.cdek_uuid ? '<small>UUID: ' + esc(order.cdek_uuid) + '</small>' : '') +
+    return (
+        '<div class="cdek-order"><b>СДЭК</b><p>' +
+        esc(labels[state] || state || "Отправление ещё не создано") +
+        "</p>" +
+        (order.cdek_error
+            ? '<p class="error-text">' + esc(order.cdek_error) + "</p>"
+            : "") +
+        (order.cdek_uuid
+            ? "<small>UUID: " + esc(order.cdek_uuid) + "</small>"
+            : "") +
         '<div class="cdek-order__actions">' +
-        (create ? '<button type="button" class="button secondary" data-cdek-action="create" ' + (order.status === "CONFIRMED" ? '' : 'disabled title="Доступно после оплаты"') + '>' + (state ? 'Повторить создание' : 'Создать отправление') + '</button>' :
-            '<button type="button" class="button secondary" data-cdek-action="sync">Уточнить статус</button>') +
-        (order.cdek_uuid && !["DELIVERED", "NOT_DELIVERED", "REMOVED", "CANCEL_PENDING", "INVALID"].includes(state) ? '<button type="button" class="button secondary" data-cdek-action="cancel">Отменить отправление</button>' : '') +
-        '</div></div>';
+        (create
+            ? '<button type="button" class="button secondary" data-cdek-action="create" ' +
+              (order.status === "CONFIRMED"
+                  ? ""
+                  : 'disabled title="Доступно после оплаты"') +
+              ">" +
+              (state ? "Повторить создание" : "Создать отправление") +
+              "</button>"
+            : '<button type="button" class="button secondary" data-cdek-action="sync">Уточнить статус</button>') +
+        (order.cdek_uuid &&
+        ![
+            "DELIVERED",
+            "NOT_DELIVERED",
+            "REMOVED",
+            "CANCEL_PENDING",
+            "INVALID",
+        ].includes(state)
+            ? '<button type="button" class="button secondary" data-cdek-action="cancel">Отменить отправление</button>'
+            : "") +
+        "</div></div>"
+    );
 }
 function renderOrders() {
-    const q = $("#orderSearch").value.toLocaleLowerCase("ru"),
-        status = $("#orderStatus").value;
-    const shown = orderRows.filter(
-        (row) =>
-            (status === "all" || row.status === status) &&
-            [
-                row.id,
-                row.customer_email,
-                row.customer_details?.name,
-                row.customer_details?.phone,
-                row.tracking_number,
-            ]
-                .join(" ")
-                .toLocaleLowerCase("ru")
-                .includes(q),
-    );
+    const shown = orderRows;
     const paymentNames = {
         CONFIRMED: "Оплачен",
         NEW: "Ожидает оплаты",
+        INITIALIZING: "Создаётся платёж",
+        INIT_UNKNOWN: "Уточняется результат",
+        INIT_ERROR: "Ошибка создания платежа",
+        FORM_SHOWED: "Открыта форма оплаты",
+        AUTHORIZING: "Проверяется оплата",
+        "3DS_CHECKING": "Проверка 3-D Secure",
+        "3DS_CHECKED": "Проверка 3-D Secure пройдена",
+        PAY_CHECKING: "Проверяется оплата",
+        CONFIRMING: "Подтверждается списание",
+        CONFIRM_CHECKING: "Проверяется списание",
         AUTHORIZED: "Авторизован",
         REFUNDED: "Возврат",
         PARTIAL_REFUNDED: "Частичный возврат",
@@ -1264,7 +1312,10 @@ function renderOrders() {
                             ? "pending"
                             : "") +
                       '">' +
-                      esc(paymentNames[row.status] || row.status) +
+                      esc(
+                          (paymentNames[row.status] || row.status) +
+                              (row.is_test ? " · тест" : ""),
+                      ) +
                       '</span></div><div class="order-customer"><p><span>Покупатель</span>' +
                       esc(customer.name || "Не указано") +
                       "<br>" +
@@ -1288,6 +1339,57 @@ function renderOrders() {
                       (items
                           ? '<div class="order-items">' + items + "</div>"
                           : "") +
+                      (row.payment_error
+                          ? '<p class="order-note error-text">' +
+                            esc(row.payment_error) +
+                            "</p>"
+                          : "") +
+                      (row.status === "CONFIRMED"
+                          ? '<p class="order-note">Чек: ' +
+                            esc(
+                                {
+                                    SUCCESS: "касса подтвердила фискализацию",
+                                    ERROR: "ошибка кассы",
+                                    NOT_REPORTED:
+                                        "подтверждение от кассы ещё не получено",
+                                    PENDING: "ожидается подтверждение кассы",
+                                }[row.receipt_status] || row.receipt_status,
+                            ) +
+                            (row.receipt_error
+                                ? " · " + esc(row.receipt_error)
+                                : "") +
+                            "</p>"
+                          : "") +
+                      (row.jobs || [])
+                          .filter((job) => job.error && job.state !== "done")
+                          .map(
+                              (job) =>
+                                  '<p class="order-note error-text">' +
+                                  esc(
+                                      {
+                                          webhook_paid: "Передача заказа",
+                                          cdek_create: "Создание СДЭК",
+                                          cdek_sync: "Статус СДЭК",
+                                          payment_sync: "Проверка оплаты",
+                                          payment_confirm:
+                                              "Подтверждение списания",
+                                          payment_cancel: "Закрытие платежа",
+                                      }[job.kind] || job.kind,
+                                  ) +
+                                  ": " +
+                                  esc(job.error) +
+                                  " · попыток: " +
+                                  Number(job.attempts) +
+                                  "</p>",
+                          )
+                          .join("") +
+                      '<div class="order-actions"><button type="button" class="button secondary" data-order-action="sync-payment">Проверить оплату</button>' +
+                      ((row.jobs || []).some(
+                          (job) => job.error && job.state !== "done",
+                      )
+                          ? '<button type="button" class="button secondary" data-order-action="retry-jobs">Повторить передачу</button>'
+                          : "") +
+                      '<button type="button" class="button danger" data-order-action="delete">Удалить заказ</button></div>' +
                       cdekControls(row) +
                       '<div class="order-edit"><label>Статус сборки<select name="fulfillment">' +
                       states
@@ -1318,12 +1420,77 @@ function renderOrders() {
               : "Заказов пока нет. Здесь появятся покупки после начала оформления.") +
           "</p>";
 }
-async function loadOrders() {
-    orderRows = await apiJson("/api/admin/orders");
-    renderOrders();
+let ordersRequest = 0,
+    ordersTotal = 0,
+    ordersFilterKey = "",
+    orderSearchTimer;
+async function loadOrders(reset = true) {
+    clearTimeout(orderSearchTimer);
+    const sequence = ++ordersRequest;
+    const params = new URLSearchParams(new FormData($("#orderFilters")));
+    ordersFilterKey = params.toString();
+    params.set("limit", "20");
+    params.set("offset", reset ? 0 : orderRows.length);
+    $("#orderRows").setAttribute("aria-busy", "true");
+    if (reset) {
+        orderRows = [];
+        $("#orderRows").innerHTML =
+            '<p class="empty-admin" role="status">Загружаем заказы…</p>';
+        $("#orderCount").textContent = "Загрузка заказов…";
+    }
+    $("#ordersMore").disabled = true;
+    try {
+        const page = await apiJson("/api/admin/orders?" + params);
+        if (sequence !== ordersRequest) return;
+        orderRows = reset ? page.items : orderRows.concat(page.items);
+        ordersTotal = page.total;
+        renderOrders();
+        $("#orderCount").textContent =
+            `Показано ${orderRows.length} из ${ordersTotal}`;
+        $("#ordersMore").hidden = orderRows.length >= ordersTotal;
+    } catch (error) {
+        if (sequence !== ordersRequest) return;
+        ordersFilterKey = "";
+        // Rows from the previous filter must not masquerade as matching results.
+        $("#orderRows").innerHTML =
+            '<p class="empty-admin error-text">' + esc(error.message) + "</p>";
+        $("#orderCount").textContent = "Не удалось загрузить заказы";
+        $("#ordersMore").hidden = true;
+        throw error;
+    } finally {
+        if (sequence === ordersRequest) {
+            $("#orderRows").removeAttribute("aria-busy");
+            $("#ordersMore").disabled = false;
+        }
+    }
 }
-$("#orderSearch").oninput = renderOrders;
-$("#orderStatus").onchange = renderOrders;
+$("#orderFilters").onsubmit = (event) => {
+    event.preventDefault();
+    loadOrders().catch((error) => toast(error.message, true));
+};
+$("#orderFilters").oninput = (event) => {
+    if (event.target.tagName !== "INPUT") return;
+    ++ordersRequest;
+    clearTimeout(orderSearchTimer);
+    orderSearchTimer = setTimeout(
+        () => loadOrders().catch((error) => toast(error.message, true)),
+        300,
+    );
+};
+$("#orderFilters").onchange = (event) => {
+    if (
+        new URLSearchParams(new FormData($("#orderFilters"))).toString() !==
+        ordersFilterKey
+    )
+        loadOrders().catch((error) => toast(error.message, true));
+};
+$("#orderFilters").onreset = () =>
+    setTimeout(
+        () => loadOrders().catch((error) => toast(error.message, true)),
+        0,
+    );
+$("#ordersMore").onclick = () =>
+    loadOrders(false).catch((error) => toast(error.message, true));
 $("#orderRows").onsubmit = async (event) => {
     const form = event.target.closest("[data-order-id]");
     if (!form) return;
@@ -1337,6 +1504,7 @@ $("#orderRows").onsubmit = async (event) => {
             body: JSON.stringify(Object.fromEntries(new FormData(form))),
         });
         toast("Заказ обновлён");
+        await loadOrders();
     } catch (error) {
         toast(error.message, true);
     } finally {
@@ -1344,26 +1512,80 @@ $("#orderRows").onsubmit = async (event) => {
     }
 };
 $("#orderRows").onclick = async (event) => {
+    const operation = event.target.closest("[data-order-action]");
+    if (operation && !operation.disabled) {
+        const action = operation.dataset.orderAction;
+        if (
+            action === "delete" &&
+            !confirm(
+                "Удалить заказ из списков магазина? Неоплаченный платёж будет закрыт. Удаление оплаченного заказа не выполняет возврат денег.",
+            )
+        )
+            return;
+        operation.disabled = true;
+        const id = operation.closest("[data-order-id]").dataset.orderId;
+        try {
+            await apiJson(
+                "/api/admin/orders/" +
+                    id +
+                    (action === "delete" ? "" : "/" + action),
+                {
+                    method: action === "delete" ? "DELETE" : "POST",
+                    timeoutMs: 45000,
+                },
+            );
+            toast(
+                action === "delete"
+                    ? "Заказ удалён из списка"
+                    : action === "sync-payment"
+                      ? "Статус оплаты проверен"
+                      : "Повторная передача запланирована",
+            );
+            await loadOrders();
+        } catch (error) {
+            toast(error.message, true);
+        } finally {
+            operation.disabled = false;
+        }
+        return;
+    }
     const button = event.target.closest("[data-cdek-action]");
     if (!button || button.disabled) return;
     const action = button.dataset.cdekAction;
-    if (action === "cancel" && !confirm("Отменить отправление в СДЭК? Оплата заказа при этом не меняется.")) return;
+    if (
+        action === "cancel" &&
+        !confirm(
+            "Отменить отправление в СДЭК? Оплата заказа при этом не меняется.",
+        )
+    )
+        return;
     const form = button.closest("[data-order-id]");
     const buttons = [...form.querySelectorAll("button")];
     const disabled = buttons.map((item) => item.disabled);
-    buttons.forEach((item) => item.disabled = true);
+    buttons.forEach((item) => (item.disabled = true));
     try {
-        const result = await apiJson('/api/admin/orders/' + form.dataset.orderId + '/cdek', {
-            method: { create: "POST", sync: "GET", cancel: "DELETE" }[action],
-            timeoutMs: 45000,
-        });
-        toast(result.error || (result.tracking_number ? 'Накладная СДЭК: ' + result.tracking_number : 'Данные СДЭК обновлены. Запрос может ещё обрабатываться.'), Boolean(result.error));
+        const result = await apiJson(
+            "/api/admin/orders/" + form.dataset.orderId + "/cdek",
+            {
+                method: { create: "POST", sync: "GET", cancel: "DELETE" }[
+                    action
+                ],
+                timeoutMs: 45000,
+            },
+        );
+        toast(
+            result.error ||
+                (result.tracking_number
+                    ? "Накладная СДЭК: " + result.tracking_number
+                    : "Данные СДЭК обновлены. Запрос может ещё обрабатываться."),
+            Boolean(result.error),
+        );
         await loadOrders();
     } catch (error) {
         toast(error.message, true);
         await loadOrders().catch(() => {});
     } finally {
-        buttons.forEach((item, index) => item.disabled = disabled[index]);
+        buttons.forEach((item, index) => (item.disabled = disabled[index]));
     }
 };
 $("#refreshOrders").onclick = () =>

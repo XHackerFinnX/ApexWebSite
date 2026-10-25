@@ -55,7 +55,9 @@ async function api(url, method = "GET", data) {
         }
         const result = await response.json().catch(() => ({}));
         if (!response.ok) {
-            const error = new Error(result.error || "Не удалось выполнить запрос");
+            const error = new Error(
+                result.error || "Не удалось выполнить запрос",
+            );
             error.status = response.status;
             throw error;
         }
@@ -89,6 +91,16 @@ function emptyOrders() {
 function orderCard(order) {
     const statuses = {
         NEW: "Ожидает оплаты",
+        INITIALIZING: "Создаётся платёж",
+        INIT_UNKNOWN: "Уточняем результат оплаты",
+        INIT_ERROR: "Не удалось создать платёж",
+        FORM_SHOWED: "Ожидает оплаты",
+        AUTHORIZING: "Проверяем оплату",
+        "3DS_CHECKING": "Проверяем оплату",
+        "3DS_CHECKED": "Проверяем оплату",
+        PAY_CHECKING: "Проверяем оплату",
+        CONFIRMING: "Подтверждаем оплату",
+        CONFIRM_CHECKING: "Подтверждаем оплату",
         AUTHORIZED: "Платёж авторизован",
         CONFIRMED: "Оплачен",
         REFUNDED: "Возвращён",
@@ -104,8 +116,21 @@ function orderCard(order) {
         shipped: "В пути",
         delivered: "Доставлен",
     };
+    if (order.is_test) statuses.CONFIRMED = "Тестовая оплата";
     const success = order.status === "CONFIRMED";
-    const pending = ["NEW", "AUTHORIZED"].includes(order.status);
+    const pending = [
+        "NEW",
+        "AUTHORIZED",
+        "INITIALIZING",
+        "INIT_UNKNOWN",
+        "FORM_SHOWED",
+        "AUTHORIZING",
+        "3DS_CHECKING",
+        "3DS_CHECKED",
+        "PAY_CHECKING",
+        "CONFIRMING",
+        "CONFIRM_CHECKING",
+    ].includes(order.status);
     const reviewAction = order.review_id
         ? '<p class="member-order__review-status">' +
           icon("check") +
@@ -113,7 +138,7 @@ function orderCard(order) {
               ? "Отзыв опубликован. Спасибо!"
               : "Отзыв отправлен на модерацию. Спасибо!") +
           "</p>"
-        : success
+        : success && !order.is_test
           ? '<div class="member-order__review"><p>Как тебе покупка?</p><button type="button" class="button secondary" data-review-order="' +
             escapeText(order.id) +
             '">Оставить отзыв ' +
@@ -226,9 +251,21 @@ async function loadMember() {
             stats?.active_orders ??
                 orders.filter(
                     (order) =>
-                        ["NEW", "AUTHORIZED", "CONFIRMED"].includes(
-                            order.status,
-                        ) && order.fulfillment !== "delivered",
+                        [
+                            "NEW",
+                            "AUTHORIZED",
+                            "CONFIRMED",
+                            "INITIALIZING",
+                            "INIT_UNKNOWN",
+                            "FORM_SHOWED",
+                            "AUTHORIZING",
+                            "3DS_CHECKING",
+                            "3DS_CHECKED",
+                            "PAY_CHECKING",
+                            "CONFIRMING",
+                            "CONFIRM_CHECKING",
+                        ].includes(order.status) &&
+                        order.fulfillment !== "delivered",
                 ).length,
         );
         select("#overview-earn").textContent =

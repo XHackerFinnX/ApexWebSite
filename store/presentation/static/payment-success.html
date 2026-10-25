@@ -3,22 +3,25 @@
     <head>
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width,initial-scale=1" />
-        <title>Оплата прошла — Apex</title>
-        <link rel="stylesheet" href="/payment.css" />
+        <title>Проверка оплаты — APEX</title>
+        <link rel="stylesheet" href="/payment.css?v=2" />
         <link rel="stylesheet" href="/loading.css?v=1" />
         <script defer src="/loading.js?v=1"></script>
     </head>
     <body>
         <main class="payment-result">
-            <p class="payment-result__mark">✓</p>
-            <h1>Спасибо за заказ!</h1>
-            <p>
-                Платёж принят. Мы начали обработку заказа и отправим информацию
-                на указанную почту.
+            <p class="payment-result__mark" aria-hidden="true">…</p>
+            <h1 id="order-title">Проверяем оплату</h1>
+            <p id="order-description">Ожидаем подтверждение от банка.</p>
+            <p id="order-status" role="status" aria-live="polite">
+                Уточняем статус платежа…
             </p>
-            <p id="order-status">Проверяем статус платежа…</p>
+            <button type="button" id="check-payment">Обновить статус</button>
+            <a id="receipt-link" target="_blank" rel="noopener" hidden
+                >Открыть чек</a
+            >
             <a href="/">Вернуться в магазин</a><small id="order-number"></small>
         </main>
-        <script defer src="/payment-result.js?v=2"></script>
+        <script defer src="/payment-result.js?v=3"></script>
     </body>
 </html>

@@ -7,6 +7,8 @@ from store.application.services import (
     CheckoutService,
     IntegrationService,
 )
+from store.application.order_worker import OrderWorker
+from store.infrastructure.order_webhook import OrderWebhook
 from store.config import Settings, get_settings
 from store.infrastructure.captcha import YandexCaptcha
 from store.infrastructure.cdek import CDEKDelivery
@@ -27,7 +29,8 @@ def create_app(settings: Settings | None = None):
         SecretBox(config.STORE_MASTER_KEY.get_secret_value()),
     )
     delivery = CDEKDelivery(repo)
-    return WebApp(
+    bank = TBankPayment(config.tbank_ca_certificate())
+    app = WebApp(
         CatalogService(repo),
         IntegrationService(repo, delivery),
         CheckoutService(
@@ -35,7 +38,7 @@ def create_app(settings: Settings | None = None):
                 config.CAPTCHA_MODE, config.YANDEX_CAPTCHA_SERVER_KEY.get_secret_value()
             ),
             repo,
-            TBankPayment(config.tbank_ca_certificate()),
+            bank,
             config.WEBAPP_URL,
             delivery,
         ),
@@ -47,6 +50,17 @@ def create_app(settings: Settings | None = None):
         trust_proxy_headers=config.TRUST_PROXY_HEADERS,
         secure_cookies=config.WEBAPP_URL.startswith("https://"),
     )
+    app.order_worker = OrderWorker(
+        repo,
+        bank,
+        delivery,
+        OrderWebhook(config.ORDER_WEBHOOK_URL),
+        config.WEBAPP_URL,
+        test_webhook=OrderWebhook(config.ORDER_TEST_WEBHOOK_URL)
+        if config.ORDER_TEST_WEBHOOK_URL
+        else None,
+    )
+    return app
 
 
 def run():
@@ -58,6 +72,7 @@ def run():
         daemon_threads = False
 
     server = Server((config.APP_HOST, config.APP_PORT), app.handler())
+    app.order_worker.start()
 
     def stop(_signum, _frame):
         threading.Thread(target=server.shutdown, daemon=True).start()
@@ -68,4 +83,5 @@ def run():
         server.serve_forever()
     finally:
         server.server_close()
+        app.order_worker.stop()
         app.repo.pool.close()

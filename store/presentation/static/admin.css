@@ -7,8 +7,16 @@
     border-radius: 12px;
     overflow-wrap: anywhere;
 }
-.cdek-order small { display: block; margin-top: 8px; }
-.cdek-order__actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px; }
+.cdek-order small {
+    display: block;
+    margin-top: 8px;
+}
+.cdek-order__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 12px;
+}
 .admin-shell {
     min-height: 100dvh;
 }
@@ -555,9 +563,20 @@ tr:hover td {
 .cdek-fields .check {
     align-items: center;
 }
-.cdek-picker { position: relative; min-width: 0; }
-.cdek-picker > label { display: block; margin-bottom: 8px; }
-.cdek-picker > small { display: block; color: var(--ui-muted); margin-top: 6px; font-size: 12px; }
+.cdek-picker {
+    position: relative;
+    min-width: 0;
+}
+.cdek-picker > label {
+    display: block;
+    margin-bottom: 8px;
+}
+.cdek-picker > small {
+    display: block;
+    color: var(--ui-muted);
+    margin-top: 6px;
+    font-size: 12px;
+}
 .cdek-picker__panel {
     position: absolute;
     z-index: 25;
@@ -572,8 +591,12 @@ tr:hover td {
     box-shadow: 0 12px 32px #0003;
     padding: 6px;
 }
-.cdek-picker__panel[hidden], .cdek-picker__more[hidden] { display: none; }
-.cdek-picker__option, .cdek-picker__more {
+.cdek-picker__panel[hidden],
+.cdek-picker__more[hidden] {
+    display: none;
+}
+.cdek-picker__option,
+.cdek-picker__more {
     display: block;
     width: 100%;
     padding: 11px 12px;
@@ -586,10 +609,25 @@ tr:hover td {
     cursor: pointer;
     overflow-wrap: anywhere;
 }
-.cdek-picker__option small { display: block; color: var(--ui-muted); font-size: 12px; }
-.cdek-picker__option:hover, .cdek-picker__option.is-active, .cdek-picker__more:hover { background: var(--ui-soft); }
-.cdek-picker__option[aria-selected="true"] { color: var(--ui-accent); }
-.cdek-picker__status { margin: 0; padding: 8px 12px; color: var(--ui-muted); font-size: 12px; }
+.cdek-picker__option small {
+    display: block;
+    color: var(--ui-muted);
+    font-size: 12px;
+}
+.cdek-picker__option:hover,
+.cdek-picker__option.is-active,
+.cdek-picker__more:hover {
+    background: var(--ui-soft);
+}
+.cdek-picker__option[aria-selected="true"] {
+    color: var(--ui-accent);
+}
+.cdek-picker__status {
+    margin: 0;
+    padding: 8px 12px;
+    color: var(--ui-muted);
+    font-size: 12px;
+}
 .loyalty-settings {
     max-width: 800px;
 }
@@ -1303,5 +1341,58 @@ dialog .variants-section {
     }
     .login-card {
         padding: 28px;
+    }
+}
+
+.order-filters {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    align-items: end;
+    gap: 14px;
+}
+.order-filters label {
+    display: grid;
+    gap: 6px;
+    min-width: 0;
+    font-size: 12px;
+}
+.order-filters .order-filter-search {
+    grid-column: span 2;
+}
+.order-filters input,
+.order-filters select {
+    width: 100%;
+    min-width: 0;
+}
+.order-filters .button {
+    align-self: end;
+}
+.order-count {
+    color: var(--ui-muted);
+    font-size: 13px;
+    margin: 18px 0;
+}
+.order-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin: 14px 0;
+}
+#tbank-fields > .field-hint {
+    grid-column: 1/-1;
+    margin: 0;
+    line-height: 1.6;
+}
+@media (max-width: 800px) {
+    .order-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media (max-width: 440px) {
+    .order-filters {
+        grid-template-columns: minmax(0, 1fr);
+    }
+    .order-filters .order-filter-search {
+        grid-column: auto;
     }
 }

@@ -178,7 +178,22 @@ class CommerceHandler:
             if method == "POST":
                 return self._send(201, app.repo.save_promotion(self._body()))
         if method == "GET" and path == "/api/admin/orders":
-            return self._send(data=app.repo.list_admin_orders())
+            return self._send(data=app.repo.admin_orders_page(query))
+        if (
+            len(parts) == 5
+            and parts[:3] == ["api", "admin", "orders"]
+            and method == "POST"
+        ):
+            from uuid import UUID
+
+            order_id = str(UUID(parts[3]))
+            if parts[4] == "sync-payment":
+                from store.application.payments import PaymentService
+
+                PaymentService(app.repo, app.checkout.tbank).sync(order_id)
+                return self._send(data={"ok": True})
+            if parts[4] == "retry-jobs":
+                return self._send(data=app.repo.retry_order_jobs(order_id))
         if method == "POST" and path in {
             "/api/admin/integrations/cdek/cities",
             "/api/admin/integrations/cdek/offices",
@@ -260,4 +275,6 @@ class CommerceHandler:
                     return self._send(data={"ok": app.repo.delete_review(int(key))})
             if kind == "orders" and method == "PUT":
                 return self._send(data=app.repo.update_fulfillment(key, self._body()))
+            if kind == "orders" and method == "DELETE":
+                return self._send(data=app.repo.archive_order(key))
         return False

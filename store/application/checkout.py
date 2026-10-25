@@ -36,7 +36,7 @@ def allocate_discount(items, discount, eligible=None):
         remaining -= amount
 
 
-def receipt_items(items, shipping=Decimal(0)):
+def receipt_items(items, shipping=Decimal(0), *, include_zero=False):
     result = []
     for item in items:
         cents = int(item["line_total"] * 100)
@@ -45,9 +45,14 @@ def receipt_items(items, shipping=Decimal(0)):
             (price, item["quantity"] - remainder),
             (price + 1, remainder),
         ]:
-            if quantity and unit:
+            if quantity and (unit or include_zero):
                 result.append(
                     {
+                        **{
+                            key: item[key]
+                            for key in ("sku", "size", "color", "product_id")
+                            if key in item
+                        },
                         "name": item["name"],
                         "quantity": quantity,
                         "unit_price": Decimal(unit) / 100,
@@ -248,7 +253,7 @@ class CheckoutService:
         )
         import re
 
-        if not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
+        if len(email) > 64 or not re.fullmatch(r"[^\s@]+@[^\s@]+\.[^\s@]+", email):
             raise ValueError("Укажите корректную почту для электронного чека")
         if (
             len(str(contact.get("name", "")).strip()) < 2
@@ -267,6 +272,11 @@ class CheckoutService:
                     "points": int(data.get("points") or 0),
                     "delivery": data.get("delivery"),
                     "email": email,
+                    "contact": {
+                        key: str(contact.get(key, "")) for key in ("name", "phone")
+                    },
+                    "recipient": str(data.get("recipient", "")),
+                    "comment": str(data.get("comment", "")),
                 },
                 sort_keys=True,
                 ensure_ascii=False,
@@ -276,6 +286,22 @@ class CheckoutService:
             key, email, customer["id"] if customer else None, fingerprint
         )
         if previous:
+            from store.infrastructure.tbank import TBankError
+
+            if previous.get("deleted_at") or previous["status"] in {
+                "CANCELED",
+                "REJECTED",
+                "REVERSED",
+                "REFUNDED",
+                "DEADLINE_EXPIRED",
+            }:
+                error = TBankError(
+                    "Предыдущая платёжная сессия закрыта. Нажмите оплатить ещё раз для создания нового заказа."
+                )
+                error.retry_checkout = True
+                raise error
+            if previous["status"] in {"CONFIRMED", "PARTIAL_REFUNDED"}:
+                raise ValueError("Этот заказ уже оплачен. Проверьте личный кабинет.")
             if previous.get("payment_url"):
                 return {
                     "order_id": str(previous["id"]),
@@ -325,6 +351,20 @@ class CheckoutService:
         )
 
     def _initialize_payment(self, config, order, items, shipping):
+        from store.infrastructure.tbank import TBankError
+
+        if order.get("external_payment_id") or order["status"] in {
+            "INIT_UNKNOWN",
+            "INITIALIZING",
+        }:
+            raise TBankError(
+                "Результат создания платежа уточняется у банка. Подождите минуту и повторите попытку.",
+                ambiguous=True,
+            )
+        if not order.get("payment_terminal_key"):
+            self.repo.bind_payment_context(order["id"], config)
+        order = self.repo.payment_context(order["id"])
+        config = self.repo.payment_configuration(order)
         if not self.repo.claim_payment(order["id"]):
             raise ValueError(
                 "Платёж уже создаётся. Подождите несколько секунд и повторите"
@@ -333,8 +373,10 @@ class CheckoutService:
             result = self.tbank.init_payment(
                 config, order, receipt_items(items, shipping), self.public_url
             )
-        except Exception:
-            self.repo.payment_initialization_failed(order["id"])
+        except Exception as exc:
+            self.repo.mark_payment_error(
+                order["id"], str(exc), bool(getattr(exc, "ambiguous", True))
+            )
             raise
         self.repo.set_order_payment(
             str(order["id"]),
@@ -345,22 +387,73 @@ class CheckoutService:
         return {"order_id": str(order["id"]), "payment_url": result["PaymentURL"]}
 
     def accept_tbank_notification(self, data):
-        config = self.repo.get_integration_config("tbank") if self.repo else None
-        if (
-            not config
-            or str(data.get("TerminalKey", "")) != str(config["terminal_key"])
-            or not self.tbank.verify_token(data, str(config["password"]))
-        ):
+        if not isinstance(data, dict) or not self.repo:
             raise ValueError("Некорректная подпись уведомления Т-Банка")
-        order = self.repo.payment_order(str(data.get("PaymentId", "")))
+        order = self.repo.find_notification_order(data)
         if not order:
             raise ValueError("Заказ для платежа не найден")
-        if str(data.get("Status")) == "CONFIRMED" and (
-            "Amount" not in data
-            or int(data["Amount"]) != int(order["total"] * 100)
+        config = self.repo.payment_configuration(order, original_password=True)
+        valid = str(data.get("TerminalKey", "")) == str(
+            config["terminal_key"]
+        ).strip() and self.tbank.verify_token(data, str(config["password"]))
+        if not valid:
+            current = self.repo.payment_configuration(order)
+            valid = str(data.get("TerminalKey", "")) == str(
+                current["terminal_key"]
+            ).strip() and self.tbank.verify_token(data, str(current["password"]))
+        if not valid:
+            raise ValueError("Некорректная подпись уведомления Т-Банка")
+        receipt = data.get("Receipt")
+        fiscal = (
+            any(key.startswith("Fiscal") for key in data)
+            or any(key in data for key in ("ReceiptId", "ReceiptUrl", "ReceiptURL"))
+            or (
+                isinstance(receipt, dict)
+                and (
+                    any(key.startswith("Fiscal") for key in receipt)
+                    or any(
+                        key in receipt
+                        for key in ("ReceiptId", "ReceiptUrl", "ReceiptURL", "Url")
+                    )
+                )
+            )
+            or str(data.get("Type", "")).lower() in {"receipt", "fiscalization"}
+        )
+        if (data.get("OrderId") is not None or not fiscal) and str(
+            data.get("OrderId", "")
+        ) != str(order["id"]):
+            raise ValueError("Номер заказа в уведомлении не совпадает с платежом")
+        if order.get("payment_terminal_key") and order["payment_terminal_key"] != str(
+            data["TerminalKey"]
+        ):
+            raise ValueError("Терминал в уведомлении не совпадает с заказом")
+        payment_id = str(data.get("PaymentId", ""))
+        if not payment_id:
+            raise ValueError("Не указан идентификатор платежа")
+        if fiscal:
+            if order.get("external_payment_id") != payment_id:
+                raise ValueError("Платёж чека не совпадает с заказом")
+            return self.repo.record_receipt(order["id"], data)
+        status = str(data.get("Status", ""))
+        if not status:
+            raise ValueError("Не указан статус платежа")
+        if status in {"CONFIRMED", "AUTHORIZED"} and (
+            int(data.get("Amount", -1)) != int(order["total"] * 100)
             or data.get("Success") is not True
         ):
             raise ValueError("Сумма или результат платежа не совпадают с заказом")
-        return self.repo.update_order_by_payment(
-            str(data.get("PaymentId", "")), str(data.get("Status", ""))
-        )
+        if order.get("external_payment_id") != payment_id:
+            self.repo.attach_notification_payment(order["id"], payment_id)
+        self.repo.record_payment_event(order["id"], data)
+        result = self.repo.update_order_by_payment(payment_id, status)
+        if data.get("Success") is False:
+            self.repo.record_payment_check(
+                order["id"],
+                str(
+                    data.get("Message")
+                    or data.get("Details")
+                    or data.get("ErrorCode")
+                    or "Оплата отклонена"
+                ),
+            )
+        return result

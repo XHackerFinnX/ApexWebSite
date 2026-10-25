@@ -132,7 +132,7 @@ class PostgreSQLCommerceTests(unittest.TestCase):
                 "tbank",
                 "payment",
                 True,
-                {"environment": "test"},
+                {"environment": "production"},
                 {"terminal_key": "test-terminal", "password": "test-terminal-password"},
             )
         )
@@ -168,7 +168,7 @@ class PostgreSQLCommerceTests(unittest.TestCase):
 
     def cdek_fixture(self, paid=True):
         config = {
-            "environment": "test",
+            "environment": "production",
             "client_id": "test-only",
             "client_secret": "test-only",
             "contract_type": "1",
@@ -848,6 +848,7 @@ class PostgreSQLCommerceTests(unittest.TestCase):
             "Success": True,
             "Amount": 1,
             "Token": "signed-test-notification",
+            "OrderId": result["order_id"],
         }
         with self.assertRaisesRegex(ValueError, "Сумма"):
             self.checkout.accept_tbank_notification(data)

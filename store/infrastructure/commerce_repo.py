@@ -11,9 +11,11 @@ import psycopg
 from psycopg.types.json import Jsonb
 
 from store.infrastructure.security import hash_password, verify_password
+from store.infrastructure.order_repo import OrderRepository
+from store.domain.payment_mode import order_is_test
 
 
-class CommerceRepository:
+class CommerceRepository(OrderRepository):
     def loyalty_settings(self):
         with self._db() as db:
             return db.execute(
@@ -128,19 +130,20 @@ class CommerceRepository:
                     """SELECT o.id,o.status,o.total,o.subtotal,o.discount,o.shipping,
                     o.promo_code,o.points_spent,o.points_earned,o.fulfillment,
                     o.tracking_number,o.delivery_details,o.created_at,
+                    coalesce((o.payment_settings->>'is_test')::boolean,false) AS is_test,
                     r.id AS review_id,r.is_published AS review_published
                     FROM orders o LEFT JOIN reviews r ON r.order_id=o.id
-                    WHERE o.customer_id=%s ORDER BY o.created_at DESC LIMIT 100""",
+                    WHERE o.customer_id=%s AND o.deleted_at IS NULL ORDER BY o.created_at DESC LIMIT 100""",
                     (customer_id,),
                 ).fetchall()
             )
             self._attach_order_items(db, orders)
             stats = db.execute(
                 """SELECT count(*) AS total_orders,
-                count(*) FILTER (WHERE status IN ('NEW','AUTHORIZED','CONFIRMED')
-                  AND fulfillment <> 'delivered') AS active_orders,
-                coalesce(sum(total) FILTER (WHERE status='CONFIRMED'),0) AS paid_total
-                FROM orders WHERE customer_id=%s""",
+                count(*) FILTER (WHERE status IN ('NEW','AUTHORIZED','CONFIRMED','INITIALIZING','INIT_UNKNOWN','FORM_SHOWED','AUTHORIZING','3DS_CHECKING','3DS_CHECKED','PAY_CHECKING','CONFIRMING','CONFIRM_CHECKING')
+                  AND fulfillment <> 'delivered' AND NOT coalesce((payment_settings->>'is_test')::boolean,false)) AS active_orders,
+                coalesce(sum(total) FILTER (WHERE status='CONFIRMED' AND NOT coalesce((payment_settings->>'is_test')::boolean,false)),0) AS paid_total
+                FROM orders WHERE customer_id=%s AND deleted_at IS NULL""",
                 (customer_id,),
             ).fetchone()
             ledger = list(
@@ -166,13 +169,15 @@ class CommerceRepository:
         with self._db() as db:
             # The order lock serializes duplicate submissions and payment updates.
             order = db.execute(
-                "SELECT status FROM orders WHERE id=%s AND customer_id=%s FOR UPDATE",
+                "SELECT status,payment_settings FROM orders WHERE id=%s AND customer_id=%s FOR UPDATE",
                 (order_id, customer_id),
             ).fetchone()
             if not order:
                 raise ValueError("Заказ не найден")
             if order["status"] != "CONFIRMED":
                 raise ValueError("Отзыв доступен после подтверждения оплаты заказа")
+            if order_is_test(order):
+                raise ValueError("Отзыв недоступен для тестового заказа")
             if db.execute(
                 "SELECT 1 FROM reviews WHERE order_id=%s", (order_id,)
             ).fetchone():
@@ -429,6 +434,7 @@ class CommerceRepository:
                     "redeem",
                     -order["points_spent"],
                 )
+            self._enqueue_job(db, order["id"], "payment_sync", 90)
             return dict(row)
 
     def checkout_order(self, key, email, customer_id, digest):
@@ -455,7 +461,7 @@ class CommerceRepository:
         with self._db() as db:
             return bool(
                 db.execute(
-                    "UPDATE orders SET status='INITIALIZING',updated_at=now() WHERE id=%s AND (status IN ('NEW','INIT_ERROR') OR (status='INITIALIZING' AND updated_at<now()-interval '90 seconds')) RETURNING id",
+                    "UPDATE orders SET status='INITIALIZING',updated_at=now() WHERE id=%s AND deleted_at IS NULL AND status IN ('NEW','INIT_ERROR') RETURNING id",
                     (order_id,),
                 ).fetchone()
             )
@@ -526,106 +532,149 @@ class CommerceRepository:
 
     def set_order_payment(self, order_id, payment_id, status, payment_url=""):
         with self._db() as db:
+            row = db.execute(
+                "SELECT * FROM orders WHERE id=%s FOR UPDATE", (order_id,)
+            ).fetchone()
+            if not row:
+                raise LookupError("Заказ не найден")
+            if row["external_payment_id"] not in (None, "", payment_id):
+                raise ValueError("Для заказа уже зарегистрирован другой платёж")
             db.execute(
-                "UPDATE orders SET external_payment_id=%s,status=%s,payment_url=%s,updated_at=now() WHERE id=%s AND status NOT IN ('CONFIRMED','REFUNDED','REVERSED')",
-                (payment_id, status, payment_url, order_id),
+                "UPDATE orders SET external_payment_id=%s,payment_url=%s,payment_error='' WHERE id=%s",
+                (payment_id, payment_url, order_id),
             )
+            self._apply_payment_status(db, row, status)
 
     def update_order_by_payment(self, payment_id, status):
-        allowed = {
-            "NEW",
-            "FORM_SHOWED",
-            "AUTHORIZING",
-            "3DS_CHECKING",
-            "3DS_CHECKED",
-            "AUTHORIZED",
-            "CONFIRMING",
-            "CONFIRMED",
-            "CANCELED",
-            "REJECTED",
-            "DEADLINE_EXPIRED",
-            "REFUNDED",
-            "REVERSED",
-            "PARTIAL_REFUNDED",
-        }
-        if status not in allowed:
+        if not re.fullmatch(r"[A-Z0-9_]{1,40}", str(status)):
             raise ValueError("Неизвестный статус платежа")
         with self._db() as db:
             row = db.execute(
                 "SELECT * FROM orders WHERE external_payment_id=%s FOR UPDATE",
                 (payment_id,),
             ).fetchone()
-            if not row:
-                return False
-            terminal = {
-                "CANCELED",
-                "REJECTED",
-                "DEADLINE_EXPIRED",
-                "REFUNDED",
-                "REVERSED",
-            }
-            if row["status"] in terminal or (
-                row["status"] == "CONFIRMED"
-                and status
-                not in {"CONFIRMED", "REFUNDED", "REVERSED", "PARTIAL_REFUNDED"}
-            ):
-                return True
-            if row["customer_id"]:
-                db.execute(
-                    "SELECT id FROM customers WHERE id=%s FOR UPDATE",
-                    (row["customer_id"],),
-                )
-                if status == "CONFIRMED":
-                    self._points(
-                        db, row["customer_id"], row["id"], "earn", row["points_earned"]
-                    )
-            if status in terminal and not row["benefits_released"]:
-                if row["customer_id"]:
-                    if row["points_spent"]:
-                        self._points(
-                            db,
-                            row["customer_id"],
-                            row["id"],
-                            "redeem_return",
-                            row["points_spent"],
-                        )
-                    earned = db.execute(
-                        "SELECT 1 FROM loyalty_ledger WHERE order_id=%s AND kind='earn'",
-                        (row["id"],),
-                    ).fetchone()
-                    if earned:
-                        self._points(
-                            db,
-                            row["customer_id"],
-                            row["id"],
-                            "earn_return",
-                            -row["points_earned"],
-                        )
-                if row["promo_id"]:
-                    db.execute(
-                        "UPDATE promotions SET uses=greatest(uses-1,0) WHERE id=%s",
-                        (row["promo_id"],),
-                    )
-                items = list(
-                    db.execute(
-                        "SELECT * FROM order_items WHERE order_id=%s", (row["id"],)
-                    ).fetchall()
-                )
-                if row["inventory_reserved"]:
-                    self._reserve_inventory(db, items, restore=True)
-                db.execute(
-                    "UPDATE orders SET benefits_released=true WHERE id=%s", (row["id"],)
-                )
-            db.execute(
-                "UPDATE orders SET status=%s,updated_at=now() WHERE id=%s",
-                (status, row["id"]),
+            return self._apply_payment_status(db, row, status) if row else False
+
+    def _apply_payment_status(self, db, row, status):
+        test_payment = order_is_test(row)
+        terminal = {
+            "CANCELED",
+            "REJECTED",
+            "DEADLINE_EXPIRED",
+            "REFUNDED",
+            "REVERSED",
+        }
+        ranks = {
+            name: rank
+            for rank, name in enumerate(
+                [
+                    "INIT_ERROR",
+                    "INIT_UNKNOWN",
+                    "INITIALIZING",
+                    "NEW",
+                    "FORM_SHOWED",
+                    "AUTHORIZING",
+                    "3DS_CHECKING",
+                    "3DS_CHECKED",
+                    "PAY_CHECKING",
+                    "AUTHORIZED",
+                    "CONFIRMING",
+                    "CONFIRM_CHECKING",
+                ]
             )
+        }
+        if (
+            row["status"] in ranks
+            and status in ranks
+            and ranks[status] < ranks[row["status"]]
+        ):
             return True
+        if row["status"] == "PARTIAL_REFUNDED" and status not in {
+            "PARTIAL_REFUNDED",
+            "REFUNDED",
+        }:
+            return True
+        if row["status"] in terminal or (
+            row["status"] == "CONFIRMED"
+            and status not in {"CONFIRMED", "REFUNDED", "REVERSED", "PARTIAL_REFUNDED"}
+        ):
+            return True
+        if row["customer_id"]:
+            db.execute(
+                "SELECT id FROM customers WHERE id=%s FOR UPDATE",
+                (row["customer_id"],),
+            )
+            if status == "CONFIRMED" and not test_payment:
+                self._points(
+                    db, row["customer_id"], row["id"], "earn", row["points_earned"]
+                )
+        if (status in terminal or (test_payment and status == "CONFIRMED")) and not row[
+            "benefits_released"
+        ]:
+            if row["customer_id"]:
+                if row["points_spent"]:
+                    self._points(
+                        db,
+                        row["customer_id"],
+                        row["id"],
+                        "redeem_return",
+                        row["points_spent"],
+                    )
+                earned = db.execute(
+                    "SELECT 1 FROM loyalty_ledger WHERE order_id=%s AND kind='earn'",
+                    (row["id"],),
+                ).fetchone()
+                if earned:
+                    self._points(
+                        db,
+                        row["customer_id"],
+                        row["id"],
+                        "earn_return",
+                        -row["points_earned"],
+                    )
+            if row["promo_id"]:
+                db.execute(
+                    "UPDATE promotions SET uses=greatest(uses-1,0) WHERE id=%s",
+                    (row["promo_id"],),
+                )
+            items = list(
+                db.execute(
+                    "SELECT * FROM order_items WHERE order_id=%s", (row["id"],)
+                ).fetchall()
+            )
+            if row["inventory_reserved"] and row["fulfillment"] not in {
+                "shipped",
+                "delivered",
+            }:
+                self._reserve_inventory(db, items, restore=True)
+            db.execute(
+                "UPDATE orders SET benefits_released=true,inventory_reserved=false WHERE id=%s",
+                (row["id"],),
+            )
+        db.execute(
+            "UPDATE orders SET status=%s,updated_at=now() WHERE id=%s",
+            (status, row["id"]),
+        )
+        if status == "CONFIRMED":
+            if row.get("deleted_at") and row["status"] not in {
+                "CONFIRMED",
+                "PARTIAL_REFUNDED",
+            }:
+                db.execute(
+                    "UPDATE orders SET deleted_at=NULL WHERE id=%s", (row["id"],)
+                )
+            self._enqueue_job(db, row["id"], "webhook_paid")
+            if row["delivery_details"].get("type") in {"pvz", "cdek"}:
+                self._enqueue_job(db, row["id"], "cdek_create")
+        elif status == "AUTHORIZED":
+            self._enqueue_job(db, row["id"], "payment_confirm")
+        return True
 
     def get_order(self, order_id):
         with self._db() as db:
             return db.execute(
-                "SELECT id,status,total,created_at FROM orders WHERE id=%s", (order_id,)
+                "SELECT id,status,total,created_at,receipt_status,receipt_url,coalesce((payment_settings->>'is_test')::boolean,false) AS is_test,coalesce((payment_settings->>'receipt_enabled')::boolean,true) AS receipt_enabled FROM orders WHERE id=%s",
+                (order_id,),
             ).fetchone()
 
     def list_admin_orders(self):
@@ -637,7 +686,7 @@ class CommerceRepository:
                     o.points_spent,o.created_at,d.external_id AS cdek_uuid,
                     d.status AS cdek_status,d.error AS cdek_error
                     FROM orders o LEFT JOIN deliveries d ON d.order_id=o.id AND d.provider='cdek'
-                    ORDER BY o.created_at DESC LIMIT 200"""
+                    WHERE o.deleted_at IS NULL ORDER BY o.created_at DESC LIMIT 200"""
                 ).fetchall()
             )
             self._attach_order_items(db, orders)

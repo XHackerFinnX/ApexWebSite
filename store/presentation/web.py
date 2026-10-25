@@ -237,8 +237,13 @@ class WebApp:
 
             def _route(self):
                 client_ip = self._client_ip()
-                if self.path.startswith("/api/") and not app.limiter.allow(
-                    client_ip, time.monotonic()
+                bank_notification = (
+                    urlparse(self.path).path == "/api/payments/tbank/notification"
+                )
+                if (
+                    self.path.startswith("/api/")
+                    and not bank_notification
+                    and not app.limiter.allow(client_ip, time.monotonic())
                 ):
                     return self._send(429, {"error": "Слишком много запросов"})
                 parsed = urlparse(self.path)
@@ -246,8 +251,10 @@ class WebApp:
                 try:
                     if self.command in {"POST", "PUT", "DELETE"}:
                         origin = self.headers.get("Origin")
-                        if origin and urlparse(origin).netloc != self.headers.get(
-                            "Host"
+                        if (
+                            not bank_notification
+                            and origin
+                            and urlparse(origin).netloc != self.headers.get("Host")
                         ):
                             return self._send(
                                 403, {"error": "Запрос с другого сайта запрещён"}
@@ -409,7 +416,10 @@ class WebApp:
                         return self._send(200, b"OK", "text/plain; charset=utf-8")
                     if self.command == "GET" and path == "/api/checkout/order":
                         order_id = parse_qs(parsed.query).get("order_id", [""])[0]
+                        order_id = str(UUID(order_id))
                         order = app.repo.get_order(order_id)
+                        if order:
+                            app.repo.request_payment_sync(order_id)
                         return (
                             self._send(200, order)
                             if order
@@ -499,7 +509,20 @@ class WebApp:
                     return self._send(400, {"error": str(e)})
                 except TBankError as e:
                     logger.warning("T-Bank payment request failed: %s", e)
-                    return self._send(502, {"error": str(e)})
+                    message = (
+                        str(e)
+                        if path.startswith("/api/admin/")
+                        or e.ambiguous
+                        or getattr(e, "retry_checkout", False)
+                        else "Не удалось открыть оплату. Повторите попытку позже или свяжитесь с магазином."
+                    )
+                    return self._send(
+                        502,
+                        {
+                            "error": message,
+                            "retry_checkout": bool(getattr(e, "retry_checkout", False)),
+                        },
+                    )
                 except MediaStorageError as e:
                     logger.warning(
                         "Media storage unavailable for %s %s", self.command, path

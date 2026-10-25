@@ -3,6 +3,7 @@
 import hashlib
 
 from store.application.ports import DeliveryError
+from store.domain.payment_mode import order_is_test
 
 
 class ShippingService:
@@ -35,6 +36,18 @@ class ShippingService:
             return self.sync(order_id)
         config = self._config()
         order = self.repo.shipping_order(order_id)
+        if order_is_test(order) and config.get("environment") != "test":
+            raise ValueError(
+                "Для тестового платежа выберите тестовую среду СДЭК. Боевое отправление не создаётся."
+            )
+        if (
+            "is_test" in order.get("payment_settings", {})
+            and not order_is_test(order)
+            and config.get("environment") == "test"
+        ):
+            raise ValueError(
+                "Для рабочего платежа выберите Production в настройках СДЭК."
+            )
         if order["status"] != "CONFIRMED":
             raise ValueError("Отправление СДЭК доступно после подтверждения оплаты")
         payload = self.delivery.order_payload(config, order)

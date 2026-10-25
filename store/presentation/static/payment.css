@@ -40,3 +40,18 @@ body {
     margin-top: 20px;
     color: #777;
 }
+.payment-result button {
+    border: 1px solid #555;
+    border-radius: 6px;
+    padding: 12px 18px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+}
+.payment-result button:disabled {
+    opacity: 0.5;
+    cursor: wait;
+}
+.payment-result [hidden] {
+    display: none;
+}
