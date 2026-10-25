@@ -4,8 +4,12 @@ import argparse
 
 from psycopg.types.json import Jsonb
 
-from store.config import get_settings
-from store.infrastructure.media import store_image
+from store.config import Settings, get_settings
+from store.infrastructure.media import (
+    configure_media,
+    store_image,
+    upload_media_directory,
+)
 from store.infrastructure.postgres_repo import PostgreSQLRepository
 from store.infrastructure.security import SecretBox
 
@@ -53,9 +57,22 @@ def migrate_media(repo):
 
 def main():
     parser = argparse.ArgumentParser(description="Apex Store maintenance")
-    parser.add_argument("command", choices=["migrate-media"])
-    parser.parse_args()
-    settings = get_settings()
+    parser.add_argument(
+        "--env-file", help="Settings file; credentials are never printed"
+    )
+    parser.add_argument("command", choices=["migrate-media", "upload-media"])
+    parser.add_argument(
+        "--directory", help="Existing local media directory for upload-media"
+    )
+    args = parser.parse_args()
+    settings = Settings(_env_file=args.env_file) if args.env_file else get_settings()
+    configure_media(settings)
+    if args.command == "upload-media":
+        count = upload_media_directory(args.directory or settings.STORE_MEDIA_ROOT)
+        print(
+            f"Uploaded/verified {count} WebP files; existing /media URLs were preserved."
+        )
+        return
     repo = PostgreSQLRepository(
         settings.postgresql_connection(),
         SecretBox(settings.STORE_MASTER_KEY.get_secret_value()),

@@ -2,7 +2,7 @@ import time
 from dataclasses import asdict
 from http.cookies import SimpleCookie
 
-from store.infrastructure.media import MEDIA_ROOT
+from store.infrastructure.media import read_media
 
 
 class CommerceHandler:
@@ -18,7 +18,7 @@ class CommerceHandler:
         return self.application.repo.customer_for_session(self._cookie("apex_customer"))
 
     def _customer_cookie(self, token, expire=False):
-        secure = "; Secure" if self.headers.get("X-Forwarded-Proto") == "https" else ""
+        secure = "; Secure" if self.application.secure_cookies else ""
         return f"apex_customer={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age={0 if expire else 2592000}{secure}"
 
     def _commerce_route(self, path, parsed):
@@ -62,12 +62,13 @@ class CommerceHandler:
             width = query.get("w", [""])[0]
             if width in {"240", "480", "960"} and "-" not in filename:
                 filename = filename.replace(".webp", f"-{width}.webp")
-            target = MEDIA_ROOT / filename
-            if not target.is_file():
+            try:
+                content = read_media(filename)
+            except FileNotFoundError:
                 return self._send(404, {"error": "Файл не найден"})
             return self._send(
                 200,
-                target.read_bytes(),
+                content,
                 "image/webp",
                 {"Cache-Control": "public, max-age=31536000, immutable"},
             )
@@ -119,7 +120,7 @@ class CommerceHandler:
             return self._send(data=result)
         if method == "POST" and path in {"/api/account/register", "/api/account/login"}:
             if not app.auth_limiter.allow(
-                "customer:" + self.client_address[0], time.monotonic()
+                "customer:" + self._client_ip(), time.monotonic()
             ):
                 return self._send(
                     429, {"error": "Слишком много попыток входа. Повторите позже"}

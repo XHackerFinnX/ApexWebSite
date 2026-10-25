@@ -3,6 +3,7 @@ import binascii
 import gzip
 import hashlib
 import hmac
+import ipaddress
 import json
 import logging
 import mimetypes
@@ -18,6 +19,7 @@ from uuid import UUID
 import psycopg
 from psycopg_pool import PoolTimeout
 
+from store.infrastructure.media import MediaStorageError
 from store.infrastructure.security import RateLimiter
 from store.infrastructure.tbank import TBankError
 from store.presentation.commerce_web import CommerceHandler
@@ -53,6 +55,8 @@ class WebApp:
         delivery=None,
         admin_username="admin",
         admin_password="admin",
+        trust_proxy_headers=False,
+        secure_cookies=False,
     ):
         (
             self.catalog,
@@ -71,6 +75,8 @@ class WebApp:
         )
         self.admin_username = admin_username
         self.admin_password = admin_password
+        self.trust_proxy_headers = trust_proxy_headers
+        self.secure_cookies = secure_cookies
         self.auth_limiter = RateLimiter(12, 600)
         self.cache = {}
         self.cache_lock = threading.Lock()
@@ -113,7 +119,9 @@ class WebApp:
                     super().handle()
                 except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
                     self.close_connection = True
-                    logger.debug("Client closed HTTP connection from %s", self.address_string())
+                    logger.debug(
+                        "Client closed HTTP connection from %s", self.address_string()
+                    )
 
             def _send(
                 self,
@@ -215,9 +223,22 @@ class WebApp:
                 self.send_header("Content-Length", "0")
                 self.end_headers()
 
+            def _client_ip(self):
+                client_ip = self.client_address[0]
+                if app.trust_proxy_headers:
+                    forwarded = (
+                        self.headers.get("X-Forwarded-For", "").split(",")[0].strip()
+                    )
+                    try:
+                        client_ip = str(ipaddress.ip_address(forwarded))
+                    except ValueError:
+                        pass
+                return client_ip
+
             def _route(self):
+                client_ip = self._client_ip()
                 if self.path.startswith("/api/") and not app.limiter.allow(
-                    self.client_address[0], time.monotonic()
+                    client_ip, time.monotonic()
                 ):
                     return self._send(429, {"error": "Слишком много запросов"})
                 parsed = urlparse(self.path)
@@ -238,6 +259,9 @@ class WebApp:
                                 app.cache.clear()
                     if self.command == "GET" and path == "/health":
                         return self._send(data={"status": "ok"})
+                    if self.command == "GET" and path == "/ready":
+                        app.repo.check_connection()
+                        return self._send(data={"status": "ready"})
                     # Keep the entry point explicit: it must never fall through to
                     # generic path-to-file handling (or depend on a trailing slash).
                     if self.command == "GET" and path in {"/admin", "/admin/"}:
@@ -251,7 +275,7 @@ class WebApp:
                         return self._send(204, b"", "image/x-icon")
                     if self.command == "POST" and path == "/api/admin/login":
                         if not app.auth_limiter.allow(
-                            "admin:" + self.client_address[0], time.monotonic()
+                            "admin:" + client_ip, time.monotonic()
                         ):
                             return self._send(
                                 429, {"error": "Слишком много попыток входа"}
@@ -272,6 +296,7 @@ class WebApp:
                             headers={
                                 "Set-Cookie": f"apex_admin={token}; Path=/; "
                                 "HttpOnly; SameSite=Strict; Max-Age=28800"
+                                + ("; Secure" if app.secure_cookies else "")
                             },
                         )
                     if self.command == "POST" and path == "/api/admin/logout":
@@ -367,7 +392,7 @@ class WebApp:
                             data={
                                 "proof": app.checkout.confirm_captcha(
                                     self._body().get("token", ""),
-                                    self.client_address[0],
+                                    client_ip,
                                 )
                             }
                         )
@@ -473,6 +498,13 @@ class WebApp:
                 except TBankError as e:
                     logger.warning("T-Bank payment request failed: %s", e)
                     return self._send(502, {"error": str(e)})
+                except MediaStorageError as e:
+                    logger.warning(
+                        "Media storage unavailable for %s %s", self.command, path
+                    )
+                    return self._send(
+                        503, {"error": str(e)}, headers={"Retry-After": "2"}
+                    )
                 except (psycopg.OperationalError, PoolTimeout):
                     logger.warning(
                         "Database connection unavailable for %s %s", self.command, path

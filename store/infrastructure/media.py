@@ -12,7 +12,44 @@ from PIL import Image, ImageOps, UnidentifiedImageError
 MEDIA_ROOT = Path(
     os.getenv("STORE_MEDIA_ROOT", str(Path(__file__).parents[2] / "var" / "media"))
 )
+_object_storage = None
 MAX_IMAGE_BYTES = 8_000_000
+
+
+class MediaStorageError(RuntimeError):
+    pass
+
+
+def configure_media(settings):
+    global MEDIA_ROOT, _object_storage
+    MEDIA_ROOT = Path(settings.STORE_MEDIA_ROOT).expanduser()
+    if settings.STORE_MEDIA_BACKEND == "s3":
+        from store.infrastructure.object_storage import S3MediaStorage
+
+        _object_storage = S3MediaStorage(settings)
+    else:
+        _object_storage = None
+
+
+def read_media(filename):
+    if _object_storage is not None:
+        return _object_storage.read(filename)
+    return (MEDIA_ROOT / filename).read_bytes()
+
+
+def upload_media_directory(directory):
+    if _object_storage is None:
+        raise ValueError("Для переноса фотографий установите STORE_MEDIA_BACKEND=s3")
+    if not Path(directory).is_dir():
+        raise ValueError("Каталог с фотографиями не найден")
+    count = 0
+    import re
+
+    for path in sorted(Path(directory).glob("*.webp")):
+        if re.fullmatch(r"[a-f0-9]{64}(-(?:240|480|960))?\.webp", path.name):
+            _object_storage.put(path.name, path.read_bytes())
+            count += 1
+    return count
 
 
 def store_image(value: str) -> str:
@@ -49,7 +86,8 @@ def store_image(value: str) -> str:
             image.save(output, "WEBP", quality=82, method=4)
             content = output.getvalue()
             digest = hashlib.sha256(content).hexdigest()
-            MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
+            if _object_storage is None:
+                MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
             _save(MEDIA_ROOT / f"{digest}.webp", content)
             for width in (240, 480, 960):
                 thumbnail = image.copy()
@@ -68,6 +106,9 @@ def store_image(value: str) -> str:
 
 
 def _save(path: Path, content: bytes) -> None:
+    if _object_storage is not None:
+        _object_storage.put(path.name, content)
+        return
     if not path.exists():
         temporary = path.with_suffix(f".{secrets.token_hex(8)}.tmp")
         temporary.write_bytes(content)

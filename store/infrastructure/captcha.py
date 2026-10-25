@@ -5,9 +5,11 @@ import urllib.request
 
 
 class YandexCaptcha:
-    def __init__(self):
-        self.mode = os.getenv("CAPTCHA_MODE", "mock")
-        self.key = os.getenv("YANDEX_CAPTCHA_SERVER_KEY", "")
+    def __init__(self, mode=None, key=None):
+        self.mode = mode if mode is not None else os.getenv("CAPTCHA_MODE", "mock")
+        self.key = (
+            key if key is not None else os.getenv("YANDEX_CAPTCHA_SERVER_KEY", "")
+        )
 
     def verify(self, token: str, ip: str) -> bool:
         if self.mode == "mock":

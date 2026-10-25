@@ -48,6 +48,10 @@ class PostgreSQLRepository(CommerceRepository):
     def _db(self):
         return self.pool.connection()
 
+    def check_connection(self):
+        with self._db() as db:
+            db.execute("SELECT 1").fetchone()
+
     def migrate(self) -> None:
         with self._db() as db:
             db.execute("SELECT pg_advisory_xact_lock(726415300)")
