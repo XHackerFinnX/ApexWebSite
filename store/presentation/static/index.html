@@ -10,11 +10,14 @@
             content="Премиальный гоночный стритвир: худи, куртки и футболки из плотных материалов с деталями в духе автоспорта."
         />
         <link rel="stylesheet" href="/ui.css?v=6" />
-        <link rel="stylesheet" href="/storefront.css?v=7" />
+        <link rel="stylesheet" href="/storefront.css?v=8" />
         <link rel="stylesheet" href="/loading.css?v=1" />
         <script defer src="/loading.js?v=1"></script>
         <script defer src="/filters.js?v=4"></script>
         <script defer src="/motion.js?v=4"></script>
+        <script defer src="/storefront-theme.js?v=1"></script>
+        <script defer src="/storefront-menu.js?v=1"></script>
+        <script defer src="/reviews.js?v=1"></script>
         <link
             rel="preload"
             href="/fonts/barlow-700.woff2"
@@ -229,7 +232,13 @@
                     class="grid"
                     id="featured-products"
                     aria-live="polite"
-                ></div>
+                    aria-busy="true"
+                >
+                    <div class="catalog-skeleton" role="status">
+                        <span>Собираем стартовую решётку…</span><i></i><i></i
+                        ><i></i><i></i>
+                    </div>
+                </div>
             </section>
             <section
                 class="category-collection reveal"
@@ -245,6 +254,12 @@
                         Впечатления говорят сами за себя
                     </h2>
                     <div class="reviews__top">
+                        <div
+                            id="reviews-rating"
+                            class="reviews__rating"
+                            role="img"
+                            hidden
+                        ></div>
                         <p id="reviews-total">Загрузка отзывов…</p>
                         <a class="section__link" href="/reviews"
                             >Все отзывы →</a
@@ -309,7 +324,6 @@
                 class="section new-arrivals"
                 id="new-arrivals"
                 aria-labelledby="new-arrivals-title"
-                hidden
             >
                 <div class="section__head">
                     <div>
@@ -322,7 +336,12 @@
                         </h2>
                     </div>
                 </div>
-                <div class="grid" id="new-arrivals-grid"></div>
+                <div class="grid" id="new-arrivals-grid" aria-busy="true">
+                    <div class="catalog-skeleton" role="status">
+                        <span>Собираем стартовую решётку…</span><i></i><i></i
+                        ><i></i><i></i>
+                    </div>
+                </div>
             </section>
 
             <section
@@ -717,6 +736,6 @@
         <!-- Add-to-bag toast -->
         <div class="toast" id="toast" role="status" aria-hidden="true"></div>
 
-        <script src="/script.js?v=8" defer></script>
+        <script src="/script.js?v=9" defer></script>
     </body>
 </html>

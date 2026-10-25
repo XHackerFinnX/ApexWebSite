@@ -285,9 +285,10 @@ class PostgreSQLRepository(CommerceRepository):
         limit = min(max(int(limit), 1), 50)
         offset = max(int(offset), 0)
         with self._db() as db:
-            total = db.execute(
-                "SELECT count(*)::int AS count FROM reviews WHERE is_published=true"
-            ).fetchone()["count"]
+            summary = db.execute(
+                """SELECT count(*)::int AS count, avg(rating) AS average_rating
+                   FROM reviews WHERE is_published=true"""
+            ).fetchone()
             rows = db.execute(
                 """SELECT id,author,title,body,rating,created_at,
                           EXISTS(SELECT 1 FROM review_images i WHERE i.review_id=reviews.id) AS has_images
@@ -295,7 +296,15 @@ class PostgreSQLRepository(CommerceRepository):
                    ORDER BY created_at DESC,id DESC LIMIT %s OFFSET %s""",
                 (limit, offset),
             ).fetchall()
-        return {"items": list(rows), "total": total, "limit": limit, "offset": offset}
+        return {
+            "items": list(rows),
+            "total": summary["count"],
+            "average_rating": float(summary["average_rating"])
+            if summary["average_rating"] is not None
+            else None,
+            "limit": limit,
+            "offset": offset,
+        }
 
     def review_images(self, review_id: int) -> list[dict[str, object]]:
         with self._db() as db:

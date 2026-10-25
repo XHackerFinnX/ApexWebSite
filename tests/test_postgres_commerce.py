@@ -491,6 +491,39 @@ class PostgreSQLCommerceTests(unittest.TestCase):
             304,
         )
 
+    def test_review_rating_uses_all_published_reviews_across_pages(self):
+        with self.repo._db() as db:
+            db.execute("DELETE FROM reviews")
+        empty = self.http_request("/api/reviews")[1]
+        self.assertEqual(empty["total"], 0)
+        self.assertIsNone(empty["average_rating"])
+        for rating, published in [(5, True), (4, True), (2, True), (1, False)]:
+            self.repo.save_review(
+                {
+                    "author": "Покупатель",
+                    "body": "Отзыв",
+                    "rating": rating,
+                    "is_published": published,
+                }
+            )
+        first = self.http_request("/api/reviews?limit=1")[1]
+        second = self.http_request("/api/reviews?limit=1&offset=1")[1]
+        self.assertEqual(first["total"], 3)
+        self.assertEqual(len(first["items"]), 1)
+        self.assertAlmostEqual(first["average_rating"], 11 / 3)
+        self.assertEqual(first["average_rating"], second["average_rating"])
+
+    def test_reviews_route_serves_dedicated_page_without_cart_or_search(self):
+        for path in ["/reviews", "/reviews/"]:
+            status, body, _ = self.http_request(path)
+            self.assertEqual(status, 200)
+            self.assertIn(b'data-page="reviews"', body)
+            self.assertIn(b'class="footer"', body)
+            self.assertIn(b'id="mobile-menu"', body)
+            self.assertNotIn(b'id="open-cart"', body)
+            self.assertNotIn(b'id="search-toggle"', body)
+            self.assertNotIn(b'id="featured-products"', body)
+
     def test_old_order_refund_does_not_restore_unreserved_inventory(self):
         result = self.payment()
         with self.repo._db() as db:

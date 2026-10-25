@@ -615,6 +615,63 @@ button {
     font-size: 13px;
     margin-bottom: 22px;
 }
+.reviews__top > p {
+    margin: 0;
+}
+.reviews__rating {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--ink);
+    font-size: 14px;
+}
+.rating-stars {
+    position: relative;
+    display: inline-block;
+    width: 87px;
+    height: 15px;
+    color: var(--line);
+}
+.rating-stars > span {
+    position: absolute;
+    inset: 0 auto 0 0;
+    display: flex;
+    gap: 3px;
+    overflow: hidden;
+}
+.rating-stars .icon {
+    width: 15px;
+    height: 15px;
+    fill: currentColor;
+    stroke: none;
+}
+.rating-stars .rating-stars__fill {
+    color: var(--accent);
+}
+.reviews-page main {
+    min-height: 65vh;
+    padding-top: 132px;
+}
+.reviews-page .reviews {
+    padding-top: 30px;
+}
+.reviews-page .eyebrow,
+.reviews-intro {
+    text-align: center;
+    margin: 20px auto;
+}
+.reviews-intro {
+    color: var(--muted);
+    line-height: 1.6;
+}
+.reviews-back {
+    display: inline-block;
+    margin-bottom: 12px;
+}
+.reviews-page .reviews__viewport {
+    overflow: visible;
+    scroll-snap-type: none;
+}
 .reviews__controls {
     display: flex;
     justify-content: flex-end;
@@ -961,6 +1018,14 @@ button {
     grid-template-columns: repeat(3, 1fr);
     gap: 20px;
     padding: 30px 40px;
+}
+.grid > .catalog-skeleton,
+.grid > .empty-state {
+    grid-column: 1 / -1;
+    width: 100%;
+}
+.grid > .catalog-skeleton {
+    padding: 0;
 }
 .catalog-skeleton > span {
     grid-column: 1/-1;
@@ -2027,6 +2092,15 @@ button {
 }
 .suggestions button:hover {
     background: var(--soft);
+}
+.suggestions button[aria-selected="true"] {
+    background: var(--soft);
+    outline: 1px solid var(--accent);
+}
+.suggestions__message {
+    padding: 12px 10px;
+    color: var(--muted);
+    font-size: 12px;
 }
 .suggestions span {
     font-size: 10px;

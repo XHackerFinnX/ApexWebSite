@@ -482,7 +482,9 @@ class WebApp:
                     if self.command == "GET":
                         file = (
                             "index.html"
-                            if path in {"/", "/reviews", "/reviews/"}
+                            if path == "/"
+                            else "reviews.html"
+                            if path in {"/reviews", "/reviews/"}
                             else path.lstrip("/")
                         )
                         return self._serve_static(file)

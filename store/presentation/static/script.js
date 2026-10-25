@@ -5,8 +5,6 @@
 /* ---------- Данные ---------- */
 let collections = [];
 
-let reviews = [];
-
 const faqs = [
     {
         q: "Куда вы доставляете?",
@@ -149,10 +147,20 @@ async function loadCatalog(reset = true) {
         document.getElementById("catalog-count").after(feedback);
     }
     feedback.hidden = true;
-    catalog.setAttribute("aria-busy", "true");
-    if (reset && !catalogItems.length)
-        catalog.innerHTML =
-            '<div class="catalog-skeleton" role="status"><span>Собираем стартовую решётку…</span><i></i><i></i><i></i><i></i></div>';
+    const productGrids = [
+        catalog,
+        document.getElementById("featured-products"),
+        document.getElementById("new-arrivals-grid"),
+    ];
+    productGrids.forEach((grid) => grid.setAttribute("aria-busy", "true"));
+    if (reset && !catalogItems.length) {
+        productGrids.forEach((grid) => {
+            grid.innerHTML =
+                '<div class="catalog-skeleton" role="status"><span>Собираем стартовую решётку…</span><i></i><i></i><i></i><i></i></div>';
+        });
+        document.getElementById("featured-collection").hidden = false;
+        document.getElementById("new-arrivals").hidden = false;
+    }
     const params = new URLSearchParams({
         limit: 24,
         offset: reset ? 0 : catalogOffset,
@@ -234,10 +242,12 @@ async function loadCatalog(reset = true) {
             openProduct(location.hash.slice(9), false);
     } catch (error) {
         if (sequence !== catalogRequest) return;
-        if (!catalogItems.length)
-            catalog.innerHTML =
-                '<section class="section"><div class="empty-state"><h2>Не удалось загрузить каталог</h2><p>Проверьте соединение. Содержимое корзины сохранено.</p><button class="button button--dark" type="button" data-retry-catalog>Попробовать снова</button></div></section>';
-        else {
+        if (!catalogItems.length) {
+            productGrids.forEach((grid) => {
+                grid.innerHTML =
+                    '<div class="empty-state"><h2>Не удалось загрузить товары</h2><p>Проверьте соединение. Содержимое корзины сохранено.</p><button class="button button--dark" type="button" data-retry-catalog>Попробовать снова</button></div>';
+            });
+        } else {
             feedback.innerHTML =
                 "<span>" +
                 esc(error.message) +
@@ -245,7 +255,8 @@ async function loadCatalog(reset = true) {
             feedback.hidden = false;
         }
     } finally {
-        if (sequence === catalogRequest) catalog.removeAttribute("aria-busy");
+        if (sequence === catalogRequest)
+            productGrids.forEach((grid) => grid.removeAttribute("aria-busy"));
     }
 }
 
@@ -307,7 +318,7 @@ function renderCatalogNavigation() {
         help +
         '<a href="#story">О бренде</a>';
     document.getElementById("mobile-nav").innerHTML =
-        `<button type="button" class="mobile-theme-toggle" data-theme-toggle role="switch" aria-label="Тёмная тема" aria-checked="${document.documentElement.classList.contains("dark")}"><span>◐ <span>Тёмная тема</span></span><span class="theme-switch" aria-hidden="true"></span></button>` +
+        `<button type="button" class="mobile-theme-toggle" data-theme-toggle role="switch" aria-label="Тёмная тема" aria-checked="${document.documentElement.classList.contains("dark")}"><span>◐ <span data-theme-label>Тёмная тема</span></span><span class="theme-switch" aria-hidden="true"></span></button>` +
         '<div class="mobile-nav-links"><a href="#catalog-filter-title" data-store-category="all">Весь каталог</a>' +
         categories +
         help +
@@ -316,20 +327,21 @@ function renderCatalogNavigation() {
         '<a href="/account">Личный кабинет ' +
         ICONS.arrow +
         "</a></div>";
+    window.apexTheme.sync();
 }
 function renderCategoryTiles() {
     const definitions = [
-        ["Куртки", "jackets", /куртк|jacket/i],
-        ["Худи", "hoodies", /худи|hoodie/i],
-        ["Весь каталог", "bundles", /комплект|bundle|набор/i],
+        ["Весь каталог", "bundles", null],
+        ["Свитшоты", "jackets", /свитшот|sweatshirt/i],
+        ["Зип-худи", "hoodies", /зип[\s-]*худи|zip[\s-]*hoodie/i],
         ["Футболки", "tees", /футбол|tees|t-shirt/i],
     ];
     document.getElementById("category-tiles").innerHTML = definitions
         .map(([title, image, pattern]) => {
-            const category = availableCategories.find((name) =>
-                pattern.test(name),
-            );
-            return `<a class="category-tile" href="#catalog-filter-title" data-store-category="${esc(category || "all")}"><img src="/images/reference/category-${image}.webp" alt="${esc(title)} — гоночная коллекция" width="800" height="800" loading="lazy" decoding="async"><span>${image === "bundles" && category ? esc(category) : title}<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></span></a>`;
+            const category = pattern
+                ? availableCategories.find((name) => pattern.test(name))
+                : "all";
+            return `<a class="category-tile" href="#catalog-filter-title" data-store-category="${esc(category || "all")}"><img src="/images/reference/category-${image}.webp" alt="${esc(title)} — гоночная коллекция" width="800" height="800" loading="lazy" decoding="async"><span>${title}<svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 12h14m-5-5 5 5-5 5"/></svg></span></a>`;
         })
         .join("");
 }
@@ -554,73 +566,6 @@ function initCardGalleries() {
             });
         });
     });
-}
-let reviewsOffset = 0;
-let reviewsTotal = 0;
-function drawReviews() {
-    document.getElementById("reviews-grid").innerHTML = reviews.length
-        ? reviews
-              .map(
-                  (r) =>
-                      `<button type="button" class="review" data-review-id="${r.id || ""}"><span class="review__stars">${ICONS.star.repeat(Number(r.rating || 5))}</span><strong>${esc(r.title || "Отзыв о покупке")}</strong><span class="review__quote">&ldquo;${esc(r.body || r.quote)}&rdquo;</span><span class="review__author">— ${esc(r.author)}</span>${r.has_images ? '<span class="review__media-mark">Есть фотографии</span>' : ""}</button>`,
-              )
-              .join("")
-        : '<p class="reviews-empty">Здесь появятся впечатления покупателей после первых заказов.</p>';
-}
-async function renderReviews(append = false) {
-    const limit = 10;
-    try {
-        const page = await jsonFetch(
-            `/api/reviews?limit=${limit}&offset=${append ? reviewsOffset : 0}`,
-        );
-        reviews = append ? reviews.concat(page.items) : page.items;
-        reviewsOffset = reviews.length;
-        reviewsTotal = page.total;
-    } catch (_) {
-        if (append) return;
-        reviewsTotal = reviews.length;
-    }
-    drawReviews();
-    document.getElementById("reviews-total").textContent =
-        `${reviewsTotal} отзывов покупателей`;
-    const more = document.getElementById("reviews-more");
-    more.classList.toggle(
-        "hidden",
-        reviewsOffset >= reviewsTotal || location.pathname !== "/reviews",
-    );
-    if (location.pathname === "/reviews")
-        document.querySelector(".reviews").classList.add("reviews--page");
-}
-
-async function openReview(id) {
-    const review = reviews.find((item) => String(item.id) === String(id));
-    if (!review) return;
-    const modal = document.getElementById("review-modal");
-    const content = document.getElementById("review-modal-content");
-    modal.classList.add("is-open");
-    modal.setAttribute("aria-hidden", "false");
-    document.body.style.overflow = "hidden";
-    content.innerHTML = `<div class="review__stars">${ICONS.star.repeat(Number(review.rating || 5))}</div><h2>${esc(review.title || "Отзыв о покупке")}</h2><p class="review-modal__author">${esc(review.author)}</p><p class="review-modal__body">${esc(review.body || review.quote)}</p><div class="review-modal__photos">${review.has_images ? "Загружаем фотографии…" : ""}</div>`;
-    if (review.has_images) {
-        try {
-            const images = await jsonFetch(`/api/reviews/${id}/images`);
-            content.querySelector(".review-modal__photos").innerHTML = images
-                .map(
-                    (image) =>
-                        `<img src="${esc(image.image_url)}" alt="${esc(image.alt_text || `Фото от ${review.author}`)}" loading="lazy" />`,
-                )
-                .join("");
-        } catch (_) {
-            content.querySelector(".review-modal__photos").textContent =
-                "Не удалось загрузить фотографии.";
-        }
-    }
-}
-function closeReview() {
-    const modal = document.getElementById("review-modal");
-    modal.classList.remove("is-open");
-    modal.setAttribute("aria-hidden", "true");
-    document.body.style.overflow = "";
 }
 function renderFaq() {
     document.getElementById("faq-list").innerHTML = faqs
@@ -1182,7 +1127,7 @@ function renderCheckoutForm() {
     return (
         '<form class="checkout" id="checkout-form" novalidate><h3 class="checkout__title display">Оформление заказа</h3><p class="checkout__intro">Остался один шаг до следующего гоночного образа.</p><div class="checkout-layout"><div class="checkout-main">' +
         '<section class="checkout-section"><h4><span>1</span>Контактные данные</h4><div class="checkout__grid"><label>Имя<input id="customer-name" autocomplete="given-name" required placeholder="Иван"></label><label>Почта<input id="customer-email" type="email" autocomplete="email" required placeholder="name@example.com"></label><label class="checkout__wide">Телефон<input id="customer-phone" type="tel" autocomplete="tel" required value="+7 " placeholder="+7 (999) 123-45-67"></label></div></section>' +
-        '<section class="checkout-section"><h4><span>2</span>Получение заказа</h4><div class="checkout__radio" id="delivery-options"><span class="checkout__hint">Загрузка способов доставки…</span></div><label id="city-label">Город<div class="suggest-wrap"><input id="delivery-city" autocomplete="off" disabled placeholder="Начните вводить город"><div class="suggestions" id="city-suggestions"></div></div></label><div class="checkout__hint" id="delivery-status">Проверяем доступные способы доставки…</div><label id="pvz-label">Пункт получения<div class="suggest-wrap"><input id="delivery-point" autocomplete="off" disabled placeholder="Сначала выберите город"><div class="suggestions" id="pvz-suggestions"></div></div></label><div class="pvz-info" id="pvz-info"></div><label>ФИО получателя полностью<input id="recipient-name" autocomplete="name" required placeholder="Иванов Иван Иванович"></label><label>Комментарий к заказу<textarea id="order-comment" rows="3" placeholder="Что нам стоит знать о заказе"></textarea></label></section>' +
+        '<section class="checkout-section"><h4><span>2</span>Получение заказа</h4><div class="checkout__radio" id="delivery-options"><span class="checkout__hint">Загрузка способов доставки…</span></div><label id="city-label">Город<div class="suggest-wrap"><input id="delivery-city" autocomplete="off" disabled placeholder="Начните вводить город" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="city-suggestions"><div class="suggestions" id="city-suggestions" role="listbox" aria-label="Города СДЭК"></div></div></label><div class="checkout__hint" id="delivery-status">Проверяем доступные способы доставки…</div><label id="pvz-label">Пункт получения<div class="suggest-wrap"><input id="delivery-point" autocomplete="off" disabled placeholder="Сначала выберите город"><div class="suggestions" id="pvz-suggestions"></div></div></label><div class="pvz-info" id="pvz-info"></div><label>ФИО получателя полностью<input id="recipient-name" autocomplete="name" required placeholder="Иванов Иван Иванович"></label><label>Комментарий к заказу<textarea id="order-comment" rows="3" placeholder="Что нам стоит знать о заказе"></textarea></label></section>' +
         '<section class="checkout-section"><h4><span>3</span>Способ оплаты</h4><div class="checkout__radio" id="payment-options"><span class="checkout__hint">Загрузка способов оплаты…</span></div><label class="check"><input type="checkbox" id="privacy-consent" required><span>Я согласен с <a href="/client-service#policy" target="_blank" rel="noopener">политикой обработки персональных данных</a>.</span></label><label class="check"><input type="checkbox" id="delivery-consent" required><span>Я ознакомился с условиями доставки и <a href="/client-service#public-offer" target="_blank" rel="noopener">публичной офертой</a>.</span></label></section></div>' +
         '<aside class="checkout-summary"><h4>Ваш заказ · ' +
         cartCount() +
@@ -1378,63 +1323,151 @@ function bindCityAutocomplete() {
     const input = document.getElementById("delivery-city"),
         box = document.getElementById("city-suggestions"),
         status = document.getElementById("delivery-status");
+    const cache = new Map();
     let timer,
-        request = 0;
-    input.oninput = () => {
+        request = 0,
+        pendingQuery = null,
+        active = -1;
+    function close() {
+        ++request;
+        clearTimeout(timer);
+        pendingQuery = null;
+        active = -1;
+        box.classList.remove("is-open");
+        box.removeAttribute("aria-busy");
+        input.setAttribute("aria-expanded", "false");
+        input.removeAttribute("aria-activedescendant");
+    }
+    function show() {
+        box.classList.add("is-open");
+        input.setAttribute("aria-expanded", "true");
+    }
+    function draw(cities) {
+        active = -1;
+        input.removeAttribute("aria-activedescendant");
+        box.innerHTML = cities.length
+            ? cities
+                  .map(
+                      (city, index) =>
+                          `<button type="button" role="option" aria-selected="false" id="delivery-city-option-${index}" data-name="${esc(city.name)}" data-full="${esc(city.fullName)}" data-postal="${esc(city.postalCode)}" data-city-code="${Number(city.code) || 0}"><b>${esc(city.name)}</b><span>${esc(city.fullName)}</span></button>`,
+                  )
+                  .join("")
+            : '<p class="suggestions__message" role="status">Город не найден. Попробуйте другое название.</p>';
+        show();
+        status.textContent = cities.length
+            ? "Выберите город из списка."
+            : "Город не найден.";
+    }
+    async function search() {
+        if (input.disabled || !input.isConnected) return;
+        const query =
+            deliveryState.city_code && input.value === deliveryState.cityName
+                ? ""
+                : input.value.trim();
+        if (pendingQuery === query) return;
         const sequence = ++request;
+        if (cache.has(query)) {
+            draw(cache.get(query));
+            return;
+        }
+        pendingQuery = query;
+        active = -1;
+        input.removeAttribute("aria-activedescendant");
+        box.innerHTML =
+            '<p class="suggestions__message" role="status">Ищем города…</p>';
+        box.setAttribute("aria-busy", "true");
+        show();
+        try {
+            const cities = await fetchCities(query);
+            if (cache.size >= 30) cache.clear();
+            cache.set(query, cities);
+            if (sequence !== request || !input.isConnected || input.disabled)
+                return;
+            draw(cities);
+        } catch (error) {
+            if (sequence !== request || !input.isConnected || input.disabled)
+                return;
+            box.innerHTML =
+                '<p class="suggestions__message" role="status">Не удалось загрузить города.</p><button type="button" data-retry-cities>Попробовать снова</button>';
+            status.textContent = error.message;
+        } finally {
+            if (sequence === request) {
+                pendingQuery = null;
+                box.removeAttribute("aria-busy");
+            }
+        }
+    }
+    input.onfocus = input.onclick = () => {
+        clearTimeout(timer);
+        search();
+    };
+    input.oninput = () => {
+        close();
         ++deliveryRequest;
-        if (input.disabled) return;
         deliveryState.city_code = 0;
+        deliveryState.cityName = "";
+        deliveryState.cityFullName = "";
         deliveryState.postalCode = "";
         deliveryState.pvz = null;
+        deliveryState.price = 0;
+        deliveryState.days = 0;
+        cachedPvzList = [];
+        const point = document.getElementById("delivery-point");
+        point.value = "";
+        point.disabled = true;
+        document.getElementById("pvz-suggestions").classList.remove("is-open");
+        document.getElementById("pvz-info").textContent = "";
+        ++quoteSequence;
         quoteState = null;
-        clearTimeout(timer);
-        box.innerHTML = "";
-        box.classList.remove("is-open");
-        timer = setTimeout(async () => {
-            if (input.value.trim().length < 2) return;
-            status.textContent = "Ищем город...";
-            try {
-                const cities = await fetchCities(input.value.trim());
-                if (
-                    sequence !== request ||
-                    !input.isConnected ||
-                    input.disabled
-                )
-                    return;
-                box.innerHTML = cities
-                    .slice(0, 8)
-                    .map(
-                        (c) =>
-                            `<button type="button" data-name="${esc(c.name)}" data-full="${esc(c.fullName)}" data-postal="${esc(c.postalCode)}" data-city-code="${Number(c.code) || 0}"><b>${c.name}</b><span>${c.fullName}</span></button>`,
-                    )
-                    .join("");
-                box.classList.add("is-open");
-                status.textContent = cities.length
-                    ? "Выберите город из списка."
-                    : "Город не найден.";
-            } catch (error) {
-                if (
-                    sequence !== request ||
-                    !input.isConnected ||
-                    input.disabled
-                )
-                    return;
-                status.textContent =
-                    error.message ||
-                    "Не удалось загрузить города. Попробуй ещё раз.";
-            }
-        }, 350);
+        document.querySelector('#checkout-form [type="submit"]').disabled =
+            true;
+        renderTotals();
+        timer = setTimeout(search, 250);
     };
-    box.onclick = async (e) => {
-        const btn = e.target.closest("button");
-        if (!btn) return;
-        input.value = btn.dataset.name;
-        deliveryState.cityName = btn.dataset.name;
-        deliveryState.cityFullName = btn.dataset.full;
-        deliveryState.postalCode = btn.dataset.postal;
-        deliveryState.city_code = Number(btn.dataset.cityCode);
-        box.classList.remove("is-open");
+    input.onblur = (event) => {
+        if (!box.contains(event.relatedTarget)) close();
+    };
+    input.onkeydown = (event) => {
+        if (event.key === "Escape" && box.classList.contains("is-open")) {
+            event.preventDefault();
+            event.stopPropagation();
+            close();
+        } else if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+            event.preventDefault();
+            const options = [...box.querySelectorAll("[data-city-code]")];
+            if (!box.classList.contains("is-open") || !options.length) {
+                search();
+                return;
+            }
+            active =
+                (active +
+                    (event.key === "ArrowDown" ? 1 : active < 0 ? 0 : -1) +
+                    options.length) %
+                options.length;
+            options.forEach((option, index) =>
+                option.setAttribute("aria-selected", String(index === active)),
+            );
+            input.setAttribute("aria-activedescendant", options[active].id);
+            options[active].scrollIntoView({ block: "nearest" });
+        } else if (event.key === "Enter" && box.classList.contains("is-open")) {
+            event.preventDefault();
+            if (active >= 0)
+                box.querySelectorAll("[data-city-code]")[active]?.click();
+        }
+    };
+    box.onclick = async (event) => {
+        if (event.target.closest("[data-retry-cities]")) {
+            search();
+            return;
+        }
+        const button = event.target.closest("[data-city-code]");
+        if (!button) return;
+        close();
+        input.value = button.dataset.name;
+        deliveryState.cityName = button.dataset.name;
+        deliveryState.cityFullName = button.dataset.full;
+        deliveryState.postalCode = button.dataset.postal;
+        deliveryState.city_code = Number(button.dataset.cityCode);
         await refreshDelivery();
     };
 }
@@ -1644,73 +1677,8 @@ function showToast(message) {
         toast.setAttribute("aria-hidden", "true");
     }, 2200);
 }
-let setMobileMenu = () => {};
+const setMobileMenu = (open) => window.apexMenu.setOpen(open);
 function initMobileMenu() {
-    const toggle = document.getElementById("menu-toggle"),
-        nav = document.getElementById("mobile-nav"),
-        menu = document.getElementById("mobile-menu"),
-        close = document.getElementById("mobile-menu-close"),
-        backdrop = document.getElementById("mobile-menu-backdrop");
-    menu.hidden = false;
-    backdrop.hidden = false;
-    toggle.setAttribute("aria-controls", "mobile-menu");
-    setMobileMenu = (open) => {
-        const hadFocus = menu.contains(document.activeElement);
-        menu.classList.toggle("is-open", open);
-        backdrop.classList.toggle("is-open", open);
-        menu.inert = !open;
-        menu.setAttribute("aria-hidden", String(!open));
-        toggle.setAttribute("aria-expanded", String(open));
-        document.querySelector(".header").classList.toggle("menu-open", open);
-        document.body.classList.toggle("menu-open", open);
-        if (open) close.focus({ preventScroll: true });
-        else if (hadFocus) toggle.focus({ preventScroll: true });
-    };
-    toggle.onclick = () =>
-        setMobileMenu(toggle.getAttribute("aria-expanded") !== "true");
-    close.onclick = backdrop.onclick = () => setMobileMenu(false);
-    menu.onclick = (event) => {
-        if (event.target === menu || event.target.closest("a"))
-            setMobileMenu(false);
-    };
-    window
-        .matchMedia("(min-width: 1101px)")
-        .addEventListener("change", (event) => {
-            if (event.matches) setMobileMenu(false);
-        });
-    document.addEventListener("keydown", (event) => {
-        if (event.key === "Escape") {
-            setMobileMenu(false);
-            document
-                .querySelectorAll("#desktop-nav details[open]")
-                .forEach((details) => {
-                    if (details.contains(document.activeElement))
-                        details.querySelector("summary").focus();
-                    details.open = false;
-                });
-        }
-        if (event.key !== "Tab" || !menu.classList.contains("is-open")) return;
-        const focusable = [...menu.querySelectorAll("button,a,summary")].filter(
-            (node) => node.getClientRects().length,
-        );
-        const first = focusable[0],
-            last = focusable.at(-1);
-        if (event.shiftKey && document.activeElement === first) {
-            event.preventDefault();
-            last.focus();
-        } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault();
-            first.focus();
-        }
-    });
-    document.addEventListener("click", (event) => {
-        const current = event.target.closest("#desktop-nav details");
-        document
-            .querySelectorAll("#desktop-nav details[open]")
-            .forEach((details) => {
-                if (details !== current) details.open = false;
-            });
-    });
     const observer = new IntersectionObserver(
         (entries) =>
             document
@@ -1739,30 +1707,8 @@ function initMobileMenu() {
             );
         }
     });
-    document.getElementById("reviews-prev").onclick = () =>
-        document
-            .querySelector(".reviews__viewport")
-            .scrollBy({ left: -360, behavior: "smooth" });
-    document.getElementById("reviews-next").onclick = () =>
-        document
-            .querySelector(".reviews__viewport")
-            .scrollBy({ left: 360, behavior: "smooth" });
 }
-function applyTheme(dark, save = true) {
-    document.documentElement.classList.toggle("dark", dark);
-    if (save) {
-        try {
-            localStorage.setItem("apex-theme", dark ? "dark" : "light");
-        } catch {}
-    }
-    document.querySelector('meta[name="theme-color"]').content = dark
-        ? "#161719"
-        : "#ffffff";
-    document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
-        button.setAttribute("aria-checked", String(dark));
-        button.title = dark ? "Включить светлую тему" : "Включить тёмную тему";
-    });
-}
+
 function initEvents() {
     initCardGalleries();
     document.getElementById("open-cart").addEventListener("click", openCart);
@@ -1774,9 +1720,6 @@ function initEvents() {
     document.getElementById("checkout-modal").addEventListener("click", (e) => {
         if (e.target.id === "checkout-modal") closeCheckout();
     });
-    document
-        .getElementById("reviews-more")
-        .addEventListener("click", () => renderReviews(true));
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
             closeCart();
@@ -1784,14 +1727,9 @@ function initEvents() {
             closeProduct();
             toggleSearch(false);
             closeCheckout();
-            closeReview();
         }
     });
     document.addEventListener("click", (e) => {
-        if (e.target.closest("[data-theme-toggle]")) {
-            applyTheme(!document.documentElement.classList.contains("dark"));
-            return;
-        }
         const sourceCard = e.target.closest("[data-product-card]");
         if (
             sourceCard &&
@@ -1803,15 +1741,6 @@ function initEvents() {
         const dot = e.target.closest("[data-card-photo]");
         if (dot) {
             selectCardPhoto(sourceCard, Number(dot.dataset.cardPhoto));
-            return;
-        }
-        const review = e.target.closest("[data-review-id]");
-        if (review) {
-            openReview(review.dataset.reviewId);
-            return;
-        }
-        if (e.target.closest("[data-close-review]")) {
-            closeReview();
             return;
         }
         const t = e.target.closest(
@@ -1957,11 +1886,6 @@ function initEvents() {
                 .forEach((x) => x.classList.remove("is-open"));
     });
 }
-let savedDarkTheme = false;
-try {
-    savedDarkTheme = localStorage.getItem("apex-theme") === "dark";
-} catch {}
-applyTheme(savedDarkTheme, false);
 renderAnnouncement();
 renderCatalogNavigation();
 renderCategoryTiles();
@@ -2008,23 +1932,14 @@ jsonFetch("/api/account")
     })
     .catch(() => {});
 renderCart();
+const requestedCategory = new URLSearchParams(location.search).get("category");
+if (requestedCategory)
+    document
+        .getElementById("category-filter")
+        .add(new Option(requestedCategory, requestedCategory, true, true));
 loadCatalog();
-const reviewsObserver = new IntersectionObserver(
-    (entries) => {
-        if (entries.some((e) => e.isIntersecting)) {
-            renderReviews();
-            reviewsObserver.disconnect();
-        }
-    },
-    { rootMargin: "300px" },
-);
-reviewsObserver.observe(document.querySelector(".reviews"));
 renderFaq();
 renderCommunityGallery();
 renderCommunity();
 initMobileMenu();
 initEvents();
-if (location.pathname === "/reviews")
-    requestAnimationFrame(() =>
-        document.querySelector(".reviews")?.scrollIntoView(),
-    );

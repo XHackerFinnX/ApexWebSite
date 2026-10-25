@@ -1,0 +1,426 @@
+<!doctype html>
+<html lang="ru">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <meta name="theme-color" content="#ffffff" />
+        <title>Отзывы покупателей — APEX</title>
+        <meta
+            name="description"
+            content="Отзывы покупателей APEX: впечатления о гоночном стритвире, оценки и фотографии покупок."
+        />
+        <link rel="canonical" href="https://apextop.ru/reviews" />
+        <link rel="stylesheet" href="/ui.css?v=6" />
+        <link rel="stylesheet" href="/storefront.css?v=8" />
+        <link rel="stylesheet" href="/loading.css?v=1" />
+        <script defer src="/loading.js?v=1"></script>
+        <script defer src="/storefront-theme.js?v=1"></script>
+        <script defer src="/storefront-menu.js?v=1"></script>
+        <script defer src="/reviews.js?v=1"></script>
+    </head>
+    <body class="reference-store reviews-page" data-page="reviews">
+        <div class="announcement">
+            <div class="announcement__track">
+                <span
+                    >APEX / ГОНОЧНАЯ КУЛЬТУРА<i aria-hidden="true"
+                        >/////</i
+                    ></span
+                ><span
+                    >APEX CLUB — БАЛЛЫ ЗА ОПЛАЧЕННЫЕ ПОКУПКИ<i
+                        aria-hidden="true"
+                        >/////</i
+                    ></span
+                ><span
+                    >ТВОИ ЗАКАЗЫ В ЛИЧНОМ КАБИНЕТЕ<i aria-hidden="true"
+                        >/////</i
+                    ></span
+                ><span
+                    >СОЗДАНО ДЛЯ ОДЕРЖИМЫХ СКОРОСТЬЮ<i aria-hidden="true"
+                        >/////</i
+                    ></span
+                ><span
+                    >APEX / ГОНОЧНАЯ КУЛЬТУРА<i aria-hidden="true"
+                        >/////</i
+                    ></span
+                ><span
+                    >APEX CLUB — БАЛЛЫ ЗА ОПЛАЧЕННЫЕ ПОКУПКИ<i
+                        aria-hidden="true"
+                        >/////</i
+                    ></span
+                ><span
+                    >ТВОИ ЗАКАЗЫ В ЛИЧНОМ КАБИНЕТЕ<i aria-hidden="true"
+                        >/////</i
+                    ></span
+                ><span
+                    >СОЗДАНО ДЛЯ ОДЕРЖИМЫХ СКОРОСТЬЮ<i aria-hidden="true"
+                        >/////</i
+                    ></span
+                >
+            </div>
+        </div>
+        <header class="header is-solid">
+            <div class="header__inner">
+                <button
+                    type="button"
+                    class="header__menu-btn"
+                    id="menu-toggle"
+                    aria-label="Открыть меню"
+                    aria-expanded="false"
+                >
+                    <svg class="icon" viewBox="0 0 24 24" id="menu-icon-open">
+                        <path d="M3 12h18M3 6h18M3 18h18" />
+                    </svg>
+                    <svg
+                        class="icon hidden"
+                        viewBox="0 0 24 24"
+                        id="menu-icon-close"
+                    >
+                        <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                </button>
+
+                <a
+                    href="/#top"
+                    class="header__logo display"
+                    aria-label="APEX — главная"
+                    ><img
+                        class="brand-logo"
+                        src="/images/apex-logo.webp"
+                        alt="APEX"
+                        width="640"
+                        height="148"
+                /></a>
+
+                <nav class="header__nav" id="desktop-nav">
+                    <a href="/#catalog-filter-title">Каталог</a>
+                    <details class="header-help nav-categories">
+                        <summary>
+                            Категории товаров
+                            <svg
+                                class="icon"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
+                                <path d="m6 9 6 6 6-6" />
+                            </svg>
+                        </summary>
+                        <div>
+                            <a href="/?category=Свитшоты#catalog-filter-title"
+                                >Свитшоты</a
+                            ><a href="/?category=Зип-Худи#catalog-filter-title"
+                                >Зип-худи</a
+                            ><a href="/?category=Футболки#catalog-filter-title"
+                                >Футболки</a
+                            >
+                        </div>
+                    </details>
+                    <details class="header-help">
+                        <summary>
+                            Помощь
+                            <svg
+                                class="icon"
+                                viewBox="0 0 24 24"
+                                aria-hidden="true"
+                            >
+                                <path d="m6 9 6 6 6-6" />
+                            </svg>
+                        </summary>
+                        <div>
+                            <a href="/client-service">Клиентский сервис</a
+                            ><a href="/client-service#delivery">Доставка</a
+                            ><a href="/client-service#refund">Обмен и возврат</a
+                            ><a href="/client-service#preorder">Предзаказ</a
+                            ><a href="/account">Мои заказы</a>
+                        </div>
+                    </details>
+                    <a href="/#story">О бренде</a>
+                </nav>
+
+                <div class="header__actions">
+                    <a
+                        href="/account"
+                        class="member-link"
+                        aria-label="Личный кабинет"
+                        ><svg
+                            class="icon"
+                            viewBox="0 0 24 24"
+                            aria-hidden="true"
+                        >
+                            <circle cx="12" cy="8" r="4" />
+                            <path d="M4 21v-2a8 8 0 0 1 16 0v2" /></svg
+                        ><span data-account-label>Кабинет</span></a
+                    >
+                    <button
+                        type="button"
+                        class="header__icon-btn theme-toggle"
+                        id="theme-toggle"
+                        data-theme-toggle
+                        role="switch"
+                        aria-checked="false"
+                        aria-label="Тёмная тема"
+                        title="Сменить тему"
+                    >
+                        <span aria-hidden="true">◐</span>
+                    </button>
+                </div>
+            </div>
+        </header>
+        <main id="top">
+            <section
+                class="reviews reviews--page"
+                aria-labelledby="reviews-title"
+            >
+                <div class="reviews__inner">
+                    <a class="section__link reviews-back" href="/"
+                        >← В магазин</a
+                    >
+                    <p class="eyebrow">APEX COMMUNITY</p>
+                    <h1 class="display reviews__title" id="reviews-title">
+                        Впечатления говорят сами за себя
+                    </h1>
+                    <p class="reviews-intro">
+                        Отзывы, оценки и фотографии покупателей APEX.
+                    </p>
+                    <div class="reviews__top">
+                        <div
+                            id="reviews-rating"
+                            class="reviews__rating"
+                            role="img"
+                            hidden
+                        ></div>
+                        <p id="reviews-total" aria-live="polite">
+                            Загрузка отзывов…
+                        </p>
+                    </div>
+                    <div class="reviews__viewport">
+                        <div
+                            class="reviews__grid"
+                            id="reviews-grid"
+                            aria-busy="true"
+                        >
+                            <p class="reviews-empty" role="status">
+                                Загружаем отзывы…
+                            </p>
+                        </div>
+                    </div>
+                    <button
+                        class="reviews__more"
+                        id="reviews-more"
+                        type="button"
+                        hidden
+                    >
+                        Показать ещё
+                    </button>
+                </div>
+            </section>
+        </main>
+        <footer class="footer">
+            <div class="footer__inner">
+                <div class="footer__top">
+                    <div class="footer__brand">
+                        <h2 class="footer-club-title">Первыми на старте</h2>
+                        <p class="footer-club-copy">
+                            Твои заказы и бонусы за покупки — в APEX Club.
+                        </p>
+                        <a class="action-button" href="/account"
+                            >Присоединиться к клубу</a
+                        >
+                        <a
+                            class="footer__logo"
+                            href="/#top"
+                            aria-label="APEX — главная"
+                            ><img
+                                class="brand-logo"
+                                src="/images/apex-logo.webp"
+                                alt="APEX"
+                                width="640"
+                                height="148"
+                                loading="lazy"
+                        /></a>
+                        <p class="footer__tagline">
+                            Премиальный гоночный стритвир Formula 1. Создано для
+                            одержимых скоростью.
+                        </p>
+                    </div>
+                    <div class="footer__col">
+                        <p class="footer__heading">Документы</p>
+                        <ul>
+                            <li>
+                                <a href="/client-service#policy"
+                                    >Политика конфиденциальности</a
+                                >
+                            </li>
+                            <li>
+                                <a href="/client-service#public-offer"
+                                    >Публичная оферта</a
+                                >
+                            </li>
+                            <li>
+                                <a href="/client-service#cookies">Cookie</a>
+                            </li>
+                        </ul>
+                    </div>
+                    <div class="footer__col">
+                        <p class="footer__heading">Помощь</p>
+                        <ul>
+                            <li>
+                                <a href="/client-service#delivery">Доставка</a>
+                            </li>
+                            <li>
+                                <a href="/client-service#refund"
+                                    >Обмен и возврат</a
+                                >
+                            </li>
+                            <li>
+                                <a href="/client-service">Клиентский сервис</a>
+                            </li>
+                            <li><a href="/account">Мои заказы</a></li>
+                        </ul>
+                    </div>
+                    <div class="footer__col">
+                        <p class="footer__heading">Коллекции</p>
+                        <ul>
+                            <li>
+                                <a href="/#catalog-filter-title">Все товары</a>
+                            </li>
+                            <li><a href="/#shop-categories">Категории</a></li>
+                            <li><a href="/#community-title">Сообщество</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="footer__bottom">
+                    <p>© 2026 APEX™. Все права защищены.</p>
+                    <p>Не является партнёром команд F1 или FIA.</p>
+                </div>
+            </div>
+        </footer>
+        <button
+            type="button"
+            class="mobile-menu-backdrop"
+            id="mobile-menu-backdrop"
+            aria-label="Закрыть меню"
+            hidden
+        ></button>
+
+        <div
+            class="mobile-menu"
+            id="mobile-menu"
+            role="dialog"
+            aria-label="Меню магазина"
+            aria-modal="true"
+            aria-hidden="true"
+            hidden
+            inert
+        >
+            <div class="mobile-menu__sheet">
+                <button
+                    type="button"
+                    class="mobile-menu__close"
+                    id="mobile-menu-close"
+                    aria-label="Закрыть меню"
+                >
+                    <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                </button>
+                <nav
+                    class="header__mobile-nav"
+                    id="mobile-nav"
+                    aria-label="Мобильная навигация"
+                >
+                    <button
+                        type="button"
+                        class="mobile-theme-toggle"
+                        data-theme-toggle
+                        role="switch"
+                        aria-label="Тёмная тема"
+                        aria-checked="false"
+                    >
+                        <span>◐ <span data-theme-label>Тёмная тема</span></span
+                        ><span class="theme-switch" aria-hidden="true"></span>
+                    </button>
+                    <div class="mobile-nav-links">
+                        <a href="/#catalog-filter-title">Каталог</a>
+                        <details class="header-help nav-categories">
+                            <summary>
+                                Категории товаров
+                                <svg
+                                    class="icon"
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                >
+                                    <path d="m6 9 6 6 6-6" />
+                                </svg>
+                            </summary>
+                            <div>
+                                <a
+                                    href="/?category=Свитшоты#catalog-filter-title"
+                                    >Свитшоты</a
+                                ><a
+                                    href="/?category=Зип-Худи#catalog-filter-title"
+                                    >Зип-худи</a
+                                ><a
+                                    href="/?category=Футболки#catalog-filter-title"
+                                    >Футболки</a
+                                >
+                            </div>
+                        </details>
+                        <details class="header-help">
+                            <summary>
+                                Помощь
+                                <svg
+                                    class="icon"
+                                    viewBox="0 0 24 24"
+                                    aria-hidden="true"
+                                >
+                                    <path d="m6 9 6 6 6-6" />
+                                </svg>
+                            </summary>
+                            <div>
+                                <a href="/client-service">Клиентский сервис</a
+                                ><a href="/client-service#delivery">Доставка</a
+                                ><a href="/client-service#refund"
+                                    >Обмен и возврат</a
+                                ><a href="/client-service#preorder">Предзаказ</a
+                                ><a href="/account">Мои заказы</a>
+                            </div>
+                        </details>
+                        <a href="/#story">О бренде</a>
+                    </div>
+                    <div class="mobile-nav-footer">
+                        <img
+                            class="brand-logo"
+                            src="/images/apex-logo.webp"
+                            alt="APEX"
+                            width="640"
+                            height="148"
+                        /><a href="/account">Личный кабинет →</a>
+                    </div>
+                </nav>
+            </div>
+        </div>
+        <div class="review-modal" id="review-modal" aria-hidden="true">
+            <button
+                class="review-modal__backdrop"
+                type="button"
+                data-close-review
+                aria-label="Закрыть отзыв"
+            ></button>
+            <article
+                class="review-modal__dialog"
+                role="dialog"
+                aria-modal="true"
+            >
+                <button
+                    class="review-modal__close"
+                    type="button"
+                    data-close-review
+                    aria-label="Закрыть"
+                >
+                    ×
+                </button>
+                <div id="review-modal-content"></div>
+            </article>
+        </div>
+    </body>
+</html>

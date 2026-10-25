@@ -56,6 +56,42 @@ class SenderDirectoryTests(unittest.TestCase):
             self.assertEqual(query["postal_code"], ["143911"])
             self.assertNotIn("code", query)
 
+    def test_checkout_uses_prefix_suggestions_and_preserves_all_matches(self):
+        for prefix, name in [("Мос", "Москва"), ("Санк", "Санкт-Петербург")]:
+            with (
+                self.subTest(prefix=prefix),
+                patch.object(self.provider, "_config", return_value=CONFIG),
+                patch.object(
+                    self.provider,
+                    "_authorized",
+                    return_value=[
+                        {**CITY, "city": name, "code": code} for code in range(1, 13)
+                    ],
+                ) as request,
+            ):
+                cities = self.provider.cities(prefix)
+                path = urlparse(request.call_args.args[0])
+                self.assertEqual(path.path, "location/suggest/cities")
+                self.assertEqual(
+                    parse_qs(path.query), {"name": [prefix], "country_code": ["RU"]}
+                )
+                self.assertEqual(len(cities), 12)
+                self.assertEqual(cities[0]["name"], name)
+                self.assertEqual(cities[0]["code"], 1)
+                self.assertIn("fullName", cities[0])
+
+    def test_checkout_focus_loads_initial_cities_and_reuses_directory_cache(self):
+        with (
+            patch.object(self.provider, "_config", return_value=CONFIG),
+            patch.object(self.provider, "_authorized", return_value=[CITY]) as request,
+        ):
+            self.assertEqual(self.provider.cities("")[0]["code"], 44)
+            self.provider.cities("")
+            self.assertEqual(request.call_count, 1)
+            path = urlparse(request.call_args.args[0])
+            self.assertEqual(path.path, "location/cities")
+            self.assertNotIn("city", parse_qs(path.query))
+
     def test_office_list_excludes_closed_non_reception_and_other_cities(self):
         point = {
             "code": "MSK1",

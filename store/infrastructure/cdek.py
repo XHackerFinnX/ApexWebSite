@@ -632,26 +632,16 @@ class CDEKDelivery:
         return response
 
     def cities(self, query):
-        query = str(query).strip()
-        if len(query) < 2:
-            return []
-        data = self._authorized(
-            "location/cities?"
-            + urlencode({"city": query[:80], "country_codes": "RU", "size": 8}),
-            self._config(),
-        )
-        if not isinstance(data, list):
-            raise CDEKError("Не удалось получить города СДЭК")
+        # The cities directory's `city` filter matches complete names. The
+        # suggestion endpoint accepts prefixes; the unfiltered directory also
+        # provides initial choices when the customer focuses an empty field.
+        page = self.sender_cities(self._config(), query)
         return [
             {
-                "name": c["city"],
-                "fullName": ", ".join(
-                    filter(None, [c["city"], c.get("region"), c.get("country")])
-                ),
+                "name": c["name"],
+                "fullName": c["fullName"],
                 "code": c["code"],
-                "postalCode": str(c.get("postal_codes", [""])[0])
-                if c.get("postal_codes")
-                else "",
+                "postalCode": "",
             }
-            for c in data[:8]
+            for c in page["items"]
         ]
