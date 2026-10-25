@@ -10,7 +10,7 @@
             content="Премиальный гоночный стритвир: худи, куртки и футболки из плотных материалов с деталями в духе автоспорта."
         />
         <link rel="stylesheet" href="/ui.css?v=6" />
-        <link rel="stylesheet" href="/storefront.css?v=6" />
+        <link rel="stylesheet" href="/storefront.css?v=7" />
         <link rel="stylesheet" href="/loading.css?v=1" />
         <script defer src="/loading.js?v=1"></script>
         <script defer src="/filters.js?v=4"></script>
@@ -92,7 +92,10 @@
                                 type="button"
                                 class="header__icon-btn theme-toggle"
                                 id="theme-toggle"
-                                aria-label="Включить тёмную тему"
+                                data-theme-toggle
+                                role="switch"
+                                aria-checked="false"
+                                aria-label="Тёмная тема"
                                 title="Сменить тему"
                             >
                                 <span aria-hidden="true">◐</span>
@@ -714,6 +717,6 @@
         <!-- Add-to-bag toast -->
         <div class="toast" id="toast" role="status" aria-hidden="true"></div>
 
-        <script src="/script.js?v=7" defer></script>
+        <script src="/script.js?v=8" defer></script>
     </body>
 </html>

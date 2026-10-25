@@ -76,15 +76,34 @@ let catalogTotal = 0;
 let catalogRequest = 0;
 const detailRequests = new Map();
 function normalizeProduct(item) {
+    const photos = [
+        ...new Set(
+            [
+                ...(item.images || []),
+                ...(item.variants || []).flatMap(
+                    (variant) => variant.images || [],
+                ),
+                item.image_url,
+            ].filter(Boolean),
+        ),
+    ];
+    const variants = (item.variants || []).map(
+        ({ image_indexes, ...variant }) => ({
+            ...variant,
+            images: image_indexes
+                ? image_indexes
+                      .map((index) => item.images?.[index])
+                      .filter(Boolean)
+                : variant.images || [],
+        }),
+    );
     return {
         ...item,
         id: String(item.id),
-        image: item.images?.[0] || item.image_url || "",
-        images: item.images?.length
-            ? item.images
-            : item.image_url
-              ? [item.image_url]
-              : [],
+        image: photos[0] || "",
+        images: photos,
+        variants,
+        _full: item.details_complete === true || item._full === true,
         colors: item.color ? [item.color] : [],
         compareAt: Math.max(
             Number(item.price) || 0,
@@ -149,9 +168,10 @@ async function loadCatalog(reset = true) {
         catalogTotal = page.total;
         catalogItems.forEach((item) => {
             const normalized = normalizeProduct(item);
-            productById[normalized.id] = productById[normalized.id]?._full
-                ? productById[normalized.id]
-                : normalized;
+            productById[normalized.id] =
+                !normalized._full && productById[normalized.id]?._full
+                    ? productById[normalized.id]
+                    : normalized;
         });
         const grouped = new Map();
         catalogItems.forEach((item) => {
@@ -205,6 +225,7 @@ async function loadCatalog(reset = true) {
             .map((product) => productCard(product, "new"))
             .join("");
         document.getElementById("new-arrivals").hidden = !fresh.length;
+        observeCardPhotos();
         await Promise.allSettled(
             [...cart.keys()].map((key) => ensureProduct(cartSelection(key).id)),
         );
@@ -286,6 +307,7 @@ function renderCatalogNavigation() {
         help +
         '<a href="#story">О бренде</a>';
     document.getElementById("mobile-nav").innerHTML =
+        `<button type="button" class="mobile-theme-toggle" data-theme-toggle role="switch" aria-label="Тёмная тема" aria-checked="${document.documentElement.classList.contains("dark")}"><span>◐ <span>Тёмная тема</span></span><span class="theme-switch" aria-hidden="true"></span></button>` +
         '<div class="mobile-nav-links"><a href="#catalog-filter-title" data-store-category="all">Весь каталог</a>' +
         categories +
         help +
@@ -352,12 +374,186 @@ function renderCollections() {
 }
 function productCard(p, section = "catalog") {
     if (typeof section !== "string") section = "catalog";
-    const primary = p.images[0] || "";
-    const secondary = p.images[1];
-    const pictures = primary
-        ? `<img class="card__image card__image--primary" ${imageAttributes(primary)} alt="${esc(p.name)}" width="800" height="1000" decoding="async" loading="lazy" />${secondary ? `<img class="card__image card__image--hover" ${imageAttributes(secondary)} alt="" width="800" height="1000" decoding="async" loading="lazy" />` : ""}`
+    const trackId = `${section}-photos-${p.id}`;
+    const pictures = p.images.length
+        ? `<div class="card__track" id="${trackId}" role="group" aria-label="Фотографии ${esc(p.name)}">${p.images.map((image, index) => `<div class="card__slide"><img class="card__image" data-card-image="${index}" ${imageAttributes(image)} alt="${esc(p.name)} — фото ${index + 1}" width="800" height="1000" decoding="async" loading="lazy" draggable="false" /></div>`).join("")}</div>`
         : `<span class="card__no-image">Фото скоро появится</span>`;
-    return `<article class="card" id="${section}-product-${p.id}" data-product-card="${p.id}" tabindex="0"><div class="card__media">${pictures}${p.is_new ? '<span class="drop-badge">Новинка</span>' : ""}<div class="card__actions"><button type="button" class="card__view" data-view="${p.id}">Посмотреть товар</button><button type="button" class="card__add" data-quick-add="${p.id}" aria-label="Быстро добавить ${esc(p.name)} в корзину"><span>Быстро добавить</span>${ICONS.plus}</button></div></div><div class="card__info"><div><p class="card__category">${esc(p.category)}</p><h3 class="card__name">${esc(p.name)}</h3></div><p class="card__prices"><span class="card__price">${money(p.price)}</span>${p.compareAt > Number(p.price) ? `<del>${money(p.compareAt)}</del>` : ""}</p></div></article>`;
+    const dots =
+        p.images.length > 1
+            ? `<div class="card__dots" role="group" aria-label="Выбор фотографии">${p.images.map((_, index) => `<button class="card__dot" type="button" data-card-photo="${index}" aria-label="Фото ${index + 1} из ${p.images.length}" aria-controls="${trackId}" aria-current="${index === 0}"></button>`).join("")}</div>`
+            : "";
+    return `<article class="card" id="${section}-product-${p.id}" data-product-card="${p.id}" tabindex="0"><div class="card__media">${pictures}${dots}${p.is_new ? '<span class="drop-badge">Новинка</span>' : ""}<div class="card__actions"><button type="button" class="card__view" data-view="${p.id}">Посмотреть товар</button><button type="button" class="card__add" data-quick-add="${p.id}" aria-label="Быстро добавить ${esc(p.name)} в корзину"><span>Быстро добавить</span>${ICONS.plus}</button></div></div><div class="card__info"><div><p class="card__category">${esc(p.category)}</p><h3 class="card__name">${esc(p.name)}</h3></div><p class="card__prices"><span class="card__price">${money(p.price)}</span>${p.compareAt > Number(p.price) ? `<del>${money(p.compareAt)}</del>` : ""}</p></div></article>`;
+}
+
+const imagePreviews = new Map();
+const fullImages = new Set();
+const imageRequests = new Map();
+const imageQueue = [];
+let imageDownloads = 0;
+function warmProductImage(url) {
+    if (fullImages.has(url)) return Promise.resolve(true);
+    if (!imageRequests.has(url)) {
+        const request = new Promise((resolve) =>
+            imageQueue.push({ url, resolve }),
+        );
+        imageRequests.set(url, request);
+        drainImageQueue();
+    }
+    return imageRequests.get(url);
+}
+function drainImageQueue() {
+    while (imageDownloads < 2 && imageQueue.length) {
+        const { url, resolve } = imageQueue.shift();
+        const picture = new Image();
+        picture.decoding = "async";
+        picture.fetchPriority = "low";
+        imageDownloads++;
+        const finish = (loaded) => {
+            picture.onload = picture.onerror = null;
+            if (loaded) fullImages.add(url);
+            imageRequests.delete(url);
+            imageDownloads--;
+            resolve(loaded);
+            drainImageQueue();
+        };
+        picture.onload = () => finish(true);
+        picture.onerror = () => finish(false);
+        picture.src = url;
+    }
+}
+function previewSource(url, width = 0) {
+    return fullImages.has(url)
+        ? url
+        : imagePreviews.get(url) ||
+              (width && url.startsWith("/media/") ? `${url}?w=${width}` : url);
+}
+function showProductImage(element, url) {
+    if (!element) return;
+    element.apexImageSource = url;
+    element.src = previewSource(url);
+    warmProductImage(url).then((loaded) => {
+        if (loaded && element.isConnected && element.apexImageSource === url)
+            element.src = url;
+    });
+}
+let cardPhotosObserver;
+function observeCardPhotos() {
+    cardPhotosObserver ||= new IntersectionObserver(
+        (entries) => {
+            entries
+                .filter((entry) => entry.isIntersecting)
+                .forEach(({ target }) => {
+                    target
+                        .querySelectorAll("img")
+                        .forEach((image) => (image.loading = "eager"));
+                    const id = target.closest("[data-product-card]").dataset
+                        .productCard;
+                    productById[id]?.images.forEach(warmProductImage);
+                    cardPhotosObserver.unobserve(target);
+                });
+        },
+        { rootMargin: "150px" },
+    );
+    cardPhotosObserver.disconnect();
+    document
+        .querySelectorAll(".card__track")
+        .forEach((track) => cardPhotosObserver.observe(track));
+}
+function updateCardDots(track) {
+    if (!track.clientWidth) return;
+    const card = track.closest("[data-product-card]");
+    const index = Math.round(track.scrollLeft / track.clientWidth);
+    card.dataset.photoIndex = String(index);
+    card.querySelectorAll("[data-card-photo]").forEach((dot, i) => {
+        dot.setAttribute("aria-current", String(i === index));
+    });
+}
+function selectCardPhoto(card, index) {
+    const track = card.querySelector(".card__track");
+    if (!track) return;
+    const count = track.children.length;
+    const target = (index + count) % count;
+    track.scrollTo({
+        left: target * track.clientWidth,
+        behavior: matchMedia("(prefers-reduced-motion: reduce)").matches
+            ? "auto"
+            : "smooth",
+    });
+}
+const swipedCards = new WeakMap();
+function initCardGalleries() {
+    document.addEventListener(
+        "load",
+        (event) => {
+            const image = event.target;
+            if (!image.matches?.("img[data-card-image]")) return;
+            const id = image.closest("[data-product-card]").dataset.productCard;
+            const url =
+                productById[id]?.images[Number(image.dataset.cardImage)];
+            if (url && image.naturalWidth)
+                imagePreviews.set(url, image.currentSrc || image.src);
+        },
+        true,
+    );
+    document.addEventListener(
+        "scroll",
+        (event) => {
+            const track = event.target;
+            if (track.matches?.(".card__track")) updateCardDots(track);
+        },
+        true,
+    );
+    let gesture;
+    document.addEventListener(
+        "touchstart",
+        (event) => {
+            gesture = null;
+            const touchedCard = event.target.closest?.("[data-product-card]");
+            if (touchedCard) swipedCards.delete(touchedCard);
+            const track = event.target.closest?.(".card__track");
+            if (!track || event.touches.length !== 1) return;
+            const touch = event.touches[0];
+            const card = track.closest("[data-product-card]");
+            gesture = {
+                card,
+                x: touch.clientX,
+                y: touch.clientY,
+                swiped: false,
+            };
+        },
+        { passive: true },
+    );
+    document.addEventListener(
+        "touchmove",
+        (event) => {
+            if (!gesture || event.touches.length !== 1) return;
+            const dx = Math.abs(event.touches[0].clientX - gesture.x);
+            const dy = Math.abs(event.touches[0].clientY - gesture.y);
+            if (dx > 12 && dx > dy) gesture.swiped = true;
+        },
+        { passive: true },
+    );
+    document.addEventListener(
+        "touchend",
+        () => {
+            if (gesture?.swiped)
+                swipedCards.set(gesture.card, performance.now() + 500);
+            gesture = null;
+        },
+        { passive: true },
+    );
+    document.addEventListener("touchcancel", () => (gesture = null), {
+        passive: true,
+    });
+    window.addEventListener("resize", () => {
+        document.querySelectorAll(".card__track").forEach((track) => {
+            const card = track.closest("[data-product-card]");
+            track.scrollTo({
+                left: Number(card.dataset.photoIndex || 0) * track.clientWidth,
+                behavior: "auto",
+            });
+        });
+    });
 }
 let reviewsOffset = 0;
 let reviewsTotal = 0;
@@ -516,22 +712,27 @@ function selectedProductView(p, color = activeColor) {
             : p.stock,
     };
 }
-function galleryMarkup(p) {
+function galleryMarkup(p, selectedImage = "") {
     const colors = colorOptions(p);
-    activeColor = colors[0] || "";
+    activeColor =
+        p.variants.find((variant) => variant.images.includes(selectedImage))
+            ?.color ||
+        colors[0] ||
+        "";
     const view = selectedProductView(p);
-    return `<div class="product-view"><div class="product-view__gallery"><button type="button" class="product-view__main-button" data-open-lightbox aria-label="Открыть фотографию полностью"><img class="product-view__main" src="${esc(view.images[0])}" alt="${esc(p.name)}" /></button><div class="product-view__thumbs"></div></div><div class="product-view__info"><p class="eyebrow">${esc(p.category)}</p><h2 class="display product-view__title" id="product-modal-title">${esc(p.name)}</h2><div class="product-view__prices"><strong></strong></div><div class="product-assurances"><span>${ICONS.bag}Доставка СДЭК</span><span>${ICONS.star}APEX Club</span><span>${ICONS.arrow}Выбор размера</span></div>${colors.length ? `<fieldset><legend>Цвет</legend><div class="product-view__options product-view__colors">${colors.map((color, index) => `<label><input type="radio" name="product-color" value="${esc(color)}" ${index === 0 ? "checked" : ""}/><span>${esc(color)}</span></label>`).join("")}</div></fieldset>` : ""}<fieldset><legend>Размер <small>— доступны сейчас</small></legend><div class="product-view__options product-view__sizes"></div></fieldset><div class="product-quantity"><span>Количество</span><div class="qty"><button type="button" data-product-quantity-step="-1" aria-label="Уменьшить количество">−</button><input id="product-quantity" type="number" min="1" max="99" value="1" aria-label="Количество товара"><button type="button" data-product-quantity-step="1" aria-label="Увеличить количество">+</button></div></div><p class="product-view__stock"></p><button type="button" class="product-view__add" data-modal-add="${p.id}">${ICONS.bag} <span></span></button><div class="product-club-note"><strong>APEX Club</strong><span>Баллы за оплаченные покупки и история заказов в <a href="/account">личном кабинете</a>.</span></div><div class="product-details"><details open><summary>Описание</summary><p class="product-view__description">${esc(p.description || "Гоночный характер в каждой детали.")}</p></details><details><summary>Доставка и получение</summary><p>Доступные способы, стоимость и сроки рассчитываются при оформлении. Для СДЭК выбери город и пункт выдачи.</p></details></div></div></div>`;
+    galleryIndex = Math.max(0, view.images.indexOf(selectedImage));
+    return `<div class="product-view"><div class="product-view__gallery"><button type="button" class="product-view__main-button" data-open-lightbox aria-label="Открыть фотографию полностью"><img class="product-view__main" src="${esc(previewSource(view.images[galleryIndex]))}" alt="${esc(p.name)}" /></button><div class="product-view__thumbs"></div></div><div class="product-view__info"><p class="eyebrow">${esc(p.category)}</p><h2 class="display product-view__title" id="product-modal-title">${esc(p.name)}</h2><div class="product-view__prices"><strong></strong></div><div class="product-assurances"><span>${ICONS.bag}Доставка СДЭК</span><span>${ICONS.star}APEX Club</span><span>${ICONS.arrow}Выбор размера</span></div>${colors.length ? `<fieldset><legend>Цвет</legend><div class="product-view__options product-view__colors">${colors.map((color, index) => `<label><input type="radio" name="product-color" value="${esc(color)}" ${color === activeColor ? "checked" : ""}/><span>${esc(color)}</span></label>`).join("")}</div></fieldset>` : ""}<fieldset><legend>Размер <small>— доступны сейчас</small></legend><div class="product-view__options product-view__sizes"></div></fieldset><div class="product-quantity"><span>Количество</span><div class="qty"><button type="button" data-product-quantity-step="-1" aria-label="Уменьшить количество">−</button><input id="product-quantity" type="number" min="1" max="99" value="1" aria-label="Количество товара"><button type="button" data-product-quantity-step="1" aria-label="Увеличить количество">+</button></div></div><p class="product-view__stock"></p><button type="button" class="product-view__add" data-modal-add="${p.id}">${ICONS.bag} <span></span></button><div class="product-club-note"><strong>APEX Club</strong><span>Баллы за оплаченные покупки и история заказов в <a href="/account">личном кабинете</a>.</span></div><div class="product-details"><details open><summary>Описание</summary><p class="product-view__description">${esc(p.description || "Гоночный характер в каждой детали.")}</p></details><details><summary>Доставка и получение</summary><p>Доступные способы, стоимость и сроки рассчитываются при оформлении. Для СДЭК выбери город и пункт выдачи.</p></details></div></div></div>`;
 }
 function quickAddMarkup(p) {
     const colors = colorOptions(p);
     activeColor = colors[0] || "";
     return `<div class="quick-add-view"><p class="eyebrow">Быстрое добавление</p><h2 class="display product-view__title" id="product-modal-title">${esc(p.name)}</h2>${colors.length ? `<fieldset><legend>Цвет</legend><div class="product-view__options product-view__colors">${colors.map((color, index) => `<label><input type="radio" name="product-color" value="${esc(color)}" ${index === 0 ? "checked" : ""}/><span>${esc(color)}</span></label>`).join("")}</div></fieldset>` : ""}<fieldset><legend>Размер</legend><div class="product-view__options product-view__sizes"></div></fieldset><button type="button" class="product-view__add" data-modal-add="${p.id}">${ICONS.bag} <span></span></button></div>`;
 }
-function updateProductView() {
+function updateProductView(selectedImage = "") {
     const p = productById[activeProductId];
     if (!p) return;
     const view = selectedProductView(p);
-    galleryIndex = 0;
+    galleryIndex = Math.max(0, view.images.indexOf(selectedImage));
     const price = document.querySelector(".product-view__prices strong");
     if (price) price.textContent = money(view.price);
     document.querySelector(".product-view__sizes").innerHTML = view.sizes.length
@@ -556,10 +757,10 @@ function updateProductView() {
     thumbs.innerHTML = view.images
         .map(
             (image, index) =>
-                `<button class="${index === 0 ? "is-active" : ""}" type="button" data-gallery-index="${index}"><img src="${esc(image)}" alt="Фото товара ${index + 1}" /></button>`,
+                `<button class="${index === galleryIndex ? "is-active" : ""}" type="button" data-gallery-index="${index}"><img src="${esc(previewSource(image, 240))}" alt="Фото товара ${index + 1}" /></button>`,
         )
         .join("");
-    document.querySelector(".product-view__main").src = view.images[0];
+    setGalleryImage(galleryIndex);
 }
 
 function updateSelectedVariant() {
@@ -596,20 +797,24 @@ function updateSelectedVariant() {
             : "Размер закончился";
 }
 
-async function openProduct(id, updateHash = true) {
+let productOpenRequest = 0;
+async function openProduct(id, updateHash = true, card = null) {
+    const request = ++productOpenRequest;
     let p;
     try {
-        p = await ensureProduct(id);
+        p = productById[id]?._full ? productById[id] : await ensureProduct(id);
     } catch (error) {
         showToast(error.message);
         return;
     }
-    if (!p) return;
+    if (!p || request !== productOpenRequest) return;
     activeProductId = String(id);
-    galleryIndex = 0;
-    document.getElementById("product-modal-content").innerHTML =
-        galleryMarkup(p);
-    updateProductView();
+    const selectedImage = p.images[Number(card?.dataset.photoIndex || 0)];
+    document.getElementById("product-modal-content").innerHTML = galleryMarkup(
+        p,
+        selectedImage,
+    );
+    updateProductView(selectedImage);
     const modal = document.getElementById("product-modal");
     modal.classList.remove("is-quick-add");
     modal.classList.add("is-open");
@@ -621,14 +826,15 @@ async function openProduct(id, updateHash = true) {
     modal.querySelector(".product-modal__close").focus();
 }
 async function openQuickAdd(id) {
+    const request = ++productOpenRequest;
     let p;
     try {
-        p = await ensureProduct(id);
+        p = productById[id]?._full ? productById[id] : await ensureProduct(id);
     } catch (error) {
         showToast(error.message);
         return;
     }
-    if (!p) return;
+    if (!p || request !== productOpenRequest) return;
     activeProductId = String(id);
     document.getElementById("product-modal-content").innerHTML =
         quickAddMarkup(p);
@@ -643,20 +849,24 @@ function setGalleryImage(index) {
     if (!p) return;
     const images = selectedProductView(p).images;
     galleryIndex = (index + images.length) % images.length;
-    document.querySelector(".product-view__main").src = images[galleryIndex];
+    showProductImage(
+        document.querySelector(".product-view__main"),
+        images[galleryIndex],
+    );
     document
         .querySelectorAll("[data-gallery-index]")
         .forEach((button, i) =>
             button.classList.toggle("is-active", i === galleryIndex),
         );
     const lightboxImage = document.getElementById("lightbox-image");
-    if (lightboxImage) lightboxImage.src = images[galleryIndex];
+    if (document.getElementById("image-lightbox").classList.contains("is-open"))
+        showProductImage(lightboxImage, images[galleryIndex]);
 }
 function openLightbox() {
     const box = document.getElementById("image-lightbox");
-    setGalleryImage(galleryIndex);
     box.classList.add("is-open");
     box.setAttribute("aria-hidden", "false");
+    setGalleryImage(galleryIndex);
 }
 function closeLightbox() {
     const box = document.getElementById("image-lightbox");
@@ -664,6 +874,7 @@ function closeLightbox() {
     box.setAttribute("aria-hidden", "true");
 }
 function closeProduct(clearHash = true) {
+    productOpenRequest++;
     const modal = document.getElementById("product-modal");
     modal.classList.remove("is-open");
     modal.setAttribute("aria-hidden", "true");
@@ -697,7 +908,10 @@ try {
     for (const item of JSON.parse(
         localStorage.getItem("apex-cart-products") || "[]",
     ))
-        productById[String(item.id)] = normalizeProduct(item);
+        productById[String(item.id)] = {
+            ...normalizeProduct(item),
+            _full: false,
+        };
 } catch {}
 let quoteState = null;
 let member = null;
@@ -738,6 +952,7 @@ function saveCart() {
                     .map((p) => ({
                         ...p,
                         _full: undefined,
+                        details_complete: undefined,
                         description: "",
                         images: p.images.slice(0, 1),
                         variants: (p.variants || []).map((v) => ({
@@ -1004,7 +1219,8 @@ async function jsonFetch(url, options = {}) {
             );
         }
         const data = await r.json().catch(() => null);
-        if (!r.ok) throw new Error(data?.error || `Ошибка запроса (${r.status})`);
+        if (!r.ok)
+            throw new Error(data?.error || `Ошибка запроса (${r.status})`);
         return data;
     });
 }
@@ -1532,7 +1748,23 @@ function initMobileMenu() {
             .querySelector(".reviews__viewport")
             .scrollBy({ left: 360, behavior: "smooth" });
 }
+function applyTheme(dark, save = true) {
+    document.documentElement.classList.toggle("dark", dark);
+    if (save) {
+        try {
+            localStorage.setItem("apex-theme", dark ? "dark" : "light");
+        } catch {}
+    }
+    document.querySelector('meta[name="theme-color"]').content = dark
+        ? "#161719"
+        : "#ffffff";
+    document.querySelectorAll("[data-theme-toggle]").forEach((button) => {
+        button.setAttribute("aria-checked", String(dark));
+        button.title = dark ? "Включить светлую тему" : "Включить тёмную тему";
+    });
+}
 function initEvents() {
+    initCardGalleries();
     document.getElementById("open-cart").addEventListener("click", openCart);
     document.getElementById("close-cart").addEventListener("click", closeCart);
     overlayEl.addEventListener("click", closeCart);
@@ -1545,15 +1777,6 @@ function initEvents() {
     document
         .getElementById("reviews-more")
         .addEventListener("click", () => renderReviews(true));
-    document.getElementById("theme-toggle").addEventListener("click", () => {
-        const dark = document.documentElement.classList.toggle("dark");
-        try {
-            localStorage.setItem("apex-theme", dark ? "dark" : "light");
-        } catch {}
-        document.querySelector('meta[name="theme-color"]').content = dark
-            ? "#161719"
-            : "#ffffff";
-    });
     document.addEventListener("keydown", (e) => {
         if (e.key === "Escape") {
             closeCart();
@@ -1565,6 +1788,23 @@ function initEvents() {
         }
     });
     document.addEventListener("click", (e) => {
+        if (e.target.closest("[data-theme-toggle]")) {
+            applyTheme(!document.documentElement.classList.contains("dark"));
+            return;
+        }
+        const sourceCard = e.target.closest("[data-product-card]");
+        if (
+            sourceCard &&
+            (swipedCards.get(sourceCard) || 0) > performance.now()
+        ) {
+            e.preventDefault();
+            return;
+        }
+        const dot = e.target.closest("[data-card-photo]");
+        if (dot) {
+            selectCardPhoto(sourceCard, Number(dot.dataset.cardPhoto));
+            return;
+        }
         const review = e.target.closest("[data-review-id]");
         if (review) {
             openReview(review.dataset.reviewId);
@@ -1579,7 +1819,7 @@ function initEvents() {
         );
         if (!t) {
             const card = e.target.closest("[data-product-card]");
-            if (card) openProduct(card.dataset.productCard);
+            if (card) openProduct(card.dataset.productCard, true, card);
             return;
         }
         if (t.dataset.retryCatalog !== undefined) loadCatalog();
@@ -1592,7 +1832,7 @@ function initEvents() {
         else if (t.dataset.galleryIndex !== undefined)
             setGalleryImage(Number(t.dataset.galleryIndex));
         else if (t.dataset.closeProduct !== undefined) closeProduct();
-        else if (t.dataset.view) openProduct(t.dataset.view);
+        else if (t.dataset.view) openProduct(t.dataset.view, true, sourceCard);
         else if (t.dataset.modalAdd) {
             const color =
                 document.querySelector('[name="product-color"]:checked')
@@ -1623,9 +1863,20 @@ function initEvents() {
     });
     document.addEventListener("keydown", (event) => {
         const card = event.target.closest?.("[data-product-card]");
-        if (card && (event.key === "Enter" || event.key === " ")) {
+        if (card && ["ArrowLeft", "ArrowRight"].includes(event.key)) {
             event.preventDefault();
-            openProduct(card.dataset.productCard);
+            selectCardPhoto(
+                card,
+                Number(card.dataset.photoIndex || 0) +
+                    (event.key === "ArrowRight" ? 1 : -1),
+            );
+        } else if (
+            card &&
+            event.target === card &&
+            (event.key === "Enter" || event.key === " ")
+        ) {
+            event.preventDefault();
+            openProduct(card.dataset.productCard, true, card);
         }
     });
     const gallery = document.getElementById("product-modal-content");
@@ -1668,7 +1919,7 @@ function initEvents() {
                     if (document.getElementById("search-input").value !== value)
                         return;
                     page.items.forEach((item) => {
-                        if (!productById[item.id])
+                        if (item.details_complete || !productById[item.id])
                             productById[item.id] = normalizeProduct(item);
                     });
                     renderSearchResults(value);
@@ -1706,6 +1957,11 @@ function initEvents() {
                 .forEach((x) => x.classList.remove("is-open"));
     });
 }
+let savedDarkTheme = false;
+try {
+    savedDarkTheme = localStorage.getItem("apex-theme") === "dark";
+} catch {}
+applyTheme(savedDarkTheme, false);
 renderAnnouncement();
 renderCatalogNavigation();
 renderCategoryTiles();
@@ -1715,10 +1971,6 @@ jsonFetch("/api/loyalty")
             `Возвращаем ${Number(rules.earn_percent)}% стоимости товаров баллами после оплаты. Оплачивай баллами до ${Number(rules.redeem_percent)}% следующей покупки.`;
     })
     .catch(() => {});
-try {
-    if (localStorage.getItem("apex-theme") === "dark")
-        document.documentElement.classList.add("dark");
-} catch {}
 document.addEventListener("keydown", (event) => {
     if (event.key !== "Tab") return;
     const root =

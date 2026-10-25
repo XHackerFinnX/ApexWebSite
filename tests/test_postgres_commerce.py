@@ -666,6 +666,34 @@ class PostgreSQLCommerceTests(unittest.TestCase):
         self.repo.migrate()
         self.assertEqual(self.repo.catalog_page()["total"], 1)
 
+    def test_catalog_contains_complete_details_and_deduplicated_photos_for_every_color(self):
+        black = [f"https://example.test/black-{i}.webp" for i in range(3)]
+        white = [f"https://example.test/white-{i}.webp" for i in range(2)]
+        description = "Полное описание товара. " * 30
+        product = self.catalog.save({
+            "name": "Gallery product", "category": "Test", "is_active": True,
+            "description": description,
+            "variants": [
+                {"sku": f"{color}-{size}", "color": color, "size": size,
+                 "price": "500", "stock": 3, "images": photos}
+                for color, photos in [("Black", black), ("White", white)]
+                for size in ["S", "M"]
+            ],
+        })
+        page = self.repo.catalog_page()
+        item = next(row for row in page["items"] if row["id"] == product.id)
+        self.assertTrue(item["details_complete"])
+        self.assertEqual(item["description"], description)
+        self.assertEqual(item["images"], black + white)
+        self.assertEqual(len(item["variants"]), 4)
+        for variant in item["variants"]:
+            self.assertNotIn("images", variant)
+            photos = [item["images"][i] for i in variant["image_indexes"]]
+            self.assertEqual(photos, black if variant["color"] == "Black" else white)
+        serialized = json.dumps(item, default=str)
+        self.assertEqual(serialized.count(black[1]), 1)
+        self.assertEqual(serialized.count(white[1]), 1)
+
     def test_pool_replaces_terminated_idle_connection_before_query(self):
         repo = PostgreSQLRepository(
             {**self.connection, "options": "-c search_path=" + self.schema},

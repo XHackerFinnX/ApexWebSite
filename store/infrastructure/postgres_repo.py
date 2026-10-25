@@ -149,9 +149,8 @@ class PostgreSQLRepository(CommerceRepository):
             ).fetchone()["n"]
             rows = list(
                 db.execute(
-                    """SELECT p.id,p.name,left(p.description,240) AS description,p.price,c.name AS category,
-                p.stock,p.views,p.cart_adds,p.color,p.is_active,p.is_new,p.image_url,p.images[1:2] AS images,
-                COALESCE((SELECT jsonb_agg(v-'images') FROM jsonb_array_elements(p.variants) v),'[]') AS variants,
+                    """SELECT p.id,p.name,p.description,p.price,c.name AS category,
+                p.stock,p.views,p.cart_adds,p.color,p.is_active,p.is_new,p.image_url,p.images,p.variants,
                 ARRAY(SELECT ps.size FROM product_sizes ps WHERE ps.product_id=p.id ORDER BY ps.size) AS sizes
                 FROM products p JOIN categories c ON c.id=p.category_id"""
                     + clause
@@ -161,6 +160,30 @@ class PostgreSQLRepository(CommerceRepository):
                     args + [limit, offset],
                 ).fetchall()
             )
+            for product in rows:
+                # A complete product opens immediately from the catalog. Share one
+                # gallery across sizes/colors instead of repeating photo URLs.
+                photos, positions = [], {}
+
+                def photo_indexes(images):
+                    indexes = []
+                    for image in images:
+                        if not image:
+                            continue
+                        if image not in positions:
+                            positions[image] = len(photos)
+                            photos.append(image)
+                        if positions[image] not in indexes:
+                            indexes.append(positions[image])
+                    return indexes
+
+                photo_indexes(product["images"] or [product["image_url"]])
+                variants = []
+                for variant in product["variants"] or []:
+                    variant = dict(variant)
+                    variant["image_indexes"] = photo_indexes(variant.pop("images", []))
+                    variants.append(variant)
+                product.update(images=photos, variants=variants, details_complete=True)
             categories = list(
                 db.execute(
                     "SELECT c.name FROM categories c WHERE EXISTS(SELECT 1 FROM products p WHERE p.category_id=c.id"
