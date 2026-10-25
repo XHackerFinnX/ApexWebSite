@@ -14,10 +14,12 @@ from store.infrastructure.media import configure_media
 from store.infrastructure.postgres_repo import PostgreSQLRepository
 from store.infrastructure.security import RateLimiter, SecretBox
 from store.infrastructure.tbank import TBankPayment
+from store.infrastructure.trust import configure_runtime_trust
 from store.presentation.web import WebApp
 
 
 def create_app(settings: Settings | None = None):
+    configure_runtime_trust()
     config = settings or get_settings()
     configure_media(config)
     repo = PostgreSQLRepository(

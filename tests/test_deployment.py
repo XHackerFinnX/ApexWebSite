@@ -414,6 +414,7 @@ class MediaAuditTests(unittest.TestCase):
         with (
             patch("sys.argv", ["store.manage", "check-media"]),
             patch("store.manage.get_settings", return_value=config),
+            patch("store.manage.configure_runtime_trust"),
             patch("store.manage.configure_media"),
             patch("store.manage.psycopg.connect") as connect,
             patch("store.manage.PostgreSQLRepository") as repository,

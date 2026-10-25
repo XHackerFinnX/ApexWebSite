@@ -16,6 +16,7 @@ from store.infrastructure.media import (
 )
 from store.infrastructure.postgres_repo import PostgreSQLRepository
 from store.infrastructure.security import SecretBox
+from store.infrastructure.trust import configure_runtime_trust
 
 
 def check_product_media(rows):
@@ -114,6 +115,7 @@ def main():
         "--directory", help="Existing local media directory for upload-media"
     )
     args = parser.parse_args()
+    configure_runtime_trust()
     settings = Settings(_env_file=args.env_file) if args.env_file else get_settings()
     configure_media(settings)
     if args.command == "check-media" and settings.STORE_MEDIA_BACKEND != "s3":

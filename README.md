@@ -155,6 +155,16 @@ APP_HOST=0.0.0.0
 APP_PORT=8000
 WEBAPP_URL=https://apextop.ru
 TRUST_PROXY_HEADERS=true
+ADMIN_USERNAME=YOUR_ADMIN_LOGIN
+ADMIN_PASSWORD=replace-with-your-unique-admin-password
+STORE_MASTER_KEY=replace-with-existing-persistent-master-key
+POSTGRESQL_HOST=YOUR_DATABASE_HOST
+POSTGRESQL_PORT=5432
+POSTGRESQL_DATABASE=YOUR_DATABASE_NAME
+POSTGRESQL_USER=YOUR_DATABASE_USER
+POSTGRESQL_PASSWORD=YOUR_DATABASE_PASSWORD
+POSTGRESQL_SSLMODE=verify-full
+POSTGRESQL_SSLROOTCERT_PEM=YOUR_DATABASE_CA_IN_PEM
 STORE_MEDIA_BACKEND=s3
 S3_ENDPOINT_URL=https://s3.twcstorage.ru
 S3_REGION=ru-1
@@ -189,6 +199,96 @@ docker run -d --name apex-store --restart unless-stopped \
 передаётся через Docker Hub. Docker-образ приложения публикуется workflow
 `Publish Docker image` из раздела GitHub Actions; для запуска нужны переменная репозитория
 `DOCKERHUB_USERNAME` и секрет `DOCKERHUB_TOKEN`. Выбирайте тег конкретного коммита.
+
+### Запуск в Timeweb App Platform из Docker Hub
+
+Этот вариант использует готовый образ. GitHub Actions собирает и публикует его,
+а Timeweb скачивает образ и запускает приложение с вашими переменными.
+
+1. В GitHub откройте **Actions → Publish Docker image → Run workflow**, выберите
+   `main`, запустите сборку и дождитесь зелёного результата. После изменений в коде
+   нужна новая сборка: повторный запуск старого задания использует старый коммит.
+   Для этого проекта `DOCKERHUB_USERNAME=hackerfinn`; секрет `DOCKERHUB_TOKEN`
+   должен содержать токен Docker Hub этого аккаунта с правом **Repo Read & Write**.
+2. В Docker Hub откройте `hackerfinn/apex-store` → **Tags**. Репозиторий должен
+   быть **Public**. Скопируйте тег полного коммита из новой сборки; `latest` тоже
+   публикуется, но тег коммита позволяет однозначно выбрать нужную версию.
+3. В Timeweb выберите **App Platform → Создать → Docker Hub**. Введите имя
+   `hackerfinn/apex-store`, а тег выберите в отдельном поле. В название образа
+   не добавляйте `https://`, `:latest` или URL GitHub.
+4. В разделе **Переменные → Добавить → Загрузить из файла** выберите ваш
+   заполненный **`.env`**. Убедитесь, что импортированные переменные выбраны для
+   этого приложения. Сам файл не нужно добавлять в Git или в Docker-образ.
+5. Выберите регион и приватную сеть с доступом к PostgreSQL. Для публичного адреса
+   БД разрешите подключения от приложения в настройках БД. Хосты `localhost` и
+   `127.0.0.1` внутри контейнера относятся к самому приложению, а не к внешней БД.
+6. Включите **Сертификаты Минцифры**, если они нужны вашему Т-Банку; ТЦИ включайте
+   при необходимости. Укажите путь проверки состояния **`/health`** в расширенных
+   настройках, если такое поле доступно для выбранного способа деплоя.
+7. Запустите деплой. Откройте технический HTTPS-домен из дашборда, затем
+   подключите `apextop.ru`, как описано ниже. Загрузка витрины, вход в `/admin`
+   и тестовая загрузка фото должны работать до приёма реальных заказов.
+
+Для существующего приложения откройте **Настройки → Настройки деплоя →
+Редактировать**, обновите тег и переменные, затем сохраните и выполните деплой.
+GitHub Actions не передаёт production `.env` в Timeweb автоматически.
+
+### Запуск в Timeweb App Platform из GitHub / Dockerfile
+
+Вариант по [инструкции Timeweb](https://timeweb.cloud/docs/apps/deploying-with-dockerfile)
+собирает тот же Dockerfile непосредственно на стороне Timeweb. Для него публикация
+в Docker Hub и запуск GitHub Actions не нужны.
+
+1. **App Platform → Создать → GitHub** → репозиторий `XHackerFinnX/ApexWebSite`.
+2. Выберите ветку **`main`**, фреймворк **`Dockerfile`**. Поле **«Путь до директории
+   проекта» оставьте пустым**: Dockerfile и контекст сборки находятся в корне.
+3. Добавьте переменные из `.env`, сеть, сертификаты и путь **`/health`**, как выше.
+   Собственные команды установки и запуска задавать не требуется: они уже в
+   Dockerfile. Корневой `docker-compose.yml` запускает только локальную БД и для
+   этого деплоя не используется.
+4. Запустите деплой. При последующих обновлениях можно использовать автодеплой
+   из `main` либо вручную выбирать нужный коммит.
+
+### Порт, сертификаты и диагностика
+
+Приложение слушает **`0.0.0.0:8000`**, Dockerfile объявляет **`EXPOSE 8000`**.
+Timeweb направляет внешний HTTP/HTTPS-трафик на этот порт. Оставьте
+`APP_HOST=0.0.0.0` и `APP_PORT=8000`; отдельный Nginx в контейнере не требуется.
+
+Timeweb добавляет выбранные CA-файлы в `/usr/local/share/ca-certificates`.
+При запуске приложение объединяет их со стандартными доверенными корнями во
+временный PEM-файл, доступный пользователю контейнера. Проверка TLS остаётся
+включённой; Python, клиент S3 и команды `store.manage` используют этот набор.
+Явно заданные `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE` и `AWS_CA_BUNDLE` имеют
+приоритет. Если они остались от старого окружения, проверьте пути внутри
+контейнера. При выключенных переключателях сертификатов обычные HTTPS-запросы
+продолжают использовать стандартные доверенные корни.
+
+Сертификат PostgreSQL задаётся отдельно: для `verify-full` используйте CA вашей
+БД в `POSTGRESQL_SSLROOTCERT_PEM`. Можно указать переносы строк как `\n`.
+Удалите старый `POSTGRESQL_SSLROOTCERT`, если вместо него используете PEM;
+оба способа одновременно задавать нельзя. Путь к файлу на вашем ПК, например
+`C:\certs\root.crt`, не существует в Linux-контейнере. То же относится к
+`TBANK_CA_CERT`: используйте сертификаты Timeweb либо `TBANK_CA_CERT_PEM`.
+
+`/health` возвращает 200, пока отвечает HTTP-сервер, и подходит для перезапусков
+Timeweb. `/ready` проверяет соединение с PostgreSQL и вернёт 503 при недоступной
+БД. Его можно открыть вручную после запуска, но не следует выбирать как проверку
+живучести: временная ошибка БД не исправляется перезапуском каждого контейнера.
+
+| Сообщение в логе | Что проверить |
+|---|---|
+| `Field required`, `S3_BUCKET`, `STORE_MASTER_KEY`, `ADMIN_PASSWORD` | Импорт и привязку переменных `.env` к приложению; пароль от 12 символов и постоянный мастер-ключ от 32 |
+| `POSTGRESQL_SSLROOTCERT ... не найден` | Путь внутри контейнера либо переход на `POSTGRESQL_SSLROOTCERT_PEM` |
+| `connection refused`, `timeout`, `PoolTimeout` | Адрес/порт PostgreSQL, правила доступа, выбранную приватную сеть и состояние БД |
+| `CERTIFICATE_VERIFY_FAILED` | CA конкретного сервиса и корректность путей к явно заданным сертификатам |
+| `pull access denied`, `manifest unknown` | Публичность `hackerfinn/apex-store` и наличие выбранного тега после успешной сборки |
+| Не пройдена проверка состояния | `/health`, `APP_HOST=0.0.0.0`, `APP_PORT=8000` и ошибки запуска выше по логу |
+
+Подробности Timeweb: [переменные и импорт .env](https://timeweb.cloud/docs/apps/variables),
+[проверка состояния](https://timeweb.cloud/docs/apps/healthcheck-path),
+[корневые сертификаты](https://timeweb.cloud/docs/apps/trusted-certificates),
+[запуск из Docker Hub](https://timeweb.cloud/docs/apps/deploying-with-docker-hub).
 
 Подключение домена:
 

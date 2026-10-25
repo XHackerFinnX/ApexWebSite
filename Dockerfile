@@ -29,9 +29,12 @@ RUN groupadd --gid 10001 apex \
 
 USER 10001:10001
 
+# Timeweb reads EXPOSE to configure its reverse proxy (external ports 80/443).
 EXPOSE 8000
 
+# The platform restarts unhealthy containers, so check HTTP liveness here.
+# /ready remains available for a separate database readiness check.
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import os,urllib.request; urllib.request.urlopen('http://127.0.0.1:'+os.environ.get('APP_PORT','8000')+'/ready',timeout=8).close()"
+    CMD python -c "import os,urllib.request; urllib.request.build_opener(urllib.request.ProxyHandler({})).open('http://127.0.0.1:'+os.environ.get('APP_PORT','8000')+'/health',timeout=8).close()"
 
 CMD ["python", "-m", "store"]
