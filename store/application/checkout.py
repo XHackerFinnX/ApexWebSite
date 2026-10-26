@@ -80,11 +80,6 @@ class CheckoutService:
             delivery,
         )
 
-    def confirm_captcha(self, token, ip):
-        if not self.captcha.verify(token, ip):
-            raise ValueError("Проверка CAPTCHA не пройдена")
-        return "captcha-approved"
-
     def quote(self, data, customer=None, require_delivery=False):
         raw_items = data.get("items", [])
         if not isinstance(raw_items, list) or not 1 <= len(raw_items) <= 100:

@@ -5,12 +5,16 @@
         <meta name="viewport" content="width=device-width,initial-scale=1" />
         <meta name="theme-color" content="#f5f6f8" />
         <title>Личный кабинет — APEX</title>
-        <link rel="stylesheet" href="/account.css?v=6" />
+        <link rel="stylesheet" href="/account.css?v=7" />
         <link rel="stylesheet" href="/loading.css?v=1" />
         <script defer src="/loading.js?v=1"></script>
         <script defer src="/appearance.js?v=4"></script>
-        <script defer src="/account.js?v=8"></script>
+        <script defer src="/account.js?v=9"></script>
         <script defer src="/motion.js?v=4"></script>
+        <link rel="stylesheet" href="/cookie-consent.css?v=1" />
+        <script defer src="/cookie-consent.js?v=1"></script>
+        <link rel="stylesheet" href="/security.css?v=1" />
+        <script defer src="/security.js?v=1"></script>
     </head>
     <body class="account-page" data-appearance="apex-theme">
         <header class="account-header">
@@ -112,7 +116,11 @@
                     <p id="auth-description">
                         Войди, чтобы увидеть свои заказы и бонусы.
                     </p>
-                    <div class="account-tabs" aria-label="Вход или регистрация">
+                    <div
+                        id="auth-tabs"
+                        class="account-tabs"
+                        aria-label="Вход или регистрация"
+                    >
                         <button
                             type="button"
                             data-auth="login"
@@ -176,6 +184,121 @@
                             </svg>
                         </button>
                     </form>
+                    <button
+                        id="forgot-password"
+                        class="text-button auth-forgot"
+                        type="button"
+                    >
+                        Забыли пароль?
+                    </button>
+                    <section id="verification-panel" hidden>
+                        <p
+                            class="auth-step-note"
+                            id="verification-description"
+                        ></p>
+                        <form id="verification-form">
+                            <label
+                                >Код из письма<input
+                                    name="code"
+                                    inputmode="numeric"
+                                    autocomplete="one-time-code"
+                                    pattern="[0-9]{6}"
+                                    minlength="6"
+                                    maxlength="6"
+                                    required
+                                    placeholder="000000"
+                                    class="verification-code"
+                            /></label>
+                            <button class="button accent" type="submit">
+                                Подтвердить почту →
+                            </button>
+                        </form>
+                        <p class="auth-step-note">
+                            Код действует 10 минут. Если письма нет, проверь
+                            папку «Спам». Для уже зарегистрированного адреса
+                            используй вход или восстановление пароля.
+                        </p>
+                        <button
+                            id="resend-code"
+                            class="text-button"
+                            type="button"
+                            disabled
+                        >
+                            Отправить код ещё раз
+                        </button>
+                        <button
+                            class="text-button auth-back"
+                            data-auth-back
+                            type="button"
+                        >
+                            ← Вернуться ко входу
+                        </button>
+                    </section>
+                    <section id="forgot-panel" hidden>
+                        <form id="forgot-form">
+                            <label
+                                >Email аккаунта<input
+                                    name="email"
+                                    type="email"
+                                    autocomplete="email"
+                                    maxlength="254"
+                                    required
+                                    placeholder="you@example.com"
+                            /></label>
+                            <button class="button accent" type="submit">
+                                Отправить ссылку →
+                            </button>
+                        </form>
+                        <p class="auth-step-note">
+                            После проверки безопасности отправим ссылку для
+                            сброса. Пароль останется прежним, пока ты не задашь
+                            новый.
+                        </p>
+                        <button
+                            class="text-button auth-back"
+                            data-auth-back
+                            type="button"
+                        >
+                            ← Вернуться ко входу
+                        </button>
+                    </section>
+                    <section id="reset-panel" hidden>
+                        <form id="reset-form">
+                            <label
+                                >Новый пароль<input
+                                    name="password"
+                                    type="password"
+                                    autocomplete="new-password"
+                                    minlength="10"
+                                    maxlength="256"
+                                    required
+                                    placeholder="Не менее 10 символов"
+                            /></label>
+                            <label
+                                >Повтори новый пароль<input
+                                    name="confirmation"
+                                    type="password"
+                                    autocomplete="new-password"
+                                    minlength="10"
+                                    maxlength="256"
+                                    required
+                            /></label>
+                            <button class="button accent" type="submit">
+                                Сохранить новый пароль →
+                            </button>
+                        </form>
+                        <p class="auth-step-note">
+                            После изменения пароля все предыдущие входы будут
+                            завершены.
+                        </p>
+                        <button
+                            id="request-another-reset"
+                            class="text-button auth-back"
+                            type="button"
+                        >
+                            Запросить новую ссылку
+                        </button>
+                    </section>
                     <p class="auth-legal">
                         Продолжая, ты соглашаешься с
                         <a href="/privacy">политикой конфиденциальности</a> и

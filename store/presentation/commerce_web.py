@@ -27,6 +27,32 @@ class CommerceHandler:
         app = self.application
         method = self.command
         query = parse_qs(parsed.query)
+        security = app.security
+        ip, browser, agent = (
+            self._client_ip(),
+            self._cookie("apex_guard"),
+            self.headers.get("User-Agent", ""),
+        )
+        if method == "POST" and path == "/api/security/captcha":
+            import re
+            import secrets
+
+            data = self._body()
+            headers = {}
+            if not re.fullmatch(r"[A-Za-z0-9_-]{43}", browser):
+                browser = secrets.token_urlsafe(32)
+                headers["Set-Cookie"] = (
+                    f"apex_guard={browser}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000"
+                    + ("; Secure" if app.secure_cookies else "")
+                )
+            return self._send(
+                data=security.challenge(
+                    data.get("purpose"), data.get("context"), ip, browser, agent
+                ),
+                headers=headers,
+            )
+        if method == "POST" and path == "/api/security/captcha/verify":
+            return self._send(data=security.solve(self._body(), ip, browser, agent))
         if method == "POST" and path == "/api/admin/media":
             from store.infrastructure.media import store_image
 
@@ -118,28 +144,34 @@ class CommerceHandler:
             result = app.checkout.quote(self._body(), self._customer())
             result.pop("promotion", None)
             return self._send(data=result)
-        if method == "POST" and path in {"/api/account/register", "/api/account/login"}:
-            if not app.auth_limiter.allow(
-                "customer:" + self._client_ip(), time.monotonic()
-            ):
-                return self._send(
-                    429, {"error": "Слишком много попыток входа. Повторите позже"}
-                )
-            data = self._body()
-            customer = (
-                app.repo.register_customer(data)
-                if path.endswith("register")
-                else app.repo.login_customer(
-                    data.get("email", ""), data.get("password", "")
-                )
-            )
-            token = app.repo.create_customer_session(customer["id"])
+        if method == "POST" and path == "/api/account/register":
+            return self._send(202, security.register(self._body(), ip, browser, agent))
+        if method == "POST" and path == "/api/account/password/forgot":
+            return self._send(202, security.forgot(self._body(), ip, browser, agent))
+        if method == "POST" and path == "/api/account/password/reset":
             return self._send(
-                201 if path.endswith("register") else 200,
+                data=security.reset(self._body(), ip),
+                headers={"Set-Cookie": self._customer_cookie("", True)},
+            )
+        if method == "POST" and path in {
+            "/api/account/register/verify",
+            "/api/account/login",
+        }:
+            data = self._body()
+            if path.endswith("/verify"):
+                customer, token = security.verify_registration(
+                    data, ip, with_session=True
+                )
+            else:
+                customer, token = security.login(data, ip, browser, agent)
+            return self._send(
+                201 if path.endswith("/verify") else 200,
                 customer,
                 headers={"Set-Cookie": self._customer_cookie(token)},
             )
         if method == "POST" and path == "/api/account/logout":
+            if self._cookie("apex_customer") and self._customer():
+                security.logout(ip, browser)
             app.repo.logout_customer(self._cookie("apex_customer"))
             return self._send(
                 data={"ok": True},

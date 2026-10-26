@@ -1,0 +1,89 @@
+.cookie-consent {
+    position: fixed;
+    bottom: max(20px, env(safe-area-inset-bottom));
+    left: 50%;
+    transform: translateX(-50%);
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 22px;
+    width: min(880px, calc(100% - 32px));
+    max-height: calc(100dvh - 40px);
+    overflow: auto;
+    z-index: 2000;
+    padding: 24px;
+    border: 1px solid var(--ui-line, #e5e8ee);
+    border-radius: 16px;
+    background: var(--ui-surface, #fff);
+    color: var(--ui-text, #20242e);
+    box-shadow: 0 12px 60px #0003;
+    font-family: var(--ui-font, Arial, sans-serif);
+}
+.cookie-consent__mark {
+    display: grid;
+    place-items: center;
+    width: 48px;
+    height: 48px;
+    background: var(--ui-accent-soft, #fff0ed);
+    color: var(--ui-accent, #dd4336);
+    font-size: 24px;
+    font-weight: 900;
+    font-style: italic;
+    border-radius: 12px;
+}
+.cookie-consent h2 {
+    font-size: 16px;
+    line-height: 1.5;
+    margin: 4px 0 7px;
+}
+.cookie-consent p {
+    color: var(--ui-muted, #737c8d);
+    font-size: 12px;
+    line-height: 1.8;
+    margin: 0;
+}
+.cookie-consent .cookie-consent__eyebrow {
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 1.4px;
+    color: var(--ui-accent, #dd4336);
+}
+.cookie-consent a {
+    color: var(--ui-text, #20242e);
+    text-decoration: underline;
+    text-underline-offset: 3px;
+}
+.cookie-consent button {
+    padding: 14px 18px;
+    min-height: 46px;
+    background: #dd4336;
+    color: white;
+    border: 0;
+    border-radius: 9px;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    white-space: nowrap;
+}
+.cookie-consent button span {
+    padding-left: 9px;
+}
+.cookie-consent button:focus-visible,
+.cookie-consent a:focus-visible {
+    outline: 2px solid var(--ui-accent, #dd4336);
+    outline-offset: 4px;
+}
+@media (max-width: 640px) {
+    .cookie-consent {
+        grid-template-columns: 1fr;
+        gap: 16px;
+        padding: 21px;
+        bottom: max(12px, env(safe-area-inset-bottom));
+    }
+    .cookie-consent__mark {
+        display: none;
+    }
+    .cookie-consent button {
+        width: 100%;
+    }
+}

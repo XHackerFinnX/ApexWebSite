@@ -1094,3 +1094,30 @@
         width: 100%;
     }
 }
+
+.auth-forgot {
+    margin-top: 18px;
+}
+.auth-back {
+    display: block;
+    margin-top: 22px;
+}
+.auth-step-note {
+    margin: 20px 0;
+    font-size: 12px;
+    line-height: 1.8;
+    color: var(--ui-muted);
+    overflow-wrap: anywhere;
+}
+.auth-form-panel form {
+    display: grid;
+    gap: 18px;
+}
+.auth-form-panel .verification-code {
+    font: 700 25px monospace;
+    letter-spacing: 10px;
+    text-align: center;
+}
+.auth-form-panel [hidden] {
+    display: none !important;
+}

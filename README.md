@@ -51,12 +51,14 @@ store/presentation    HTTP/API и статический интерфейс
 - CRUD товаров и dashboard администратора;
 - конфигуратор ЮKassa, Альфа-Банк, Т-Банк и СДЭК без ключей в исходниках;
 - секреты интеграций хранятся зашифрованными и никогда не возвращаются API;
-- шаг Yandex SmartCaptcha перед созданием платежа (mock в локальном режиме);
+- собственная одноразовая капча, подтверждение почты и восстановление пароля через Яндекс SMTP;
 - rate limit и защитные HTTP-заголовки на уровне приложения.
 
 API: `GET /api/products`, `POST /api/products/:id/view`,
 `POST /api/products/:id/cart`, `GET|POST /api/admin/integrations`,
-`POST /api/checkout/captcha`. Подключение создания платежа выполняется адаптером выбранного банка.
+`POST /api/security/captcha`, `POST /api/security/captcha/verify`, `POST /api/checkout/payment`.
+
+Настройка SMTP, регистрация с кодом, восстановление пароля, ограничения форм и cookie описаны в [ACCOUNT_SECURITY.md](ACCOUNT_SECURITY.md).
 
 ### Т-Банк
 
@@ -125,9 +127,7 @@ Prometheus/Grafana, централизованные логи и audit trail.
 
 ```bash
 export STORE_MASTER_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
-export YANDEX_CAPTCHA_SERVER_KEY=...
-export YANDEX_CAPTCHA_CLIENT_KEY=...
-export CAPTCHA_MODE=yandex
+export SMTP_PASSWORD=YOUR_YANDEX_APP_PASSWORD
 export POSTGRESQL_HOST=da9ca7d9f658ca4254e5094d.twc1.net
 export POSTGRESQL_PORT=5432
 export POSTGRESQL_DATABASE=default_db
@@ -184,7 +184,7 @@ S3_SECRET_ACCESS_KEY=YOUR_SECRET_KEY
 
 Значения S3 возьмите из панели своего хранилища; для другого провайдера endpoint
 и регион могут отличаться. В этом же `.env` сохраните параметры внешней
-PostgreSQL, администратора, CAPTCHA и **существующий** `STORE_MASTER_KEY`.
+PostgreSQL, администратора, SMTP и **существующий** `STORE_MASTER_KEY`.
 Не меняйте мастер-ключ при обновлении: он нужен для расшифровки интеграций в БД.
 Для production нужны мастер-ключ от 32 символов и пароль администратора от 12.
 `TRUST_PROXY_HEADERS=true` используйте за прокси Timeweb/Caddy/Nginx, который
@@ -307,7 +307,7 @@ Timeweb. `/ready` проверяет соединение с PostgreSQL и ве�
 2. В кабинете Т-Банка задайте URL уведомлений
    `https://apextop.ru/api/payments/tbank/notification`. Адреса возврата приложение
    передаёт само: `https://apextop.ru/payment/success` и `/payment/fail`.
-3. Если используете Yandex SmartCaptcha, добавьте `apextop.ru` в разрешённые домены.
+3. Для подтверждения почты задайте `SMTP_PASSWORD` и остальные параметры из [ACCOUNT_SECURITY.md](ACCOUNT_SECURITY.md).
    Проверьте витрину, вход в `/admin` и тестовую оплату по HTTPS.
 
 `www.apextop.ru`, `moto.apextop.ru` и `drive.apextop.ru` подключаются отдельно,
@@ -361,11 +361,11 @@ python -m store.manage check-media
 Первая команда переносит существующие WebP без смены URL, вторая переводит старые
 `data:image/...` из БД в S3. Обе можно повторять; цены и остатки не меняются.
 
-В режиме `mock` CAPTCHA принимает токен `demo-pass`. В production backend
-должен проверять одноразовый токен на серверном endpoint Yandex SmartCaptcha;
-клиентский ключ передаётся UI, серверный — только через secret manager/env.
-Платёжный callback необходимо проверять по подписи провайдера и обрабатывать
-идемпотентно. Секреты интеграций маскируются; смена master key требует миграции.
+Капча генерируется и проверяется самим приложением, с одноразовыми подтверждениями в PostgreSQL.
+Тестового обхода в публичном API нет. Инструкции по Яндекс SMTP и проверке писем —
+в [ACCOUNT_SECURITY.md](ACCOUNT_SECURITY.md). Платёжный callback проверяется по подписи
+провайдера и обрабатывается идемпотентно. Секреты интеграций маскируются;
+смена master key требует миграции.
 
 ## Проверки
 

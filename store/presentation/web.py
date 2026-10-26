@@ -22,6 +22,7 @@ from psycopg_pool import PoolTimeout
 from store.infrastructure.media import MediaStorageError
 from store.infrastructure.security import RateLimiter
 from store.infrastructure.tbank import TBankError
+from store.application.account_security import AccountSecurity, SecurityError
 from store.presentation.commerce_web import CommerceHandler
 
 logger = logging.getLogger(__name__)
@@ -57,6 +58,8 @@ class WebApp:
         admin_password="admin",
         trust_proxy_headers=False,
         secure_cookies=False,
+        security=None,
+        trusted_proxy_cidrs="127.0.0.0/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16",
     ):
         (
             self.catalog,
@@ -77,6 +80,12 @@ class WebApp:
         self.admin_password = admin_password
         self.trust_proxy_headers = trust_proxy_headers
         self.secure_cookies = secure_cookies
+        self.security = security or AccountSecurity(repo)
+        self.trusted_proxies = [
+            ipaddress.ip_network(value.strip())
+            for value in trusted_proxy_cidrs.split(",")
+            if value.strip()
+        ]
         self.auth_limiter = RateLimiter(12, 600)
         self.cache = {}
         self.cache_lock = threading.Lock()
@@ -138,6 +147,11 @@ class WebApp:
                     else data
                 )
                 headers = dict(headers or {})
+                if self.command in {"POST", "PUT", "DELETE"} and not getattr(
+                    self, "_request_body_read", False
+                ):
+                    self.close_connection = True
+                    headers["Connection"] = "close"
                 headers.setdefault("Cache-Control", "no-store")
                 if (
                     self.command == "GET"
@@ -184,11 +198,22 @@ class WebApp:
 
             def _body(self):
                 length = int(self.headers.get("Content-Length", "0"))
-                if length > 25_000_000:
+                maximum = (
+                    25_000_000
+                    if self.path.startswith(("/api/admin/", "/api/account/reviews"))
+                    else 150_000
+                )
+                if length < 0 or length > maximum:
                     raise RequestTooLarge(
                         "Фотографии слишком большие: размер запроса превышает 25 МБ"
+                        if maximum == 25_000_000
+                        else "Размер запроса превышает допустимый лимит"
                     )
-                return json.loads(self.rfile.read(length) or b"{}")
+                data = json.loads(self.rfile.read(length) or b"{}")
+                self._request_body_read = True
+                if not isinstance(data, dict):
+                    raise ValueError("Ожидается JSON-объект")
+                return data
 
             def _serve_static(self, filename):
                 """Serve a file only from the application's bundled static directory."""
@@ -224,18 +249,29 @@ class WebApp:
                 self.end_headers()
 
             def _client_ip(self):
-                client_ip = self.client_address[0]
-                if app.trust_proxy_headers:
-                    forwarded = (
-                        self.headers.get("X-Forwarded-For", "").split(",")[0].strip()
-                    )
+                peer = ipaddress.ip_address(self.client_address[0])
+
+                def trusted(address):
+                    return any(address in network for network in app.trusted_proxies)
+
+                if app.trust_proxy_headers and trusted(peer):
                     try:
-                        client_ip = str(ipaddress.ip_address(forwarded))
+                        chain = [
+                            ipaddress.ip_address(value.strip())
+                            for value in self.headers.get("X-Forwarded-For", "").split(
+                                ","
+                            )
+                        ]
+                        for address in reversed(chain):
+                            peer = address
+                            if not trusted(address):
+                                break
                     except ValueError:
-                        pass
-                return client_ip
+                        return self.client_address[0]
+                return str(peer)
 
             def _route(self):
+                self._request_body_read = False
                 client_ip = self._client_ip()
                 bank_notification = (
                     urlparse(self.path).path == "/api/payments/tbank/notification"
@@ -250,6 +286,13 @@ class WebApp:
                 path = parsed.path
                 try:
                     if self.command in {"POST", "PUT", "DELETE"}:
+                        if (
+                            not bank_notification
+                            and self.headers.get("Sec-Fetch-Site") == "cross-site"
+                        ):
+                            return self._send(
+                                403, {"error": "Запрос с другого сайта запрещён"}
+                            )
                         origin = self.headers.get("Origin")
                         if (
                             not bank_notification
@@ -396,17 +439,25 @@ class WebApp:
                         )
                     if self.command == "POST" and path == "/api/checkout/captcha":
                         return self._send(
-                            data={
-                                "proof": app.checkout.confirm_captcha(
-                                    self._body().get("token", ""),
-                                    client_ip,
-                                )
-                            }
+                            410,
+                            {
+                                "error": "Обновите страницу для новой проверки безопасности"
+                            },
                         )
                     if self.command == "POST" and path == "/api/checkout/payment":
+                        data = self._body()
+                        app.security.limit("checkout:" + client_ip, 15, 900)
+                        app.security.consume(
+                            data.get("captcha_proof"),
+                            "checkout",
+                            data,
+                            client_ip,
+                            self._cookie("apex_guard"),
+                            self.headers.get("User-Agent", ""),
+                        )
                         return self._send(
                             201,
-                            app.checkout.create_payment(self._body(), self._customer()),
+                            app.checkout.create_payment(data, self._customer()),
                         )
                     if (
                         self.command == "POST"
@@ -504,6 +555,18 @@ class WebApp:
                     self.close_connection = True
                     return self._send(
                         413, {"error": str(e)}, headers={"Connection": "close"}
+                    )
+                except SecurityError as e:
+                    return self._send(
+                        e.status,
+                        {
+                            "error": str(e),
+                            "captcha_required": e.captcha_required,
+                            "retry_after": e.retry_after,
+                        },
+                        headers={"Retry-After": str(e.retry_after)}
+                        if e.retry_after
+                        else None,
                     )
                 except (ValueError, LookupError, KeyError) as e:
                     return self._send(400, {"error": str(e)})

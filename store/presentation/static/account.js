@@ -1,3 +1,7 @@
+let resetToken = new URLSearchParams(location.hash.slice(1)).get(
+    "reset-password",
+);
+if (resetToken) history.replaceState(null, "", location.pathname);
 const select = (value) => document.querySelector(value);
 const escapeText = (value) =>
     String(value ?? "").replace(
@@ -59,6 +63,8 @@ async function api(url, method = "GET", data) {
                 result.error || "Не удалось выполнить запрос",
             );
             error.status = response.status;
+            error.captchaRequired = result.captcha_required === true;
+            error.retryAfter = result.retry_after || 0;
             throw error;
         }
         return result;
@@ -225,6 +231,7 @@ async function loadMember() {
     try {
         const { customer, loyalty, ledger, orders, stats } =
             await api("/api/account");
+        if (resetToken) return;
         select("#auth-panel").hidden = true;
         select("#member-panel").hidden = false;
         const name = customer.name?.trim() || "участник";
@@ -313,6 +320,7 @@ async function loadMember() {
             : emptyOrders();
         setSection(location.hash.slice(1));
     } catch (error) {
+        if (resetToken) return;
         if (error.status === 401) {
             select("#auth-panel").hidden = false;
             select("#member-panel").hidden = true;
@@ -325,47 +333,209 @@ async function loadMember() {
         select("#account-loading").hidden = true;
     }
 }
-document.querySelectorAll("[data-auth]").forEach(
+let verificationId = null,
+    pendingRegistration = null,
+    resendAt = 0,
+    loginNeedsCaptcha = false;
+function authMode(value) {
+    mode = value;
+    const register = value === "register",
+        standard = ["login", "register"].includes(value);
+    select("#auth-panel").hidden = false;
+    select("#member-panel").hidden = true;
+    select("#auth-tabs").hidden = !standard;
+    select("#auth-form").hidden = !standard;
+    select("#forgot-password").hidden = value !== "login";
+    select("#verification-panel").hidden = value !== "verify";
+    select("#forgot-panel").hidden = value !== "forgot";
+    select("#reset-panel").hidden = value !== "reset";
+    select("#register-name").hidden = !register;
+    select("#auth-form").elements.name.required = register;
+    select("#auth-password").autocomplete = register
+        ? "new-password"
+        : "current-password";
+    document
+        .querySelectorAll("[data-auth]")
+        .forEach((node) =>
+            node.setAttribute(
+                "aria-pressed",
+                String(node.dataset.auth === value),
+            ),
+        );
+    const copy = {
+        login: ["С возвращением", "Войди, чтобы увидеть свои заказы и бонусы."],
+        register: [
+            "Присоединяйся к клубу",
+            "Подтверди почту и получай больше от каждой покупки.",
+        ],
+        verify: [
+            "Проверь свою почту",
+            "Остался один шаг до твоего личного паддока.",
+        ],
+        forgot: ["Забыли пароль?", "Поможем вернуться в твой аккаунт."],
+        reset: ["Новый пароль", "Выбери надёжный пароль для своего аккаунта."],
+    }[value];
+    select("#auth-title").textContent = copy[0];
+    select("#auth-description").textContent = copy[1];
+    select("#auth-submit").innerHTML =
+        (register ? "Получить код на почту" : "Войти в кабинет") +
+        " " +
+        icon("arrow");
+    if (value === "forgot")
+        select("#forgot-form").elements.email.value =
+            select("#auth-form").elements.email.value;
+    message("");
+}
+document
+    .querySelectorAll("[data-auth]")
+    .forEach(
+        (button) => (button.onclick = () => authMode(button.dataset.auth)),
+    );
+document.querySelectorAll("[data-auth-back]").forEach(
     (button) =>
         (button.onclick = () => {
-            mode = button.dataset.auth;
-            const register = mode === "register";
-            document
-                .querySelectorAll("[data-auth]")
-                .forEach((node) =>
-                    node.setAttribute("aria-pressed", String(node === button)),
-                );
-            select("#register-name").hidden = !register;
-            select("#auth-form").elements.name.required = register;
-            select("#auth-form").elements.password.autocomplete = register
-                ? "new-password"
-                : "current-password";
-            select("#auth-title").textContent = register
-                ? "Присоединяйся к клубу"
-                : "С возвращением";
-            select("#auth-description").textContent = register
-                ? "Создай аккаунт и получай больше от каждой покупки."
-                : "Войди, чтобы увидеть свои заказы и бонусы.";
-            select("#auth-submit").innerHTML =
-                (register ? "Создать аккаунт" : "Войти в кабинет") +
-                " " +
-                icon("arrow");
-            message("");
+            pendingRegistration = null;
+            authMode("login");
         }),
 );
+select("#forgot-password").onclick = () => authMode("forgot");
+select("#request-another-reset").onclick = () => {
+    resetToken = null;
+    authMode("forgot");
+};
+function updateResend() {
+    const seconds = Math.max(0, Math.ceil((resendAt - Date.now()) / 1000));
+    select("#resend-code").disabled = seconds > 0 || !pendingRegistration;
+    select("#resend-code").textContent =
+        seconds > 0
+            ? `Повторить отправку через ${seconds} с`
+            : "Отправить код ещё раз";
+}
+setInterval(updateResend, 1000);
+async function sendRegistration(data) {
+    const proof = await apexSecurity.challenge("register", data.email);
+    const result = await api("/api/account/register", "POST", {
+        ...data,
+        captcha_proof: proof,
+    });
+    pendingRegistration = data;
+    verificationId = result.verification_id;
+    resendAt = Date.now() + result.resend_after * 1000;
+    authMode("verify");
+    select("#verification-description").textContent =
+        "Код подтверждения придёт на " + data.email + ".";
+    select("#verification-form").reset();
+    updateResend();
+    select("#verification-form").elements.code.focus();
+}
 select("#auth-form").onsubmit = async (event) => {
     event.preventDefault();
-    const button = select("#auth-submit");
+    const button = select("#auth-submit"),
+        data = Object.fromEntries(new FormData(event.target));
     button.disabled = true;
     message("");
     try {
-        await api(
-            "/api/account/" + mode,
-            "POST",
-            Object.fromEntries(new FormData(event.target)),
-        );
+        if (mode === "register") {
+            await sendRegistration(data);
+            return;
+        }
+        if (loginNeedsCaptcha)
+            data.captcha_proof = await apexSecurity.challenge(
+                "login",
+                data.email,
+            );
+        try {
+            await api("/api/account/login", "POST", data);
+        } catch (error) {
+            if (error.status !== 403 || !error.captchaRequired) throw error;
+            data.captcha_proof = await apexSecurity.challenge(
+                "login",
+                data.email,
+            );
+            await api("/api/account/login", "POST", data);
+        }
+        loginNeedsCaptcha = false;
+        pendingRegistration = null;
         history.replaceState(null, "", "#overview");
         await loadMember();
+    } catch (error) {
+        if (error.captchaRequired) loginNeedsCaptcha = true;
+        if (error.name !== "AbortError") message(error.message, true);
+    } finally {
+        button.disabled = false;
+    }
+};
+select("#verification-form").onsubmit = async (event) => {
+    event.preventDefault();
+    const button = event.target.querySelector("button");
+    button.disabled = true;
+    try {
+        await api("/api/account/register/verify", "POST", {
+            verification_id: verificationId,
+            code: event.target.elements.code.value,
+        });
+        pendingRegistration = verificationId = null;
+        authMode("login");
+        select("#auth-form").reset();
+        history.replaceState(null, "", "#overview");
+        await loadMember();
+        message("Почта подтверждена. Добро пожаловать в APEX!");
+    } catch (error) {
+        message(error.message, true);
+    } finally {
+        button.disabled = false;
+    }
+};
+select("#resend-code").onclick = async () => {
+    if (!pendingRegistration || Date.now() < resendAt) return;
+    const button = select("#resend-code");
+    button.disabled = true;
+    try {
+        await sendRegistration(pendingRegistration);
+    } catch (error) {
+        if (error.retryAfter) resendAt = Date.now() + error.retryAfter * 1000;
+        if (error.name !== "AbortError") message(error.message, true);
+    } finally {
+        updateResend();
+    }
+};
+select("#forgot-form").onsubmit = async (event) => {
+    event.preventDefault();
+    const button = event.target.querySelector("button"),
+        email = event.target.elements.email.value;
+    button.disabled = true;
+    try {
+        const proof = await apexSecurity.challenge("reset", email);
+        const result = await api("/api/account/password/forgot", "POST", {
+            email,
+            captcha_proof: proof,
+        });
+        message(result.message);
+    } catch (error) {
+        if (error.name !== "AbortError") message(error.message, true);
+    } finally {
+        button.disabled = false;
+    }
+};
+select("#reset-form").onsubmit = async (event) => {
+    event.preventDefault();
+    const form = event.target,
+        button = form.querySelector("button");
+    if (form.elements.password.value !== form.elements.confirmation.value) {
+        message("Пароли не совпадают", true);
+        return;
+    }
+    button.disabled = true;
+    try {
+        await api("/api/account/password/reset", "POST", {
+            token: resetToken,
+            password: form.elements.password.value,
+        });
+        resetToken = null;
+        form.reset();
+        select("#auth-form").reset();
+        authMode("login");
+        message("Пароль изменён. Войди с новым паролем.");
     } catch (error) {
         message(error.message, true);
     } finally {
@@ -401,6 +571,8 @@ select("#profile-form").onsubmit = async (event) => {
 async function logout() {
     try {
         await api("/api/account/logout", "POST", {});
+        pendingRegistration = null;
+        authMode("login");
         message("");
         history.replaceState(null, "", location.pathname);
         await loadMember();
@@ -455,7 +627,17 @@ document.addEventListener("click", async (event) => {
         }
     }
 });
-window.addEventListener("hashchange", () => setSection(location.hash.slice(1)));
+window.addEventListener("hashchange", () => {
+    const token = new URLSearchParams(location.hash.slice(1)).get(
+        "reset-password",
+    );
+    if (token) {
+        resetToken = token;
+        history.replaceState(null, "", location.pathname);
+        select("#account-loading").hidden = true;
+        authMode("reset");
+    } else if (!resetToken) setSection(location.hash.slice(1));
+});
 select("#close-customer-review").onclick = () =>
     select("#customer-review-dialog").close();
 select("#customer-review-dialog").addEventListener("click", (event) => {
@@ -489,4 +671,7 @@ select("#customer-review-form").onsubmit = async (event) => {
         button.disabled = false;
     }
 };
-loadMember();
+if (resetToken) {
+    select("#account-loading").hidden = true;
+    authMode("reset");
+} else loadMember();

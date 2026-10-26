@@ -44,14 +44,20 @@ class Settings(BaseSettings):
     APP_PORT: int = 8000
     APP_ENV: Literal["development", "production"] = "development"
     TRUST_PROXY_HEADERS: bool = False
+    TRUSTED_PROXY_CIDRS: str = (
+        "127.0.0.0/8,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    )
     ADMIN_USERNAME: str = "admin"
     ADMIN_PASSWORD: SecretStr
 
     STORE_MASTER_KEY: SecretStr = SecretStr("unsafe-development-key")
-    YANDEX_CAPTCHA_SERVER_KEY: SecretStr = SecretStr("")
-    YANDEX_CAPTCHA_CLIENT_KEY: str = ""
-    CAPTCHA_MODE: str = "mock"
     WEBAPP_URL: str = "http://127.0.0.1:8000"
+    SMTP_HOST: str = "smtp.yandex.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: str = "sewingnn.notification@2p2p.ru"
+    SMTP_PASSWORD: SecretStr = SecretStr("")
+    SMTP_FROM: str = "sewingnn.notification@2p2p.ru"
+    GEOIP_LOOKUP_ENABLED: bool = True
 
     CDEK_CLIENT_ID: SecretStr = SecretStr("")
     CDEK_CLIENT_SECRET: SecretStr = SecretStr("")
@@ -94,6 +100,13 @@ class Settings(BaseSettings):
     def validate_app_port(cls, value: int) -> int:
         if not 1 <= value <= 65535:
             raise ValueError("APP_PORT должен быть от 1 до 65535")
+        return value
+
+    @field_validator("SMTP_PORT")
+    @classmethod
+    def validate_smtp_port(cls, value: int) -> int:
+        if value not in {587, 465}:
+            raise ValueError("SMTP_PORT должен быть 587 (STARTTLS) или 465 (TLS)")
         return value
 
     @model_validator(mode="after")

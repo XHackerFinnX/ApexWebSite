@@ -1608,7 +1608,7 @@ async function submitOrder(e) {
     }
     const button = e.currentTarget.querySelector('[type="submit"]');
     button.disabled = true;
-    button.textContent = "Переходим к оплате…";
+    button.textContent = "Проверяем безопасность…";
     const payload = {
         customer: {
             name: document.getElementById("customer-name").value,
@@ -1640,6 +1640,10 @@ async function submitOrder(e) {
         payload.idempotency_key = pendingCheckoutKey = crypto.randomUUID();
     submittedCartFingerprint = fingerprint;
     try {
+        payload.captcha_proof = await apexSecurity.challenge(
+            "checkout",
+            payload,
+        );
         const result = await jsonFetch("/api/checkout/payment", {
             method: "POST",
             signal: AbortSignal.timeout(45000),
@@ -1658,7 +1662,8 @@ async function submitOrder(e) {
             pendingCheckoutKey = null;
             submittedCartFingerprint = null;
         }
-        showToast(error.message || "Не удалось перейти к оплате");
+        if (error.name !== "AbortError")
+            showToast(error.message || "Не удалось перейти к оплате");
         button.disabled = false;
         button.textContent = "Перейти к оплате";
     }

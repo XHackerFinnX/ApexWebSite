@@ -47,7 +47,7 @@ class CommerceRepository(OrderRepository):
         try:
             with self._db() as db:
                 return db.execute(
-                    "INSERT INTO customers(email,password_hash,name) VALUES(%s,%s,%s) RETURNING id,email,name,phone,points",
+                    "INSERT INTO customers(email,password_hash,name,email_verified_at) VALUES(%s,%s,%s,now()) RETURNING id,email,name,phone,points",
                     (email, password, name),
                 ).fetchone()
         except psycopg.errors.UniqueViolation as exc:
@@ -55,27 +55,39 @@ class CommerceRepository(OrderRepository):
                 "Этот email уже зарегистрирован. Войдите в кабинет"
             ) from exc
 
-    def login_customer(self, email, password):
+    def login_customer(self, email, password, *, with_session=False):
         with self._db() as db:
             row = db.execute(
-                "SELECT * FROM customers WHERE email=%s", (str(email).strip().lower(),)
+                "SELECT * FROM customers WHERE email=%s"
+                + (" FOR UPDATE" if with_session else ""),
+                (str(email).strip().lower(),),
             ).fetchone()
-        # Do the same expensive work for unknown addresses to avoid timing leaks.
-        dummy = "pbkdf2_sha256$600000$00000000000000000000000000000000$" + "0" * 64
-        valid = verify_password(str(password), row["password_hash"] if row else dummy)
-        if not row or not valid:
-            raise ValueError("Неверный email или пароль")
-        return {key: row[key] for key in ("id", "email", "name", "phone", "points")}
+            dummy = "pbkdf2_sha256$600000$00000000000000000000000000000000$" + "0" * 64
+            valid = verify_password(
+                str(password), row["password_hash"] if row else dummy
+            )
+            if not row or not valid or not row["email_verified_at"]:
+                raise ValueError("Неверный email или пароль")
+            customer = {
+                key: row[key] for key in ("id", "email", "name", "phone", "points")
+            }
+            if with_session:
+                return customer, self._customer_session(db, customer["id"])
+            return customer
 
     def create_customer_session(self, customer_id):
+        with self._db() as db:
+            return self._customer_session(db, customer_id)
+
+    @staticmethod
+    def _customer_session(db, customer_id):
         token = secrets.token_urlsafe(32)
         digest = hashlib.sha256(token.encode()).hexdigest()
-        with self._db() as db:
-            db.execute("DELETE FROM customer_sessions WHERE expires_at < now()")
-            db.execute(
-                "INSERT INTO customer_sessions(token_hash,customer_id,expires_at) VALUES(%s,%s,%s)",
-                (digest, customer_id, datetime.now(timezone.utc) + timedelta(days=30)),
-            )
+        db.execute("DELETE FROM customer_sessions WHERE expires_at < now()")
+        db.execute(
+            "INSERT INTO customer_sessions(token_hash,customer_id,expires_at) VALUES(%s,%s,%s)",
+            (digest, customer_id, datetime.now(timezone.utc) + timedelta(days=30)),
+        )
         return token
 
     def customer_for_session(self, token):
@@ -121,6 +133,14 @@ class CommerceRepository(OrderRepository):
                 )
                 db.execute(
                     "DELETE FROM customer_sessions WHERE customer_id=%s", (customer_id,)
+                )
+                db.execute(
+                    "UPDATE email_outbox SET state='expired',payload_encrypted='' WHERE context_id IN (SELECT id FROM password_reset_tokens WHERE customer_id=%s AND used_at IS NULL)",
+                    (customer_id,),
+                )
+                db.execute(
+                    "UPDATE password_reset_tokens SET used_at=now() WHERE customer_id=%s AND used_at IS NULL",
+                    (customer_id,),
                 )
 
     def customer_history(self, customer_id):

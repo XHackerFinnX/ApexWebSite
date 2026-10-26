@@ -404,10 +404,16 @@ class StoreTests(unittest.TestCase):
         self.assertNotIn("cdek", self.repo.integrations)
     
     def test_captcha(self):
-        service = CheckoutService(Captcha())
-        self.assertEqual(service.confirm_captcha("ok", "127.0.0.1"), "captcha-approved")
-        with self.assertRaises(ValueError):
-            service.confirm_captcha("bad", "127.0.0.1")
+        import io
+        from PIL import Image
+        from store.infrastructure.captcha import render_challenge
+
+        answer, picture = render_challenge()
+        self.assertEqual(len(answer), 5)
+        image = Image.open(io.BytesIO(picture))
+        self.assertEqual(image.size, (320, 112))
+        self.assertEqual(image.format, "PNG")
+        self.assertFalse(image.info)  # No solution or seed in image metadata.
 
     def test_secret_box_detects_tampering(self):
         box = SecretBox("key")

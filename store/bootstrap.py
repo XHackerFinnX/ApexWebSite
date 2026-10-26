@@ -8,9 +8,11 @@ from store.application.services import (
     IntegrationService,
 )
 from store.application.order_worker import OrderWorker
+from store.application.account_security import AccountSecurity
+from store.application.email_worker import EmailWorker
 from store.infrastructure.order_webhook import OrderWebhook
 from store.config import Settings, get_settings
-from store.infrastructure.captcha import YandexCaptcha
+from store.infrastructure.mailer import SMTPMailer
 from store.infrastructure.cdek import CDEKDelivery
 from store.infrastructure.media import configure_media
 from store.infrastructure.postgres_repo import PostgreSQLRepository
@@ -34,9 +36,7 @@ def create_app(settings: Settings | None = None):
         CatalogService(repo),
         IntegrationService(repo, delivery),
         CheckoutService(
-            YandexCaptcha(
-                config.CAPTCHA_MODE, config.YANDEX_CAPTCHA_SERVER_KEY.get_secret_value()
-            ),
+            None,
             repo,
             bank,
             config.WEBAPP_URL,
@@ -49,7 +49,10 @@ def create_app(settings: Settings | None = None):
         config.ADMIN_PASSWORD.get_secret_value(),
         trust_proxy_headers=config.TRUST_PROXY_HEADERS,
         secure_cookies=config.WEBAPP_URL.startswith("https://"),
+        security=AccountSecurity(repo, SMTPMailer(config), config.WEBAPP_URL),
+        trusted_proxy_cidrs=config.TRUSTED_PROXY_CIDRS,
     )
+    app.email_worker = EmailWorker(app.security)
     app.order_worker = OrderWorker(
         repo,
         bank,
@@ -73,6 +76,7 @@ def run():
 
     server = Server((config.APP_HOST, config.APP_PORT), app.handler())
     app.order_worker.start()
+    app.email_worker.start()
 
     def stop(_signum, _frame):
         threading.Thread(target=server.shutdown, daemon=True).start()
@@ -84,4 +88,5 @@ def run():
     finally:
         server.server_close()
         app.order_worker.stop()
+        app.email_worker.stop()
         app.repo.pool.close()
