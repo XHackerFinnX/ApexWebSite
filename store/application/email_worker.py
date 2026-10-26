@@ -1,4 +1,4 @@
-"""Durable email outbox. No SMTP call or recipient enumeration in HTTP requests."""
+"""Durable, encrypted outbox for the owner's signed email gateway."""
 
 import json
 import logging
@@ -69,17 +69,42 @@ class EmailWorker:
                 return True
         try:
             data = json.loads(self.repo.box.decrypt(row["payload_encrypted"]))
-            self.mailer.send(row["kind"], data, row["id"])
+            message = data.get("_gateway_message")
+            if message is None:
+                message = self.mailer.prepare(
+                    row["kind"], data, row["id"], row["created_at"], row["expires_at"]
+                )
+                data["_gateway_message"] = message
+                # Freeze the exact message before the first POST. A retry after
+                # a restart must retain its body, even if templates/geo change.
+                with self.repo._db() as db:
+                    owned = db.execute(
+                        """UPDATE email_outbox SET payload_encrypted=%s
+                        WHERE id=%s AND lease_id=%s AND state='running' AND expires_at>now()
+                        RETURNING id""",
+                        (
+                            self.repo.box.encrypt(json.dumps(data, ensure_ascii=False)),
+                            row["id"],
+                            lease,
+                        ),
+                    ).fetchone()
+                if not owned:
+                    return True
+            self.mailer.send(message)
         except Exception as exc:
-            # Exception type is sufficient for diagnostics, SMTP text can contain PII.
-            error = type(exc).__name__
+            # Never persist/log the HTTP response, payload, signature or secret.
+            error = getattr(exc, "safe_code", type(exc).__name__)
+            delay = max(
+                min(15 * 2 ** min(row["attempts"] - 1, 5), 300),
+                getattr(exc, "retry_after", 0),
+            )
             with self.repo._db() as db:
                 db.execute(
                     """UPDATE email_outbox SET state='pending',last_error=%s,
                 due_at=now()+(%s * interval '1 second') WHERE id=%s AND lease_id=%s AND state='running'""",
                     (
                         error,
-                        min(15 * 2 ** min(row["attempts"] - 1, 5), 300),
+                        delay,
                         row["id"],
                         lease,
                     ),

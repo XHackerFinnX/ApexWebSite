@@ -4,8 +4,6 @@ import concurrent.futures
 import json
 import os
 import secrets
-import smtplib
-import ssl
 import unittest
 from unittest.mock import Mock, patch
 from uuid import uuid4
@@ -16,7 +14,12 @@ from store.application.account_security import AccountSecurity, SecurityError
 from store.application.email_worker import EmailWorker
 from store.config import Settings
 from store.infrastructure.captcha import render_challenge
-from store.infrastructure.mailer import GeoLocation, SMTPMailer, render_email
+from store.infrastructure.mailer import (
+    EmailGateway,
+    EmailServiceError,
+    GeoLocation,
+    render_email,
+)
 
 
 @unittest.skipUnless(
@@ -40,7 +43,20 @@ class AccountSecurityTests(unittest.TestCase):
             db.execute(
                 "TRUNCATE security_counters,captcha_challenges,pending_registrations,password_reset_tokens,email_outbox"
             )
-        self.mailer = Mock(configured=True)
+        self.mailer = EmailGateway(
+            Settings(
+                _env_file=None,
+                POSTGRESQL_USER="test",
+                POSTGRESQL_PASSWORD="test",
+                POSTGRESQL_HOST="localhost",
+                POSTGRESQL_DATABASE="test",
+                ADMIN_PASSWORD="test-only-admin",
+                EMAIL_SERVICE_SECRET="test-shared-service-secret-32-characters",
+                WEBAPP_URL="https://apextop.ru",
+                GEOIP_LOOKUP_ENABLED=False,
+            )
+        )
+        self.mailer.send = Mock()
         self.security = AccountSecurity(
             self.repo,
             self.mailer,
@@ -459,14 +475,12 @@ class AccountSecurityTests(unittest.TestCase):
 
     def test_email_outbox_retries_across_restart_without_plaintext_or_error_leaks(self):
         self.request_registration()
-        self.mailer.send.side_effect = smtplib.SMTPAuthenticationError(
-            535, b"private token must not be stored"
-        )
+        self.mailer.send.side_effect = EmailServiceError("EMAIL_HTTP_503")
         self.assertTrue(self.worker.process_one())
         with self.repo._db() as db:
             row = db.execute("SELECT * FROM email_outbox").fetchone()
             self.assertEqual(row["state"], "pending")
-            self.assertEqual(row["last_error"], "SMTPAuthenticationError")
+            self.assertEqual(row["last_error"], "EMAIL_HTTP_503")
             self.assertTrue(row["payload_encrypted"])
             db.execute("UPDATE email_outbox SET due_at=now()-interval '1 second'")
         self.mailer.send.side_effect = None
@@ -513,8 +527,10 @@ class AccountSecurityTests(unittest.TestCase):
             self.assertTrue(first.result(5))
         self.assertEqual(self.mailer.send.call_count, 1)
 
-    def test_missing_smtp_fails_closed_without_creating_unverified_account(self):
-        self.mailer.configured = False
+    def test_missing_email_service_key_fails_closed_without_creating_unverified_account(
+        self,
+    ):
+        self.mailer.secret = ""
         with self.assertRaises(SecurityError) as caught:
             self.request_registration()
         self.assertEqual(caught.exception.status, 503)
@@ -607,6 +623,89 @@ class AccountSecurityTests(unittest.TestCase):
         )
         self.assertEqual(response.status, 410)
 
+    def test_gateway_message_is_frozen_before_post_and_reused_after_restart(self):
+        self.request_registration()
+        self.mailer.send.side_effect = EmailServiceError("EMAIL_HTTP_503")
+        self.worker.process_one()
+        first = self.mailer.send.call_args.args[0]
+        with self.repo._db() as db:
+            row = db.execute("SELECT * FROM email_outbox").fetchone()
+            snapshot = json.loads(self.repo.box.decrypt(row["payload_encrypted"]))[
+                "_gateway_message"
+            ]
+            self.assertEqual(snapshot, first)
+            self.assertEqual(snapshot["expires_at"], row["expires_at"].isoformat())
+            db.execute("UPDATE email_outbox SET due_at=now()-interval '1 second'")
+        self.mailer.send.side_effect = None
+        self.mailer.public_url = "https://changed.example"
+        with patch.object(
+            self.mailer,
+            "prepare",
+            side_effect=AssertionError("Must reuse frozen message"),
+        ):
+            EmailWorker(self.security).process_one()
+        self.assertEqual(self.mailer.send.call_args.args[0], first)
+        with self.repo._db() as db:
+            self.assertEqual(
+                db.execute("SELECT state FROM email_outbox").fetchone()["state"], "done"
+            )
+
+    def test_gateway_accepts_lost_ack_retry_as_one_remote_task(self):
+        import hashlib
+        from contextlib import nullcontext
+
+        self.request_registration()
+        remote_tasks, attempts = {}, []
+
+        def fake_api(request, timeout):
+            message = json.loads(request.data)
+            identity, digest = (
+                message["message_id"],
+                hashlib.sha256(request.data).hexdigest(),
+            )
+            self.assertEqual(
+                request.get_header("Idempotency-key"), "apex-mail-" + identity
+            )
+            if identity in remote_tasks:
+                self.assertEqual(remote_tasks[identity], digest)
+            else:
+                remote_tasks[identity] = digest
+            attempts.append(request)
+            if len(attempts) == 1:
+                # The remote durable transaction committed, but its response was lost.
+                raise TimeoutError("response lost")
+            return nullcontext(
+                SimpleNamespace(
+                    status=202,
+                    headers={"Content-Type": "application/json"},
+                    read=lambda _: json.dumps(
+                        {"ok": True, "message_id": identity}
+                    ).encode(),
+                )
+            )
+
+        self.mailer.opener = Mock()
+        self.mailer.opener.open.side_effect = fake_api
+        self.mailer.send = EmailGateway.send.__get__(self.mailer)
+        self.worker.process_one()
+        with self.repo._db() as db:
+            row = db.execute("SELECT state,last_error FROM email_outbox").fetchone()
+            self.assertEqual(
+                row, {"state": "pending", "last_error": "EMAIL_NETWORK_ERROR"}
+            )
+            db.execute("UPDATE email_outbox SET due_at=now()-interval '1 second'")
+        EmailWorker(self.security).process_one()
+        self.assertEqual(len(remote_tasks), 1)
+        self.assertEqual(len(attempts), 2)
+        self.assertEqual(attempts[0].data, attempts[1].data)
+        with self.repo._db() as db:
+            self.assertEqual(
+                db.execute(
+                    "SELECT state,payload_encrypted FROM email_outbox"
+                ).fetchone(),
+                {"state": "done", "payload_encrypted": ""},
+            )
+
     def test_http_checkout_captcha_is_mandatory_payload_bound_and_one_time(self):
         payload = {**self.payload, "points": 0, "idempotency_key": str(uuid4())}
         response, _ = self.http_request("/api/checkout/payment", "POST", payload)
@@ -670,59 +769,6 @@ class AccountSecurityTests(unittest.TestCase):
 
 
 class MailerTests(unittest.TestCase):
-    def config(self, **extra):
-        return Settings(
-            _env_file=None,
-            POSTGRESQL_USER="test",
-            POSTGRESQL_PASSWORD="test",
-            POSTGRESQL_HOST="localhost",
-            POSTGRESQL_DATABASE="test",
-            ADMIN_PASSWORD="test-only-admin",
-            SMTP_PASSWORD="test-app-password",
-            **extra,
-        )
-
-    def test_yandex_starttls_precedes_auth_and_message_has_both_parts(self):
-        mailer = SMTPMailer(self.config(SMTP_PORT="587"))
-        with patch("store.infrastructure.mailer.smtplib.SMTP") as smtp:
-            connection = smtp.return_value.__enter__.return_value
-            mailer.send(
-                "registration",
-                {
-                    "email": "member@example.test",
-                    "name": "<img src=x>",
-                    "code": "012345",
-                },
-                uuid4(),
-            )
-        calls = [call[0] for call in connection.method_calls]
-        self.assertLess(calls.index("starttls"), calls.index("login"))
-        context = connection.starttls.call_args.kwargs["context"]
-        self.assertEqual(context.verify_mode, ssl.CERT_REQUIRED)
-        self.assertTrue(context.check_hostname)
-        message = connection.send_message.call_args.args[0]
-        self.assertEqual(message["From"], "APEX <sewingnn.notification@2p2p.ru>")
-        self.assertEqual(message.get_content_type(), "multipart/alternative")
-        self.assertIn(
-            "012345", message.get_body(preferencelist=("plain",)).get_content()
-        )
-        body = message.get_body(preferencelist=("html",)).get_content()
-        self.assertIn("&lt;img src=x&gt;", body)
-        self.assertNotIn("<img src=x>", body)
-
-    def test_tls_465_and_unsafe_ports_rejected(self):
-        with self.assertRaises(ValueError):
-            self.config(SMTP_PORT=25)
-        mailer = SMTPMailer(self.config(SMTP_PORT=465))
-        with patch("store.infrastructure.mailer.smtplib.SMTP_SSL") as smtp:
-            mailer.send(
-                "registration",
-                {"email": "member@example.test", "name": "Member", "code": "012345"},
-                uuid4(),
-            )
-        smtp.return_value.__enter__.return_value.starttls.assert_not_called()
-        smtp.return_value.__enter__.return_value.login.assert_called_once()
-
     def test_reset_email_warns_and_includes_actual_request_context(self):
         data = {
             "name": "Member",

@@ -1,16 +1,18 @@
-"""TLS-only Yandex SMTP and multipart APEX transactional messages."""
+"""APEX email templates and signed HTTPS delivery to the owner's 2p2p service."""
 
 import html
 import ipaddress
 import json
-import smtplib
+import hashlib
+import hmac
+import re
 import ssl
 import threading
 import time
 import urllib.request
 from datetime import datetime
-from email.message import EmailMessage
-from email.utils import formataddr, formatdate
+from urllib.error import HTTPError, URLError
+from uuid import UUID
 from zoneinfo import ZoneInfo
 
 
@@ -84,47 +86,128 @@ def render_email(kind, data, public_url, location=""):
     return subject, text, page
 
 
-class SMTPMailer:
-    def __init__(self, config):
-        self.host, self.port = config.SMTP_HOST, config.SMTP_PORT
-        self.user, self.password = (
-            config.SMTP_USER,
-            config.SMTP_PASSWORD.get_secret_value(),
+class EmailServiceError(RuntimeError):
+    def __init__(self, code, retry_after=0):
+        self.safe_code = (
+            code
+            if re.fullmatch(r"EMAIL_[A-Z0-9_]{1,40}", code)
+            else "EMAIL_SERVICE_ERROR"
         )
-        self.sender, self.public_url = config.SMTP_FROM, config.WEBAPP_URL.rstrip("/")
+        self.retry_after = min(max(int(retry_after), 0), 300)
+        super().__init__(self.safe_code)
+
+
+class NoMailRedirect(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, *args, **kwargs):
+        # Codes, reset links and authentication must never follow redirects.
+        return None
+
+
+class EmailGateway:
+    def __init__(self, config):
+        self.url = config.EMAIL_SERVICE_URL
+        self.secret = config.EMAIL_SERVICE_SECRET.get_secret_value()
+        self.public_url = config.WEBAPP_URL.rstrip("/")
         self.geo = GeoLocation(config.GEOIP_LOOKUP_ENABLED)
+        self.context = ssl.create_default_context()
+        self.opener = urllib.request.build_opener(
+            NoMailRedirect(), urllib.request.HTTPSHandler(context=self.context)
+        )
 
     @property
     def configured(self):
-        return bool(self.host and self.user and self.password and self.sender)
+        return bool(self.url and len(self.secret) >= 32)
 
-    def send(self, kind, data, message_id):
-        if not self.configured:
-            raise RuntimeError("SMTP не настроен")
+    def prepare(self, kind, data, message_id, created_at, expires_at):
         location = self.geo.lookup(data["ip"]) if kind == "password_reset" else ""
         subject, text, page = render_email(kind, data, self.public_url, location)
-        message = EmailMessage()
-        message["Subject"], message["From"], message["To"] = (
-            subject,
-            formataddr(("APEX", self.sender)),
-            data["email"],
+        return {
+            "schema_version": 1,
+            "message_id": str(UUID(str(message_id))),
+            "source": "apex",
+            "site_url": self.public_url,
+            "kind": kind,
+            "to": data["email"],
+            "subject": subject,
+            "text": text,
+            "html": page,
+            "created_at": created_at.isoformat(),
+            "expires_at": expires_at.isoformat(),
+            "data": {
+                "name": data.get("name", ""),
+                **(
+                    {"code": data["code"]}
+                    if kind == "registration"
+                    else {"reset_url": data["url"]}
+                ),
+            },
+            "request_context": {
+                "ip": data["ip"],
+                "user_agent": data["agent"],
+                "requested_at": data["requested_at"],
+                "location": location,
+            }
+            if kind == "password_reset"
+            else {},
+        }
+
+    def send(self, message):
+        if not self.configured:
+            raise EmailServiceError("EMAIL_NOT_CONFIGURED")
+        body = json.dumps(
+            message, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+        ).encode("utf-8")
+        timestamp = str(int(time.time()))
+        signature = hmac.new(
+            self.secret.encode("utf-8"),
+            timestamp.encode("ascii") + b"." + body,
+            hashlib.sha256,
+        ).hexdigest()
+        request = urllib.request.Request(
+            self.url,
+            data=body,
+            method="POST",
+            headers={
+                "Content-Type": "application/json; charset=utf-8",
+                "Accept": "application/json",
+                "User-Agent": "ApexStoreMail/1",
+                "X-Apex-Timestamp": timestamp,
+                "X-Apex-Signature": "sha256=" + signature,
+                "Idempotency-Key": "apex-mail-" + message["message_id"],
+            },
         )
-        message["Message-ID"] = f"<apex.{message_id}@{self.sender.rsplit('@', 1)[-1]}>"
-        message["Date"] = formatdate(localtime=False)
-        message["Auto-Submitted"] = "auto-generated"
-        message.set_content(text)
-        message.add_alternative(page, subtype="html")
-        context = ssl.create_default_context()
-        if self.port == 465:
-            connection = smtplib.SMTP_SSL(
-                self.host, self.port, timeout=10, context=context
+        try:
+            with self.opener.open(request, timeout=10) as response:
+                if response.status not in {200, 202}:
+                    raise EmailServiceError("EMAIL_HTTP_" + str(response.status))
+                raw = response.read(16_385)
+                if (
+                    len(raw) > 16_384
+                    or response.headers.get("Content-Type", "")
+                    .split(";")[0]
+                    .strip()
+                    .lower()
+                    != "application/json"
+                ):
+                    raise EmailServiceError("EMAIL_INVALID_ACK")
+                try:
+                    result = json.loads(raw)
+                except (ValueError, UnicodeError):
+                    raise EmailServiceError("EMAIL_INVALID_ACK") from None
+                if (
+                    not isinstance(result, dict)
+                    or result.get("ok") is not True
+                    or result.get("message_id") != message["message_id"]
+                ):
+                    raise EmailServiceError("EMAIL_INVALID_ACK")
+        except HTTPError as exc:
+            value = exc.headers.get("Retry-After", "") if exc.headers else ""
+            retry = (
+                int(value)
+                if value.isascii() and value.isdecimal() and len(value) < 6
+                else 0
             )
-        else:
-            connection = smtplib.SMTP(self.host, self.port, timeout=10)
-        with connection as smtp:
-            smtp.ehlo()
-            if self.port != 465:
-                smtp.starttls(context=context)
-                smtp.ehlo()
-            smtp.login(self.user, self.password)
-            smtp.send_message(message, from_addr=self.sender, to_addrs=[data["email"]])
+            exc.close()
+            raise EmailServiceError("EMAIL_HTTP_" + str(exc.code), retry) from None
+        except (URLError, OSError, TimeoutError):
+            raise EmailServiceError("EMAIL_NETWORK_ERROR") from None

@@ -51,14 +51,14 @@ store/presentation    HTTP/API и статический интерфейс
 - CRUD товаров и dashboard администратора;
 - конфигуратор ЮKassa, Альфа-Банк, Т-Банк и СДЭК без ключей в исходниках;
 - секреты интеграций хранятся зашифрованными и никогда не возвращаются API;
-- собственная одноразовая капча, подтверждение почты и восстановление пароля через Яндекс SMTP;
+- собственная одноразовая капча, подтверждение почты и восстановление пароля через почтовый API 2p2p.ru;
 - rate limit и защитные HTTP-заголовки на уровне приложения.
 
 API: `GET /api/products`, `POST /api/products/:id/view`,
 `POST /api/products/:id/cart`, `GET|POST /api/admin/integrations`,
 `POST /api/security/captcha`, `POST /api/security/captcha/verify`, `POST /api/checkout/payment`.
 
-Настройка SMTP, регистрация с кодом, восстановление пароля, ограничения форм и cookie описаны в [ACCOUNT_SECURITY.md](ACCOUNT_SECURITY.md).
+Настройка почтового API, регистрация с кодом, восстановление пароля, ограничения форм и cookie описаны в [ACCOUNT_SECURITY.md](ACCOUNT_SECURITY.md). Готовое задание для backend 2p2p.ru — [EMAIL_SERVICE_PROMPT.md](EMAIL_SERVICE_PROMPT.md).
 
 ### Т-Банк
 
@@ -127,7 +127,8 @@ Prometheus/Grafana, централизованные логи и audit trail.
 
 ```bash
 export STORE_MASTER_KEY="$(python -c 'import secrets; print(secrets.token_hex(32))')"
-export SMTP_PASSWORD=YOUR_YANDEX_APP_PASSWORD
+export EMAIL_SERVICE_URL=https://2p2p.ru/api/apex/email
+export EMAIL_SERVICE_SECRET=YOUR_RANDOM_SHARED_SECRET
 export POSTGRESQL_HOST=da9ca7d9f658ca4254e5094d.twc1.net
 export POSTGRESQL_PORT=5432
 export POSTGRESQL_DATABASE=default_db
@@ -184,7 +185,7 @@ S3_SECRET_ACCESS_KEY=YOUR_SECRET_KEY
 
 Значения S3 возьмите из панели своего хранилища; для другого провайдера endpoint
 и регион могут отличаться. В этом же `.env` сохраните параметры внешней
-PostgreSQL, администратора, SMTP и **существующий** `STORE_MASTER_KEY`.
+PostgreSQL, администратора, почтового API и **существующий** `STORE_MASTER_KEY`.
 Не меняйте мастер-ключ при обновлении: он нужен для расшифровки интеграций в БД.
 Для production нужны мастер-ключ от 32 символов и пароль администратора от 12.
 `TRUST_PROXY_HEADERS=true` используйте за прокси Timeweb/Caddy/Nginx, который
@@ -307,7 +308,8 @@ Timeweb. `/ready` проверяет соединение с PostgreSQL и ве�
 2. В кабинете Т-Банка задайте URL уведомлений
    `https://apextop.ru/api/payments/tbank/notification`. Адреса возврата приложение
    передаёт само: `https://apextop.ru/payment/success` и `/payment/fail`.
-3. Для подтверждения почты задайте `SMTP_PASSWORD` и остальные параметры из [ACCOUNT_SECURITY.md](ACCOUNT_SECURITY.md).
+3. Для подтверждения почты настройте API на 2p2p.ru и параметры `EMAIL_SERVICE_*`
+   по [ACCOUNT_SECURITY.md](ACCOUNT_SECURITY.md).
    Проверьте витрину, вход в `/admin` и тестовую оплату по HTTPS.
 
 `www.apextop.ru`, `moto.apextop.ru` и `drive.apextop.ru` подключаются отдельно,
@@ -362,7 +364,7 @@ python -m store.manage check-media
 `data:image/...` из БД в S3. Обе можно повторять; цены и остатки не меняются.
 
 Капча генерируется и проверяется самим приложением, с одноразовыми подтверждениями в PostgreSQL.
-Тестового обхода в публичном API нет. Инструкции по Яндекс SMTP и проверке писем —
+Тестового обхода в публичном API нет. Инструкции по почтовому API и проверке писем —
 в [ACCOUNT_SECURITY.md](ACCOUNT_SECURITY.md). Платёжный callback проверяется по подписи
 провайдера и обрабатывается идемпотентно. Секреты интеграций маскируются;
 смена master key требует миграции.

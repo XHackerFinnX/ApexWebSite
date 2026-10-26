@@ -12,7 +12,7 @@ from store.application.account_security import AccountSecurity
 from store.application.email_worker import EmailWorker
 from store.infrastructure.order_webhook import OrderWebhook
 from store.config import Settings, get_settings
-from store.infrastructure.mailer import SMTPMailer
+from store.infrastructure.mailer import EmailGateway
 from store.infrastructure.cdek import CDEKDelivery
 from store.infrastructure.media import configure_media
 from store.infrastructure.postgres_repo import PostgreSQLRepository
@@ -49,7 +49,7 @@ def create_app(settings: Settings | None = None):
         config.ADMIN_PASSWORD.get_secret_value(),
         trust_proxy_headers=config.TRUST_PROXY_HEADERS,
         secure_cookies=config.WEBAPP_URL.startswith("https://"),
-        security=AccountSecurity(repo, SMTPMailer(config), config.WEBAPP_URL),
+        security=AccountSecurity(repo, EmailGateway(config), config.WEBAPP_URL),
         trusted_proxy_cidrs=config.TRUSTED_PROXY_CIDRS,
     )
     app.email_worker = EmailWorker(app.security)

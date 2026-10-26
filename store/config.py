@@ -52,11 +52,8 @@ class Settings(BaseSettings):
 
     STORE_MASTER_KEY: SecretStr = SecretStr("unsafe-development-key")
     WEBAPP_URL: str = "http://127.0.0.1:8000"
-    SMTP_HOST: str = "smtp.yandex.com"
-    SMTP_PORT: int = 587
-    SMTP_USER: str = "sewingnn.notification@2p2p.ru"
-    SMTP_PASSWORD: SecretStr = SecretStr("")
-    SMTP_FROM: str = "sewingnn.notification@2p2p.ru"
+    EMAIL_SERVICE_URL: str = "https://2p2p.ru/api/apex/email"
+    EMAIL_SERVICE_SECRET: SecretStr = SecretStr("")
     GEOIP_LOOKUP_ENABLED: bool = True
 
     CDEK_CLIENT_ID: SecretStr = SecretStr("")
@@ -102,11 +99,35 @@ class Settings(BaseSettings):
             raise ValueError("APP_PORT должен быть от 1 до 65535")
         return value
 
-    @field_validator("SMTP_PORT")
+    @field_validator("EMAIL_SERVICE_URL")
     @classmethod
-    def validate_smtp_port(cls, value: int) -> int:
-        if value not in {587, 465}:
-            raise ValueError("SMTP_PORT должен быть 587 (STARTTLS) или 465 (TLS)")
+    def validate_email_service_url(cls, value: str) -> str:
+        if not value:
+            return value
+        parsed = urlparse(value)
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+            or any(ord(char) <= 32 or ord(char) == 127 for char in value)
+        ):
+            raise ValueError(
+                "EMAIL_SERVICE_URL должен быть HTTPS-адресом без реквизитов, query и fragment"
+            )
+        if parsed.port is not None and not 1 <= parsed.port <= 65535:
+            raise ValueError("Некорректный порт EMAIL_SERVICE_URL")
+        return value
+
+    @field_validator("EMAIL_SERVICE_SECRET")
+    @classmethod
+    def validate_email_service_secret(cls, value: SecretStr) -> SecretStr:
+        if value.get_secret_value() and len(value.get_secret_value()) < 32:
+            raise ValueError(
+                "EMAIL_SERVICE_SECRET должен содержать не менее 32 символов"
+            )
         return value
 
     @model_validator(mode="after")
